@@ -60,6 +60,15 @@ export const ActionSource = {
 export type ActionSource = (typeof ActionSource)[keyof typeof ActionSource]
 
 
+export const TriageStatus = {
+  SNOOZED: 'SNOOZED',
+  ACKNOWLEDGED: 'ACKNOWLEDGED',
+  ABANDONED: 'ABANDONED'
+} as const
+
+export type TriageStatus = (typeof TriageStatus)[keyof typeof TriageStatus]
+
+
 export const AuditEvent = {
   PROPOSED: 'PROPOSED',
   APPROVED: 'APPROVED',

@@ -54,7 +54,8 @@ export const ModelName = {
   User: 'User',
   Credential: 'Credential',
   ProposedAction: 'ProposedAction',
-  AuditLog: 'AuditLog'
+  AuditLog: 'AuditLog',
+  TriageMark: 'TriageMark'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -141,6 +142,21 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const TriageMarkScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  itemKey: 'itemKey',
+  status: 'status',
+  snoozedUntil: 'snoozedUntil',
+  signals: 'signals',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TriageMarkScalarFieldEnum = (typeof TriageMarkScalarFieldEnum)[keyof typeof TriageMarkScalarFieldEnum]
 
 
 export const SortOrder = {

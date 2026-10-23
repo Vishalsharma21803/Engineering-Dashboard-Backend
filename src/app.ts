@@ -7,6 +7,7 @@ import credentialRoutes from "./routes/credential.routes.js";
 import azureRoutes from "./routes/azure.routes.js";
 import actionRoutes from "./routes/action.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
+import triageRoutes from "./routes/triage.routes.js";
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp() {
   app.use("/api/azure/:credentialId", azureRoutes);
   app.use("/api/actions", actionRoutes);
   app.use("/api/audit-logs", auditLogRoutes);
+  app.use("/api/triage", triageRoutes);
 
   return app;
 }

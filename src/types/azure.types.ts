@@ -393,6 +393,8 @@ export interface Recommendation {
   category: RecommendationCategory;
   title: string;
   reasons: string[];
+  /** Stable reason codes (unlike display text); a new code resurfaces a triaged item. */
+  signals: string[];
   target: {
     type: "workItem" | "pullRequest" | "build";
     projectName: string;

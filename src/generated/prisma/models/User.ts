@@ -193,6 +193,7 @@ export type UserWhereInput = {
   credentials?: Prisma.CredentialListRelationFilter
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
+  triageMarks?: Prisma.TriageMarkListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -205,6 +206,7 @@ export type UserOrderByWithRelationInput = {
   credentials?: Prisma.CredentialOrderByRelationAggregateInput
   actions?: Prisma.ProposedActionOrderByRelationAggregateInput
   auditLogs?: Prisma.AuditLogOrderByRelationAggregateInput
+  triageMarks?: Prisma.TriageMarkOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -220,6 +222,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   credentials?: Prisma.CredentialListRelationFilter
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
+  triageMarks?: Prisma.TriageMarkListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -256,6 +259,7 @@ export type UserCreateInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -268,6 +272,7 @@ export type UserUncheckedCreateInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -280,6 +285,7 @@ export type UserUpdateInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -292,6 +298,7 @@ export type UserUncheckedUpdateInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -403,6 +410,20 @@ export type UserUpdateOneRequiredWithoutAuditLogsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutAuditLogsInput, Prisma.UserUpdateWithoutAuditLogsInput>, Prisma.UserUncheckedUpdateWithoutAuditLogsInput>
 }
 
+export type UserCreateNestedOneWithoutTriageMarksInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutTriageMarksInput, Prisma.UserUncheckedCreateWithoutTriageMarksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutTriageMarksInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutTriageMarksNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutTriageMarksInput, Prisma.UserUncheckedCreateWithoutTriageMarksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutTriageMarksInput
+  upsert?: Prisma.UserUpsertWithoutTriageMarksInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutTriageMarksInput, Prisma.UserUpdateWithoutTriageMarksInput>, Prisma.UserUncheckedUpdateWithoutTriageMarksInput>
+}
+
 export type UserCreateWithoutCredentialsInput = {
   id?: string
   name: string
@@ -412,6 +433,7 @@ export type UserCreateWithoutCredentialsInput = {
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutCredentialsInput = {
@@ -423,6 +445,7 @@ export type UserUncheckedCreateWithoutCredentialsInput = {
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutCredentialsInput = {
@@ -450,6 +473,7 @@ export type UserUpdateWithoutCredentialsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutCredentialsInput = {
@@ -461,6 +485,7 @@ export type UserUncheckedUpdateWithoutCredentialsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutActionsInput = {
@@ -472,6 +497,7 @@ export type UserCreateWithoutActionsInput = {
   updatedAt?: Date | string
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutActionsInput = {
@@ -483,6 +509,7 @@ export type UserUncheckedCreateWithoutActionsInput = {
   updatedAt?: Date | string
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutActionsInput = {
@@ -510,6 +537,7 @@ export type UserUpdateWithoutActionsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutActionsInput = {
@@ -521,6 +549,7 @@ export type UserUncheckedUpdateWithoutActionsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAuditLogsInput = {
@@ -532,6 +561,7 @@ export type UserCreateWithoutAuditLogsInput = {
   updatedAt?: Date | string
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAuditLogsInput = {
@@ -543,6 +573,7 @@ export type UserUncheckedCreateWithoutAuditLogsInput = {
   updatedAt?: Date | string
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAuditLogsInput = {
@@ -570,6 +601,7 @@ export type UserUpdateWithoutAuditLogsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAuditLogsInput = {
@@ -581,6 +613,71 @@ export type UserUncheckedUpdateWithoutAuditLogsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutTriageMarksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutTriageMarksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutTriageMarksInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutTriageMarksInput, Prisma.UserUncheckedCreateWithoutTriageMarksInput>
+}
+
+export type UserUpsertWithoutTriageMarksInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutTriageMarksInput, Prisma.UserUncheckedUpdateWithoutTriageMarksInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutTriageMarksInput, Prisma.UserUncheckedCreateWithoutTriageMarksInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutTriageMarksInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutTriageMarksInput, Prisma.UserUncheckedUpdateWithoutTriageMarksInput>
+}
+
+export type UserUpdateWithoutTriageMarksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutTriageMarksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -592,12 +689,14 @@ export type UserCountOutputType = {
   credentials: number
   actions: number
   auditLogs: number
+  triageMarks: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   credentials?: boolean | UserCountOutputTypeCountCredentialsArgs
   actions?: boolean | UserCountOutputTypeCountActionsArgs
   auditLogs?: boolean | UserCountOutputTypeCountAuditLogsArgs
+  triageMarks?: boolean | UserCountOutputTypeCountTriageMarksArgs
 }
 
 /**
@@ -631,6 +730,13 @@ export type UserCountOutputTypeCountAuditLogsArgs<ExtArgs extends runtime.Types.
   where?: Prisma.AuditLogWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountTriageMarksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TriageMarkWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -642,6 +748,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   credentials?: boolean | Prisma.User$credentialsArgs<ExtArgs>
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
+  triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -677,6 +784,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   credentials?: boolean | Prisma.User$credentialsArgs<ExtArgs>
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
+  triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -688,6 +796,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     credentials: Prisma.$CredentialPayload<ExtArgs>[]
     actions: Prisma.$ProposedActionPayload<ExtArgs>[]
     auditLogs: Prisma.$AuditLogPayload<ExtArgs>[]
+    triageMarks: Prisma.$TriageMarkPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1093,6 +1202,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   credentials<T extends Prisma.User$credentialsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$credentialsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CredentialPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   actions<T extends Prisma.User$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProposedActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   auditLogs<T extends Prisma.User$auditLogsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$auditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AuditLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  triageMarks<T extends Prisma.User$triageMarksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$triageMarksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TriageMarkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1590,6 +1700,30 @@ export type User$auditLogsArgs<ExtArgs extends runtime.Types.Extensions.Internal
   take?: number
   skip?: number
   distinct?: Prisma.AuditLogScalarFieldEnum | Prisma.AuditLogScalarFieldEnum[]
+}
+
+/**
+ * User.triageMarks
+ */
+export type User$triageMarksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TriageMark
+   */
+  select?: Prisma.TriageMarkSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TriageMark
+   */
+  omit?: Prisma.TriageMarkOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TriageMarkInclude<ExtArgs> | null
+  where?: Prisma.TriageMarkWhereInput
+  orderBy?: Prisma.TriageMarkOrderByWithRelationInput | Prisma.TriageMarkOrderByWithRelationInput[]
+  cursor?: Prisma.TriageMarkWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TriageMarkScalarFieldEnum | Prisma.TriageMarkScalarFieldEnum[]
 }
 
 /**

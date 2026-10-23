@@ -32,6 +32,7 @@ function workItemRecommendation(
 ): Recommendation | null {
   let score = PRIORITY_WEIGHT[workItem.priority ?? 0] ?? DEFAULT_PRIORITY_WEIGHT;
   const reasons: string[] = [];
+  const signals: string[] = [];
   let category: RecommendationCategory | null = null;
   let signal = false;
 
@@ -44,6 +45,7 @@ function workItemRecommendation(
   if (open && workItem.blocked) {
     score += 40;
     reasons.push("Marked as blocked");
+    signals.push("BLOCKED");
     category = "BLOCKER";
     signal = true;
   }
@@ -54,10 +56,12 @@ function workItemRecommendation(
     if (msUntilDue < 0) {
       score += 30;
       reasons.push("Overdue");
+      signals.push("OVERDUE");
       signal = true;
     } else if (msUntilDue <= DUE_SOON_DAYS * DAY_MS) {
       score += 20;
       reasons.push("Due within 2 days");
+      signals.push("DUE_SOON");
       signal = true;
     }
   }
@@ -67,6 +71,7 @@ function workItemRecommendation(
   for (const violation of violations) {
     score += SEVERITY_WEIGHT[violation.severity];
     reasons.push(violation.message);
+    signals.push(`SOP:${violation.ruleId}`);
     category ??= "SOP";
     signal = true;
   }
@@ -77,6 +82,7 @@ function workItemRecommendation(
     if (idleDays > STALE_WORKING_DAYS) {
       score += 10;
       reasons.push(`No updates in ${idleDays} working days`);
+      signals.push("STALE");
       category ??= "STALE";
       signal = true;
     }
@@ -98,6 +104,7 @@ function workItemRecommendation(
     category: category ?? "SOP",
     title: `#${workItem.id} ${workItem.title}`,
     reasons,
+    signals,
     target: {
       type: "workItem",
       projectName: workItem.projectName,
@@ -115,6 +122,7 @@ function pullRequestRecommendation(pr: PullRequestSummary, now: Date): Recommend
 
   let score = 10;
   const reasons: string[] = [];
+  const signals: string[] = [];
 
   if (pr.myRole === "author") {
     const changesRequested = pr.reviewers.filter((reviewer) => reviewer.vote <= -5);
@@ -124,16 +132,19 @@ function pullRequestRecommendation(pr: PullRequestSummary, now: Date): Recommend
       reasons.push(
         `Changes requested by ${changesRequested.map((reviewer) => reviewer.displayName).join(", ")}`
       );
+      signals.push("CHANGES_REQUESTED");
     }
 
     if (pr.mergeStatus === "conflicts") {
       score += 30;
       reasons.push("Merge conflicts");
+      signals.push("MERGE_CONFLICTS");
     }
 
     if (pr.unresolvedThreads !== null && pr.unresolvedThreads > 0) {
       score += Math.min(25, pr.unresolvedThreads * 5);
       reasons.push(`${pr.unresolvedThreads} unresolved comment thread(s)`);
+      signals.push("UNRESOLVED_THREADS");
     }
 
     const requiredApproved = pr.reviewers
@@ -149,11 +160,13 @@ function pullRequestRecommendation(pr: PullRequestSummary, now: Date): Recommend
     ) {
       score += 15;
       reasons.push("Approved and ready to complete");
+      signals.push("READY_TO_COMPLETE");
     }
   } else if (pr.myRole === "reviewer" && pr.myVote === 0 && !pr.isDraft) {
     const ageDays = Math.floor((now.getTime() - new Date(pr.creationDate).getTime()) / DAY_MS);
     score += 25 + Math.min(20, Math.max(0, ageDays) * 2);
     reasons.push(ageDays > 0 ? `Review requested ${ageDays} day(s) ago` : "Review requested");
+    signals.push("REVIEW_REQUESTED");
   }
 
   if (reasons.length === 0) {
@@ -166,6 +179,7 @@ function pullRequestRecommendation(pr: PullRequestSummary, now: Date): Recommend
     category: "REVIEW",
     title: `PR !${pr.pullRequestId} ${pr.title}`,
     reasons,
+    signals,
     target: {
       type: "pullRequest",
       projectName: pr.projectName,
@@ -190,6 +204,8 @@ function buildRecommendation(build: BuildSummary): Recommendation | null {
     category: "FAILED_PIPELINE",
     title: `${build.definitionName} #${build.buildNumber} failed`,
     reasons: [`Latest run on ${branch} failed`],
+    // Per run: a snoozed pipeline resurfaces when a newer run fails.
+    signals: [`FAILED:${build.id}`],
     target: {
       type: "build",
       projectName: build.projectName,

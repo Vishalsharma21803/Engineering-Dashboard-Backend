@@ -25,6 +25,13 @@ export interface PreviewChange {
 }
 
 /** Read-only result of proposing an action. Nothing has been written. */
+/**
+ * Field values the preview was built from, keyed by Azure reference name.
+ * Execution is refused only if one of these changed (not on any revision),
+ * so a new comment or an unrelated edit does not invalidate a proposal.
+ */
+export type ExpectedFields = Record<string, string | number | null>;
+
 export interface PreparedAction {
   projectId: string;
   target: Record<string, string | number>;
@@ -126,6 +133,7 @@ export async function prepareAction(
       const projectName = workItemProjectName(workItem);
       const supported = await getSupportedFields(client, projectName, workItemType(workItem));
       const params: Partial<Record<UpdatableWorkField, number>> = {};
+      const expected: ExpectedFields = {};
       const preview: PreviewChange[] = [];
 
       for (const [key, value] of Object.entries(action.params) as Array<
@@ -146,6 +154,7 @@ export async function prepareAction(
 
         if (before !== value) {
           params[key] = value;
+          expected[WORK_FIELD_REFERENCE[key]] = before;
           preview.push({ field: WORK_FIELD_LABEL[key], before, after: value });
         }
       }
@@ -157,7 +166,7 @@ export async function prepareAction(
       return {
         projectId: projectName,
         target: workItemTarget(workItem),
-        params,
+        params: { ...params, expected },
         preview,
         summary: `Update ${preview.map((change) => change.field).join(", ")} on #${workItem.id} ${title(workItem)}`,
         baseRev: workItem.rev,
@@ -189,7 +198,7 @@ export async function prepareAction(
       return {
         projectId: projectName,
         target: workItemTarget(workItem),
-        params: { state: next.name },
+        params: { state: next.name, expected: { [WORK_ITEM_FIELDS.state]: current } },
         preview: [{ field: "State", before: current, after: next.name }],
         summary: `Move #${workItem.id} ${title(workItem)} to ${next.name}`,
         baseRev: workItem.rev,
@@ -235,6 +244,8 @@ export async function prepareAction(
           repositoryId: pr.repository.id,
           pullRequestId: pr.pullRequestId,
           pullRequestProjectId: pr.repository.project.id,
+          // Linking touches no field; only "already linked" is re-checked at execution.
+          expected: {},
         },
         preview: [
           {
@@ -285,12 +296,14 @@ export async function prepareAction(
         throw invalid("NO_CHANGES", `The work item is already ${current}`);
       }
 
-      const params: Record<string, unknown> = { state: closedState };
+      const expected: ExpectedFields = { [WORK_ITEM_FIELDS.state]: current };
+      const params: Record<string, unknown> = { state: closedState, expected };
       const preview: PreviewChange[] = [{ field: "State", before: current, after: closedState }];
       const remaining = asNumber(workItem.fields[WORK_ITEM_FIELDS.remainingWork]);
 
       if (supported.remainingWork && remaining !== null && remaining > 0) {
         params.remainingWork = 0;
+        expected[WORK_ITEM_FIELDS.remainingWork] = remaining;
         preview.push({ field: WORK_FIELD_LABEL.remainingWork, before: remaining, after: 0 });
       }
 

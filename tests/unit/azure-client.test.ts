@@ -232,6 +232,33 @@ describe("AzureClient", () => {
     expect((error as AzureApiError).upstreamMessage).toBe("TF401320: Rule Error");
   });
 
+  it("includes Azure validation results in rejected build queue messages", async () => {
+    server.use(
+      http.post(`${ORG}/*`, () =>
+        HttpResponse.json(
+          {
+            message: "Could not queue the build because there were validation errors or warnings.",
+            customProperties: {
+              ValidationResults: [
+                { result: "error", message: "The pipeline is not valid. Job Build: Step input repo references an unknown resource." },
+                { result: "ok", message: "ignored" },
+              ],
+            },
+          },
+          { status: 400 }
+        )
+      )
+    );
+
+    const error = await client("cred-queue")
+      .write(ApprovalTicket.issue("a", "cred-queue"), "POST", ["p", "_apis", "build", "builds"], {})
+      .catch((caught: unknown) => caught);
+
+    expect((error as AzureApiError).upstreamMessage).toBe(
+      "Could not queue the build because there were validation errors or warnings. The pipeline is not valid. Job Build: Step input repo references an unknown resource."
+    );
+  });
+
   it("accepts an accepted write with a non-JSON body", async () => {
     server.use(http.patch(`${ORG}/*`, () => new HttpResponse("ok", { status: 200 })));
 

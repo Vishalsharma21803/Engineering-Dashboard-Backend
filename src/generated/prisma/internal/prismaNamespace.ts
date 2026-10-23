@@ -400,7 +400,8 @@ export const ModelName = {
   User: 'User',
   Credential: 'Credential',
   ProposedAction: 'ProposedAction',
-  AuditLog: 'AuditLog'
+  AuditLog: 'AuditLog',
+  TriageMark: 'TriageMark'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -416,7 +417,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "credential" | "proposedAction" | "auditLog"
+    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -716,6 +717,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    TriageMark: {
+      payload: Prisma.$TriageMarkPayload<ExtArgs>
+      fields: Prisma.TriageMarkFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TriageMarkFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TriageMarkFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        findFirst: {
+          args: Prisma.TriageMarkFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TriageMarkFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        findMany: {
+          args: Prisma.TriageMarkFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>[]
+        }
+        create: {
+          args: Prisma.TriageMarkCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        createMany: {
+          args: Prisma.TriageMarkCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TriageMarkCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>[]
+        }
+        delete: {
+          args: Prisma.TriageMarkDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        update: {
+          args: Prisma.TriageMarkUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        deleteMany: {
+          args: Prisma.TriageMarkDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TriageMarkUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TriageMarkUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>[]
+        }
+        upsert: {
+          args: Prisma.TriageMarkUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TriageMarkPayload>
+        }
+        aggregate: {
+          args: Prisma.TriageMarkAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTriageMark>
+        }
+        groupBy: {
+          args: Prisma.TriageMarkGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TriageMarkGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TriageMarkCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TriageMarkCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -823,6 +898,21 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const TriageMarkScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  itemKey: 'itemKey',
+  status: 'status',
+  snoozedUntil: 'snoozedUntil',
+  signals: 'signals',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TriageMarkScalarFieldEnum = (typeof TriageMarkScalarFieldEnum)[keyof typeof TriageMarkScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1020,6 +1110,20 @@ export type ListEnumAuditEventFieldRefInput<$PrismaModel> = FieldRefInputType<$P
 
 
 /**
+ * Reference to a field of type 'TriageStatus'
+ */
+export type EnumTriageStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TriageStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'TriageStatus[]'
+ */
+export type ListEnumTriageStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TriageStatus[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -1187,6 +1291,7 @@ export type GlobalOmitConfig = {
   credential?: Prisma.CredentialOmit
   proposedAction?: Prisma.ProposedActionOmit
   auditLog?: Prisma.AuditLogOmit
+  triageMark?: Prisma.TriageMarkOmit
 }
 
 /* Types for Logging */

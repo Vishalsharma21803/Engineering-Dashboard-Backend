@@ -433,16 +433,28 @@ export class AzureClient {
   }
 }
 
-const MAX_UPSTREAM_MESSAGE_LENGTH = 300;
+const MAX_UPSTREAM_MESSAGE_LENGTH = 600;
 
-/** Azure validation errors ({ message }) explain rejected writes, e.g. a required field. */
+/**
+ * Azure validation errors ({ message }) explain rejected writes, e.g. a
+ * required field. Build queueing puts the real reasons in ValidationResults.
+ */
 async function readUpstreamMessage(response: Response): Promise<string | null> {
   try {
-    const payload = (await response.json()) as { message?: unknown };
+    const payload = (await response.json()) as {
+      message?: unknown;
+      customProperties?: { ValidationResults?: Array<{ result?: unknown; message?: unknown }> };
+    };
 
-    return typeof payload.message === "string"
-      ? payload.message.slice(0, MAX_UPSTREAM_MESSAGE_LENGTH)
-      : null;
+    const details = (payload.customProperties?.ValidationResults ?? [])
+      .filter((entry) => entry.result !== "ok" && typeof entry.message === "string")
+      .map((entry) => entry.message as string);
+
+    const message = [typeof payload.message === "string" ? payload.message : null, ...details]
+      .filter((part): part is string => Boolean(part))
+      .join(" ");
+
+    return message ? message.slice(0, MAX_UPSTREAM_MESSAGE_LENGTH) : null;
   } catch {
     return null;
   }

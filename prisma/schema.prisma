@@ -44,6 +44,12 @@ enum ActionSource {
   USER
 }
 
+enum TriageStatus {
+  SNOOZED
+  ACKNOWLEDGED
+  ABANDONED
+}
+
 enum AuditEvent {
   PROPOSED
   APPROVED
@@ -62,6 +68,7 @@ model User {
   credentials Credential[]
   actions     ProposedAction[]
   auditLogs   AuditLog[]
+  triageMarks TriageMark[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
@@ -77,6 +84,7 @@ model Credential {
   userId               String
   user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   actions              ProposedAction[]
+  triageMarks          TriageMark[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -132,4 +140,25 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([actionId])
+}
+
+/// Personal dashboard triage (snooze / acknowledge / abandon). Cockpit-only:
+/// never written to Azure DevOps.
+model TriageMark {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String
+  credential   Credential   @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  /// wi:<id>, pr:<repositoryId>:<id>, pipeline:<project>:<definitionId>:<branch> or project:<name>.
+  itemKey      String
+  status       TriageStatus
+  snoozedUntil DateTime?
+  /// Signal codes present when marked; a code not in this list resurfaces the item.
+  signals      String[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([credentialId, itemKey])
+  @@index([userId, credentialId])
 }

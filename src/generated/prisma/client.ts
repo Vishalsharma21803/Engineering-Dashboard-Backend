@@ -62,3 +62,9 @@ export type ProposedAction = Prisma.ProposedActionModel
  * Append-only. Never stores PATs or raw Azure error bodies.
  */
 export type AuditLog = Prisma.AuditLogModel
+/**
+ * Model TriageMark
+ * Personal dashboard triage (snooze / acknowledge / abandon). Cockpit-only:
+ * never written to Azure DevOps.
+ */
+export type TriageMark = Prisma.TriageMarkModel

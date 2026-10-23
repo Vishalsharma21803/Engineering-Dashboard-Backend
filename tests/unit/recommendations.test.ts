@@ -147,5 +147,37 @@ describe("buildRecommendations", () => {
 
     expect(recommendation).toMatchObject({ category: "SOP", score: 20 + 10 + 20 });
     expect(recommendation?.suggestedAction?.kind).toBe("WORK_ITEM_CLOSE_AFTER_MERGE");
+    expect(recommendation?.signals).toEqual(["SOP:MISSING_COMMENT", "SOP:NOT_CLOSED_AFTER_MERGE"]);
+  });
+
+  it("emits stable signal codes that do not change as display text ages", () => {
+    const build = (now: Date) =>
+      buildRecommendations({
+        now,
+        workItems: [
+          { ...baseWorkItem, id: 1, blocked: true, dueDate: daysAgo(1), changedDate: daysAgo(10) },
+          { ...baseWorkItem, id: 2, dueDate: new Date(NOW.getTime() + DAY).toISOString() },
+        ],
+        compliance: [],
+        pullRequests: [
+          { ...basePr, mergeStatus: "conflicts", unresolvedThreads: 2 },
+          { ...basePr, pullRequestId: 8, myRole: "reviewer", myVote: 0, createdBy: { id: "o", displayName: "O", uniqueName: null } },
+        ],
+        builds: [failedBuild],
+      });
+
+    const signals = (now: Date) => Object.fromEntries(build(now).map((item) => [item.id, item.signals]));
+    const today = signals(NOW);
+
+    expect(today).toEqual({
+      "wi:1": ["BLOCKED", "OVERDUE", "STALE"],
+      "wi:2": ["DUE_SOON"],
+      "pr:r:7": ["MERGE_CONFLICTS", "UNRESOLVED_THREADS"],
+      "pr:r:8": ["REVIEW_REQUESTED"],
+      "build:9": ["FAILED:9"],
+    });
+    // Reasons such as "Review requested 3 day(s) ago" change daily; signals do not.
+    expect(signals(new Date(NOW.getTime() + 2 * DAY))["pr:r:8"]).toEqual(today["pr:r:8"]);
+    expect(signals(new Date(NOW.getTime() + 2 * DAY))["wi:1"]).toEqual(today["wi:1"]);
   });
 });

@@ -200,19 +200,69 @@ describe("approval enforcement", () => {
     expect(writeRequests(fake)).toEqual([]);
   });
 
-  it("refuses to execute when the work item changed after the proposal", async () => {
+  it("refuses to execute when a field it changes was edited after the proposal", async () => {
     const action = await propose({
       kind: "WORK_ITEM_UPDATE_FIELDS",
       target: { projectId: "Alpha", workItemId: 102 },
       params: { originalEstimate: 5 },
     });
 
-    fake.workItems.get(102)!.rev += 1;
+    const item = fake.workItems.get(102)!;
+    item.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] = 2;
+    item.rev += 1;
 
     const response = await approve(action).expect(409);
     expect(response.body).toMatchObject({ reason: "ACTION_STALE", action: { status: "FAILED", errorCode: "ACTION_STALE" } });
+    expect(response.body.message).toContain("Original Estimate changed in Azure DevOps after this was proposed (was empty, now 2)");
     expect(writeRequests(fake)).toEqual([]);
     expect(await auditEvents(action.id)).toEqual(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_FAILED"]);
+  });
+
+  it("still executes field changes after a comment or unrelated edit created new revisions", async () => {
+    // Regression: approving a comment first used to make every pending field update stale.
+    const update = await propose({
+      kind: "WORK_ITEM_UPDATE_FIELDS",
+      target: { projectId: "Alpha", workItemId: 102 },
+      params: { originalEstimate: 5 },
+    });
+    const transition = await propose({
+      kind: "WORK_ITEM_TRANSITION_STATE",
+      target: { projectId: "Alpha", workItemId: 102 },
+      params: { state: "Closed" },
+    });
+    const link = await propose({
+      kind: "WORK_ITEM_LINK_PR",
+      target: { projectId: "Alpha", workItemId: 102 },
+      params: { repositoryId: ALPHA_REPO.id, pullRequestId: 3 },
+    });
+
+    await approve(await propose(comment())).expect(200);
+    fake.workItems.get(102)!.fields["System.Title"] = "Renamed by a teammate";
+    fake.workItems.get(102)!.rev += 1;
+
+    await approve(update).expect(200);
+    await approve(transition).expect(200);
+    await approve(link).expect(200);
+
+    const item = fake.workItems.get(102)!;
+    expect(item.fields).toMatchObject({
+      "Microsoft.VSTS.Scheduling.OriginalEstimate": 5,
+      "System.State": "Closed",
+      "System.Title": "Renamed by a teammate",
+    });
+    expect(writeRequests(fake).filter((request) => request.method === "PATCH")).toHaveLength(3);
+  });
+
+  it("guards the write itself against an edit racing the final re-read", async () => {
+    const action = await propose({
+      kind: "WORK_ITEM_UPDATE_FIELDS",
+      target: { projectId: "Alpha", workItemId: 102 },
+      params: { originalEstimate: 5 },
+    });
+
+    await approve(action).expect(200);
+    const [patch] = writeRequests(fake);
+    expect((patch?.body as unknown[])[0]).toEqual({ op: "test", path: "/rev", value: 3 });
   });
 
   it("refuses to execute after the credential was pointed at another organization", async () => {

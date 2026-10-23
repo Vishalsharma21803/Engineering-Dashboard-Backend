@@ -61,6 +61,19 @@ function stringParam(params: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function normalizeFieldValue(value: unknown): string | number | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function fieldLabel(reference: string): string {
+  return reference.split(".").at(-1)?.replace(/([a-z])([A-Z])/g, "$1 $2") ?? reference;
+}
+
+/**
+ * Re-reads the work item and refuses only if a field this action changes
+ * was modified since the preview. Comments and unrelated edits create new
+ * revisions in Azure DevOps and must not invalidate the proposal.
+ */
 async function assertFreshWorkItem(client: AzureClient, action: ApprovedAction) {
   const workItem = await loadWorkItemForAction(
     client,
@@ -68,7 +81,23 @@ async function assertFreshWorkItem(client: AzureClient, action: ApprovedAction) 
     numberParam(action.target, "workItemId")
   );
 
-  if (action.baseRev !== null && workItem.rev !== action.baseRev) {
+  const expected = action.params.expected;
+
+  if (expected && typeof expected === "object") {
+    for (const [reference, before] of Object.entries(expected as Record<string, unknown>)) {
+      const current = normalizeFieldValue(workItem.fields[reference]);
+
+      if (current !== normalizeFieldValue(before)) {
+        throw new AppError(
+          409,
+          "ACTION_STALE",
+          `${fieldLabel(reference)} changed in Azure DevOps after this was proposed ` +
+            `(was ${before ?? "empty"}, now ${current ?? "empty"}). Propose it again.`
+        );
+      }
+    }
+  } else if (action.baseRev !== null && workItem.rev !== action.baseRev) {
+    // Proposals created before field-level guards still use the whole-item revision.
     throw new AppError(
       409,
       "ACTION_STALE",
@@ -179,6 +208,10 @@ async function runAction(
       const expected: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(params)) {
+        if (key === "expected") {
+          continue;
+        }
+
         const reference = WORK_FIELD_REFERENCE[key as UpdatableWorkField];
 
         if (!reference || typeof value !== "number") {
@@ -192,7 +225,7 @@ async function runAction(
         client,
         ticket,
         workItem.id,
-        action.baseRev,
+        workItem.rev,
         Object.entries(expected).map(([field, value]) => ({
           op: "add",
           path: `/fields/${field}`,
@@ -221,7 +254,7 @@ async function runAction(
         client,
         ticket,
         workItem.id,
-        action.baseRev,
+        workItem.rev,
         Object.entries(expected).map(([field, value]) => ({
           op: "add",
           path: `/fields/${field}`,
@@ -247,7 +280,17 @@ async function runAction(
         repositoryId: stringParam(params, "repositoryId"),
         pullRequestId: numberParam(params, "pullRequestId"),
       };
-      const updated = await patchWorkItem(client, ticket, workItem.id, action.baseRev, [
+      const alreadyLinked = extractLinks(workItem).pullRequests.some(
+        (link) =>
+          link.repositoryId.toLowerCase() === pullRequest.repositoryId.toLowerCase() &&
+          link.pullRequestId === pullRequest.pullRequestId
+      );
+
+      if (alreadyLinked) {
+        throw new AppError(409, "ACTION_STALE", "This pull request was linked after the action was proposed.");
+      }
+
+      const updated = await patchWorkItem(client, ticket, workItem.id, workItem.rev, [
         {
           op: "add",
           path: "/relations/-",

@@ -558,6 +558,8 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
             const comment: RawComment = { id: fake.nextCommentId++, text, createdBy: ME, createdDate: new Date().toISOString() };
             fake.comments.set(id, [...(fake.comments.get(id) ?? []), comment]);
             item.fields["System.CommentCount"] = (fake.comments.get(id) ?? []).length;
+            // Like Azure DevOps, a comment creates a new work item revision.
+            item.rev += 1;
             return json(comment);
           }
 
