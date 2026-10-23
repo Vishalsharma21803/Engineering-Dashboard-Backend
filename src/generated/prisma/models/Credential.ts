@@ -27,7 +27,11 @@ export type AggregateCredential = {
 export type CredentialMinAggregateOutputType = {
   id: string | null
   platform: $Enums.Platform | null
-  patToken: string | null
+  organizationUrl: string | null
+  label: string | null
+  encryptedPatToken: string | null
+  lastValidatedAt: Date | null
+  lastValidationStatus: $Enums.ValidationStatus | null
   userId: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -36,7 +40,11 @@ export type CredentialMinAggregateOutputType = {
 export type CredentialMaxAggregateOutputType = {
   id: string | null
   platform: $Enums.Platform | null
-  patToken: string | null
+  organizationUrl: string | null
+  label: string | null
+  encryptedPatToken: string | null
+  lastValidatedAt: Date | null
+  lastValidationStatus: $Enums.ValidationStatus | null
   userId: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -45,7 +53,11 @@ export type CredentialMaxAggregateOutputType = {
 export type CredentialCountAggregateOutputType = {
   id: number
   platform: number
-  patToken: number
+  organizationUrl: number
+  label: number
+  encryptedPatToken: number
+  lastValidatedAt: number
+  lastValidationStatus: number
   userId: number
   createdAt: number
   updatedAt: number
@@ -56,7 +68,11 @@ export type CredentialCountAggregateOutputType = {
 export type CredentialMinAggregateInputType = {
   id?: true
   platform?: true
-  patToken?: true
+  organizationUrl?: true
+  label?: true
+  encryptedPatToken?: true
+  lastValidatedAt?: true
+  lastValidationStatus?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -65,7 +81,11 @@ export type CredentialMinAggregateInputType = {
 export type CredentialMaxAggregateInputType = {
   id?: true
   platform?: true
-  patToken?: true
+  organizationUrl?: true
+  label?: true
+  encryptedPatToken?: true
+  lastValidatedAt?: true
+  lastValidationStatus?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -74,7 +94,11 @@ export type CredentialMaxAggregateInputType = {
 export type CredentialCountAggregateInputType = {
   id?: true
   platform?: true
-  patToken?: true
+  organizationUrl?: true
+  label?: true
+  encryptedPatToken?: true
+  lastValidatedAt?: true
+  lastValidationStatus?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -156,7 +180,11 @@ export type CredentialGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inter
 export type CredentialGroupByOutputType = {
   id: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label: string | null
+  encryptedPatToken: string
+  lastValidatedAt: Date | null
+  lastValidationStatus: $Enums.ValidationStatus | null
   userId: string
   createdAt: Date
   updatedAt: Date
@@ -186,7 +214,11 @@ export type CredentialWhereInput = {
   NOT?: Prisma.CredentialWhereInput | Prisma.CredentialWhereInput[]
   id?: Prisma.StringFilter<"Credential"> | string
   platform?: Prisma.EnumPlatformFilter<"Credential"> | $Enums.Platform
-  patToken?: Prisma.StringFilter<"Credential"> | string
+  organizationUrl?: Prisma.StringFilter<"Credential"> | string
+  label?: Prisma.StringNullableFilter<"Credential"> | string | null
+  encryptedPatToken?: Prisma.StringFilter<"Credential"> | string
+  lastValidatedAt?: Prisma.DateTimeNullableFilter<"Credential"> | Date | string | null
+  lastValidationStatus?: Prisma.EnumValidationStatusNullableFilter<"Credential"> | $Enums.ValidationStatus | null
   userId?: Prisma.StringFilter<"Credential"> | string
   createdAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
@@ -196,7 +228,11 @@ export type CredentialWhereInput = {
 export type CredentialOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   platform?: Prisma.SortOrder
-  patToken?: Prisma.SortOrder
+  organizationUrl?: Prisma.SortOrder
+  label?: Prisma.SortOrderInput | Prisma.SortOrder
+  encryptedPatToken?: Prisma.SortOrder
+  lastValidatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastValidationStatus?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -205,21 +241,30 @@ export type CredentialOrderByWithRelationInput = {
 
 export type CredentialWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  userId_platform_organizationUrl?: Prisma.CredentialUserIdPlatformOrganizationUrlCompoundUniqueInput
   AND?: Prisma.CredentialWhereInput | Prisma.CredentialWhereInput[]
   OR?: Prisma.CredentialWhereInput[]
   NOT?: Prisma.CredentialWhereInput | Prisma.CredentialWhereInput[]
   platform?: Prisma.EnumPlatformFilter<"Credential"> | $Enums.Platform
-  patToken?: Prisma.StringFilter<"Credential"> | string
+  organizationUrl?: Prisma.StringFilter<"Credential"> | string
+  label?: Prisma.StringNullableFilter<"Credential"> | string | null
+  encryptedPatToken?: Prisma.StringFilter<"Credential"> | string
+  lastValidatedAt?: Prisma.DateTimeNullableFilter<"Credential"> | Date | string | null
+  lastValidationStatus?: Prisma.EnumValidationStatusNullableFilter<"Credential"> | $Enums.ValidationStatus | null
   userId?: Prisma.StringFilter<"Credential"> | string
   createdAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
-}, "id">
+}, "id" | "userId_platform_organizationUrl">
 
 export type CredentialOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   platform?: Prisma.SortOrder
-  patToken?: Prisma.SortOrder
+  organizationUrl?: Prisma.SortOrder
+  label?: Prisma.SortOrderInput | Prisma.SortOrder
+  encryptedPatToken?: Prisma.SortOrder
+  lastValidatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastValidationStatus?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -234,7 +279,11 @@ export type CredentialScalarWhereWithAggregatesInput = {
   NOT?: Prisma.CredentialScalarWhereWithAggregatesInput | Prisma.CredentialScalarWhereWithAggregatesInput[]
   id?: Prisma.StringWithAggregatesFilter<"Credential"> | string
   platform?: Prisma.EnumPlatformWithAggregatesFilter<"Credential"> | $Enums.Platform
-  patToken?: Prisma.StringWithAggregatesFilter<"Credential"> | string
+  organizationUrl?: Prisma.StringWithAggregatesFilter<"Credential"> | string
+  label?: Prisma.StringNullableWithAggregatesFilter<"Credential"> | string | null
+  encryptedPatToken?: Prisma.StringWithAggregatesFilter<"Credential"> | string
+  lastValidatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Credential"> | Date | string | null
+  lastValidationStatus?: Prisma.EnumValidationStatusNullableWithAggregatesFilter<"Credential"> | $Enums.ValidationStatus | null
   userId?: Prisma.StringWithAggregatesFilter<"Credential"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Credential"> | Date | string
@@ -243,7 +292,11 @@ export type CredentialScalarWhereWithAggregatesInput = {
 export type CredentialCreateInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutCredentialsInput
@@ -252,7 +305,11 @@ export type CredentialCreateInput = {
 export type CredentialUncheckedCreateInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   userId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -261,7 +318,11 @@ export type CredentialUncheckedCreateInput = {
 export type CredentialUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
@@ -270,7 +331,11 @@ export type CredentialUpdateInput = {
 export type CredentialUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -279,7 +344,11 @@ export type CredentialUncheckedUpdateInput = {
 export type CredentialCreateManyInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   userId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -288,7 +357,11 @@ export type CredentialCreateManyInput = {
 export type CredentialUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -296,7 +369,11 @@ export type CredentialUpdateManyMutationInput = {
 export type CredentialUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -312,10 +389,20 @@ export type CredentialOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
+export type CredentialUserIdPlatformOrganizationUrlCompoundUniqueInput = {
+  userId: string
+  platform: $Enums.Platform
+  organizationUrl: string
+}
+
 export type CredentialCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   platform?: Prisma.SortOrder
-  patToken?: Prisma.SortOrder
+  organizationUrl?: Prisma.SortOrder
+  label?: Prisma.SortOrder
+  encryptedPatToken?: Prisma.SortOrder
+  lastValidatedAt?: Prisma.SortOrder
+  lastValidationStatus?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -324,7 +411,11 @@ export type CredentialCountOrderByAggregateInput = {
 export type CredentialMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   platform?: Prisma.SortOrder
-  patToken?: Prisma.SortOrder
+  organizationUrl?: Prisma.SortOrder
+  label?: Prisma.SortOrder
+  encryptedPatToken?: Prisma.SortOrder
+  lastValidatedAt?: Prisma.SortOrder
+  lastValidationStatus?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -333,7 +424,11 @@ export type CredentialMaxOrderByAggregateInput = {
 export type CredentialMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   platform?: Prisma.SortOrder
-  patToken?: Prisma.SortOrder
+  organizationUrl?: Prisma.SortOrder
+  label?: Prisma.SortOrder
+  encryptedPatToken?: Prisma.SortOrder
+  lastValidatedAt?: Prisma.SortOrder
+  lastValidationStatus?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -385,10 +480,26 @@ export type EnumPlatformFieldUpdateOperationsInput = {
   set?: $Enums.Platform
 }
 
+export type NullableStringFieldUpdateOperationsInput = {
+  set?: string | null
+}
+
+export type NullableDateTimeFieldUpdateOperationsInput = {
+  set?: Date | string | null
+}
+
+export type NullableEnumValidationStatusFieldUpdateOperationsInput = {
+  set?: $Enums.ValidationStatus | null
+}
+
 export type CredentialCreateWithoutUserInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -396,7 +507,11 @@ export type CredentialCreateWithoutUserInput = {
 export type CredentialUncheckedCreateWithoutUserInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -433,7 +548,11 @@ export type CredentialScalarWhereInput = {
   NOT?: Prisma.CredentialScalarWhereInput | Prisma.CredentialScalarWhereInput[]
   id?: Prisma.StringFilter<"Credential"> | string
   platform?: Prisma.EnumPlatformFilter<"Credential"> | $Enums.Platform
-  patToken?: Prisma.StringFilter<"Credential"> | string
+  organizationUrl?: Prisma.StringFilter<"Credential"> | string
+  label?: Prisma.StringNullableFilter<"Credential"> | string | null
+  encryptedPatToken?: Prisma.StringFilter<"Credential"> | string
+  lastValidatedAt?: Prisma.DateTimeNullableFilter<"Credential"> | Date | string | null
+  lastValidationStatus?: Prisma.EnumValidationStatusNullableFilter<"Credential"> | $Enums.ValidationStatus | null
   userId?: Prisma.StringFilter<"Credential"> | string
   createdAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
@@ -442,7 +561,11 @@ export type CredentialScalarWhereInput = {
 export type CredentialCreateManyUserInput = {
   id?: string
   platform: $Enums.Platform
-  patToken: string
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -450,7 +573,11 @@ export type CredentialCreateManyUserInput = {
 export type CredentialUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -458,7 +585,11 @@ export type CredentialUpdateWithoutUserInput = {
 export type CredentialUncheckedUpdateWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -466,7 +597,11 @@ export type CredentialUncheckedUpdateWithoutUserInput = {
 export type CredentialUncheckedUpdateManyWithoutUserInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
-  patToken?: Prisma.StringFieldUpdateOperationsInput | string
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -476,7 +611,11 @@ export type CredentialUncheckedUpdateManyWithoutUserInput = {
 export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   platform?: boolean
-  patToken?: boolean
+  organizationUrl?: boolean
+  label?: boolean
+  encryptedPatToken?: boolean
+  lastValidatedAt?: boolean
+  lastValidationStatus?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -486,7 +625,11 @@ export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
 export type CredentialSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   platform?: boolean
-  patToken?: boolean
+  organizationUrl?: boolean
+  label?: boolean
+  encryptedPatToken?: boolean
+  lastValidatedAt?: boolean
+  lastValidationStatus?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -496,7 +639,11 @@ export type CredentialSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
 export type CredentialSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   platform?: boolean
-  patToken?: boolean
+  organizationUrl?: boolean
+  label?: boolean
+  encryptedPatToken?: boolean
+  lastValidatedAt?: boolean
+  lastValidationStatus?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -506,13 +653,17 @@ export type CredentialSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
 export type CredentialSelectScalar = {
   id?: boolean
   platform?: boolean
-  patToken?: boolean
+  organizationUrl?: boolean
+  label?: boolean
+  encryptedPatToken?: boolean
+  lastValidatedAt?: boolean
+  lastValidationStatus?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type CredentialOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "platform" | "patToken" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["credential"]>
+export type CredentialOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "platform" | "organizationUrl" | "label" | "encryptedPatToken" | "lastValidatedAt" | "lastValidationStatus" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["credential"]>
 export type CredentialInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
 }
@@ -531,7 +682,11 @@ export type $CredentialPayload<ExtArgs extends runtime.Types.Extensions.Internal
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     platform: $Enums.Platform
-    patToken: string
+    organizationUrl: string
+    label: string | null
+    encryptedPatToken: string
+    lastValidatedAt: Date | null
+    lastValidationStatus: $Enums.ValidationStatus | null
     userId: string
     createdAt: Date
     updatedAt: Date
@@ -961,7 +1116,11 @@ export interface Prisma__CredentialClient<T, Null = never, ExtArgs extends runti
 export interface CredentialFieldRefs {
   readonly id: Prisma.FieldRef<"Credential", 'String'>
   readonly platform: Prisma.FieldRef<"Credential", 'Platform'>
-  readonly patToken: Prisma.FieldRef<"Credential", 'String'>
+  readonly organizationUrl: Prisma.FieldRef<"Credential", 'String'>
+  readonly label: Prisma.FieldRef<"Credential", 'String'>
+  readonly encryptedPatToken: Prisma.FieldRef<"Credential", 'String'>
+  readonly lastValidatedAt: Prisma.FieldRef<"Credential", 'DateTime'>
+  readonly lastValidationStatus: Prisma.FieldRef<"Credential", 'ValidationStatus'>
   readonly userId: Prisma.FieldRef<"Credential", 'String'>
   readonly createdAt: Prisma.FieldRef<"Credential", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Credential", 'DateTime'>

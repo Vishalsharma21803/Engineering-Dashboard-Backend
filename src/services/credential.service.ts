@@ -1,0 +1,108 @@
+import { prisma } from "../lib/prisma.js";
+import { encryptSecret } from "../lib/encryption.js";
+import { ValidationStatus } from "../generated/prisma/enums.js";
+import type { CreateCredentialInput } from "../types/credential.types.js";
+
+const credentialSelect = {
+  id: true,
+  platform: true,
+  organizationUrl: true,
+  label: true,
+  lastValidatedAt: true,
+  lastValidationStatus: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+export async function createCredential(
+  userId: string,
+  input: CreateCredentialInput
+) {
+  try {
+    return await prisma.credential.create({
+      data: {
+        userId,
+        platform: input.platform,
+        organizationUrl: input.organizationUrl,
+        label: input.label ?? null,
+        encryptedPatToken: encryptSecret(input.patToken),
+      },
+      select: credentialSelect,
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new Error("CREDENTIAL_ALREADY_EXISTS");
+    }
+
+    throw error;
+  }
+}
+
+export async function listCredentials(userId: string) {
+  return prisma.credential.findMany({
+    where: { userId },
+    select: credentialSelect,
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getCredentialWithSecret(
+  userId: string,
+  credentialId: string
+) {
+  return prisma.credential.findFirst({
+    where: {
+      id: credentialId,
+      userId,
+    },
+    select: {
+      id: true,
+      organizationUrl: true,
+      encryptedPatToken: true,
+    },
+  });
+}
+
+export async function deleteCredential(
+  userId: string,
+  credentialId: string
+): Promise<boolean> {
+  const result = await prisma.credential.deleteMany({
+    where: {
+      id: credentialId,
+      userId,
+    },
+  });
+
+  return result.count > 0;
+}
+
+export async function recordValidationResult(
+  userId: string,
+  credentialId: string,
+  status: ValidationStatus
+): Promise<Date> {
+  const validatedAt = new Date();
+
+  await prisma.credential.updateMany({
+    where: {
+      id: credentialId,
+      userId,
+    },
+    data: {
+      lastValidatedAt: validatedAt,
+      lastValidationStatus: status,
+    },
+  });
+
+  return validatedAt;
+}

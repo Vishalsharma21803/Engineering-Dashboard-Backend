@@ -14,3 +14,12 @@ export const Platform = {
 } as const
 
 export type Platform = (typeof Platform)[keyof typeof Platform]
+
+
+export const ValidationStatus = {
+  VALID: 'VALID',
+  INVALID: 'INVALID',
+  ERROR: 'ERROR'
+} as const
+
+export type ValidationStatus = (typeof ValidationStatus)[keyof typeof ValidationStatus]
