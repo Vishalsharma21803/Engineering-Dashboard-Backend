@@ -27,3 +27,14 @@ export type User = Prisma.UserModel
  * 
  */
 export type Credential = Prisma.CredentialModel
+/**
+ * Model ProposedAction
+ * A change proposed for Azure DevOps. Nothing is written until a human
+ * approves it; params are immutable and bound to payloadHash.
+ */
+export type ProposedAction = Prisma.ProposedActionModel
+/**
+ * Model AuditLog
+ * Append-only. Never stores PATs or raw Azure error bodies.
+ */
+export type AuditLog = Prisma.AuditLogModel

@@ -26,7 +26,10 @@ export async function validateAzurePat(
   organizationUrl: string,
   patToken: string
 ): Promise<PatValidationResult> {
-  const url = new URL("/_apis/projects", organizationUrl);
+  // Append rather than resolve: "/_apis" would drop the /<org> path segment.
+  const url = new URL(
+    `${organizationUrl.replace(/\/+$/, "")}/_apis/projects`
+  );
 
   url.searchParams.set("api-version", AZURE_DEVOPS_API_VERSION);
   url.searchParams.set("$top", PROJECTS_PAGE_SIZE);

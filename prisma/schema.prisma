@@ -18,14 +18,52 @@ enum ValidationStatus {
   ERROR
 }
 
+enum ActionKind {
+  WORK_ITEM_COMMENT
+  WORK_ITEM_UPDATE_FIELDS
+  WORK_ITEM_TRANSITION_STATE
+  WORK_ITEM_LINK_PR
+  WORK_ITEM_CLOSE_AFTER_MERGE
+  PIPELINE_QUEUE_RUN
+  BUILD_RETRY_STAGE
+  BUILD_CANCEL
+}
+
+enum ActionStatus {
+  PENDING
+  APPROVED
+  EXECUTING
+  SUCCEEDED
+  FAILED
+  REJECTED
+  EXPIRED
+}
+
+enum ActionSource {
+  RECOMMENDATION
+  USER
+}
+
+enum AuditEvent {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTION_STARTED
+  EXECUTION_SUCCEEDED
+  EXECUTION_FAILED
+}
+
 model User {
-  id           String       @id @default(uuid())
-  name         String
-  email        String       @unique
-  password     String
-  credentials  Credential[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id          String           @id @default(uuid())
+  name        String
+  email       String           @unique
+  password    String
+  credentials Credential[]
+  actions     ProposedAction[]
+  auditLogs   AuditLog[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Credential {
@@ -38,8 +76,60 @@ model Credential {
   lastValidationStatus ValidationStatus?
   userId               String
   user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actions              ProposedAction[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
   @@unique([userId, platform, organizationUrl])
+}
+
+/// A change proposed for Azure DevOps. Nothing is written until a human
+/// approves it; params are immutable and bound to payloadHash.
+model ProposedAction {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Kept (as null) when the credential is deleted so history survives.
+  credentialId    String?
+  credential      Credential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  organizationUrl String
+  projectId       String
+  kind            ActionKind
+  source          ActionSource
+  target          Json
+  params          Json
+  preview         Json
+  summary         String
+  payloadHash     String
+  baseRev         Int?
+  status          ActionStatus @default(PENDING)
+  expiresAt       DateTime
+  decidedAt       DateTime?
+  executedAt      DateTime?
+  result          Json?
+  errorCode       String?
+  errorMessage    String?
+  auditLogs       AuditLog[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([userId, status])
+  @@index([credentialId, kind, status])
+}
+
+/// Append-only. Never stores PATs or raw Azure error bodies.
+model AuditLog {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionId  String?
+  action    ProposedAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  event     AuditEvent
+  metadata  Json
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime        @default(now())
+
+  @@index([userId, createdAt])
+  @@index([actionId])
 }

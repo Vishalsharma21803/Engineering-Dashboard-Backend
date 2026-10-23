@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".e2e-dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts", "tests/support/fake-azure.ts", "tests/e2e/**/*.ts"],
+  "exclude": ["node_modules", "dist", ".e2e-dist"]
+}

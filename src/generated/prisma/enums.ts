@@ -23,3 +23,51 @@ export const ValidationStatus = {
 } as const
 
 export type ValidationStatus = (typeof ValidationStatus)[keyof typeof ValidationStatus]
+
+
+export const ActionKind = {
+  WORK_ITEM_COMMENT: 'WORK_ITEM_COMMENT',
+  WORK_ITEM_UPDATE_FIELDS: 'WORK_ITEM_UPDATE_FIELDS',
+  WORK_ITEM_TRANSITION_STATE: 'WORK_ITEM_TRANSITION_STATE',
+  WORK_ITEM_LINK_PR: 'WORK_ITEM_LINK_PR',
+  WORK_ITEM_CLOSE_AFTER_MERGE: 'WORK_ITEM_CLOSE_AFTER_MERGE',
+  PIPELINE_QUEUE_RUN: 'PIPELINE_QUEUE_RUN',
+  BUILD_RETRY_STAGE: 'BUILD_RETRY_STAGE',
+  BUILD_CANCEL: 'BUILD_CANCEL'
+} as const
+
+export type ActionKind = (typeof ActionKind)[keyof typeof ActionKind]
+
+
+export const ActionStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  EXECUTING: 'EXECUTING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED',
+  REJECTED: 'REJECTED',
+  EXPIRED: 'EXPIRED'
+} as const
+
+export type ActionStatus = (typeof ActionStatus)[keyof typeof ActionStatus]
+
+
+export const ActionSource = {
+  RECOMMENDATION: 'RECOMMENDATION',
+  USER: 'USER'
+} as const
+
+export type ActionSource = (typeof ActionSource)[keyof typeof ActionSource]
+
+
+export const AuditEvent = {
+  PROPOSED: 'PROPOSED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  EXPIRED: 'EXPIRED',
+  EXECUTION_STARTED: 'EXECUTION_STARTED',
+  EXECUTION_SUCCEEDED: 'EXECUTION_SUCCEEDED',
+  EXECUTION_FAILED: 'EXECUTION_FAILED'
+} as const
+
+export type AuditEvent = (typeof AuditEvent)[keyof typeof AuditEvent]

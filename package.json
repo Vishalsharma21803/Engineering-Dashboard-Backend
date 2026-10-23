@@ -5,7 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "test:db:prepare": "node scripts/prepare-test-db.mjs",
+    "e2e:server": "tsc -p tsconfig.e2e.json && node .e2e-dist/tests/e2e/server.js",
     "postinstall": "prisma skills sync || exit 0"
   },
   "keywords": [],
@@ -18,8 +25,12 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
+    "msw": "^3.0.3",
     "prisma": "^7.10.1",
-    "typescript": "^7.0.2"
+    "supertest": "^7.3.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

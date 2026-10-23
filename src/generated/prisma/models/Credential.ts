@@ -223,6 +223,7 @@ export type CredentialWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  actions?: Prisma.ProposedActionListRelationFilter
 }
 
 export type CredentialOrderByWithRelationInput = {
@@ -237,6 +238,7 @@ export type CredentialOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
+  actions?: Prisma.ProposedActionOrderByRelationAggregateInput
 }
 
 export type CredentialWhereUniqueInput = Prisma.AtLeast<{
@@ -255,6 +257,7 @@ export type CredentialWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  actions?: Prisma.ProposedActionListRelationFilter
 }, "id" | "userId_platform_organizationUrl">
 
 export type CredentialOrderByWithAggregationInput = {
@@ -300,6 +303,7 @@ export type CredentialCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutCredentialsInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateInput = {
@@ -313,6 +317,7 @@ export type CredentialUncheckedCreateInput = {
   userId: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUpdateInput = {
@@ -326,6 +331,7 @@ export type CredentialUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateInput = {
@@ -339,6 +345,7 @@ export type CredentialUncheckedUpdateInput = {
   userId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialCreateManyInput = {
@@ -434,6 +441,11 @@ export type CredentialMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
+export type CredentialNullableScalarRelationFilter = {
+  is?: Prisma.CredentialWhereInput | null
+  isNot?: Prisma.CredentialWhereInput | null
+}
+
 export type CredentialCreateNestedManyWithoutUserInput = {
   create?: Prisma.XOR<Prisma.CredentialCreateWithoutUserInput, Prisma.CredentialUncheckedCreateWithoutUserInput> | Prisma.CredentialCreateWithoutUserInput[] | Prisma.CredentialUncheckedCreateWithoutUserInput[]
   connectOrCreate?: Prisma.CredentialCreateOrConnectWithoutUserInput | Prisma.CredentialCreateOrConnectWithoutUserInput[]
@@ -492,6 +504,22 @@ export type NullableEnumValidationStatusFieldUpdateOperationsInput = {
   set?: $Enums.ValidationStatus | null
 }
 
+export type CredentialCreateNestedOneWithoutActionsInput = {
+  create?: Prisma.XOR<Prisma.CredentialCreateWithoutActionsInput, Prisma.CredentialUncheckedCreateWithoutActionsInput>
+  connectOrCreate?: Prisma.CredentialCreateOrConnectWithoutActionsInput
+  connect?: Prisma.CredentialWhereUniqueInput
+}
+
+export type CredentialUpdateOneWithoutActionsNestedInput = {
+  create?: Prisma.XOR<Prisma.CredentialCreateWithoutActionsInput, Prisma.CredentialUncheckedCreateWithoutActionsInput>
+  connectOrCreate?: Prisma.CredentialCreateOrConnectWithoutActionsInput
+  upsert?: Prisma.CredentialUpsertWithoutActionsInput
+  disconnect?: Prisma.CredentialWhereInput | boolean
+  delete?: Prisma.CredentialWhereInput | boolean
+  connect?: Prisma.CredentialWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.CredentialUpdateToOneWithWhereWithoutActionsInput, Prisma.CredentialUpdateWithoutActionsInput>, Prisma.CredentialUncheckedUpdateWithoutActionsInput>
+}
+
 export type CredentialCreateWithoutUserInput = {
   id?: string
   platform: $Enums.Platform
@@ -502,6 +530,7 @@ export type CredentialCreateWithoutUserInput = {
   lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateWithoutUserInput = {
@@ -514,6 +543,7 @@ export type CredentialUncheckedCreateWithoutUserInput = {
   lastValidationStatus?: $Enums.ValidationStatus | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialCreateOrConnectWithoutUserInput = {
@@ -558,6 +588,74 @@ export type CredentialScalarWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Credential"> | Date | string
 }
 
+export type CredentialCreateWithoutActionsInput = {
+  id?: string
+  platform: $Enums.Platform
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  user: Prisma.UserCreateNestedOneWithoutCredentialsInput
+}
+
+export type CredentialUncheckedCreateWithoutActionsInput = {
+  id?: string
+  platform: $Enums.Platform
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
+  userId: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type CredentialCreateOrConnectWithoutActionsInput = {
+  where: Prisma.CredentialWhereUniqueInput
+  create: Prisma.XOR<Prisma.CredentialCreateWithoutActionsInput, Prisma.CredentialUncheckedCreateWithoutActionsInput>
+}
+
+export type CredentialUpsertWithoutActionsInput = {
+  update: Prisma.XOR<Prisma.CredentialUpdateWithoutActionsInput, Prisma.CredentialUncheckedUpdateWithoutActionsInput>
+  create: Prisma.XOR<Prisma.CredentialCreateWithoutActionsInput, Prisma.CredentialUncheckedCreateWithoutActionsInput>
+  where?: Prisma.CredentialWhereInput
+}
+
+export type CredentialUpdateToOneWithWhereWithoutActionsInput = {
+  where?: Prisma.CredentialWhereInput
+  data: Prisma.XOR<Prisma.CredentialUpdateWithoutActionsInput, Prisma.CredentialUncheckedUpdateWithoutActionsInput>
+}
+
+export type CredentialUpdateWithoutActionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
+}
+
+export type CredentialUncheckedUpdateWithoutActionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 export type CredentialCreateManyUserInput = {
   id?: string
   platform: $Enums.Platform
@@ -580,6 +678,7 @@ export type CredentialUpdateWithoutUserInput = {
   lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateWithoutUserInput = {
@@ -592,6 +691,7 @@ export type CredentialUncheckedUpdateWithoutUserInput = {
   lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateManyWithoutUserInput = {
@@ -607,6 +707,35 @@ export type CredentialUncheckedUpdateManyWithoutUserInput = {
 }
 
 
+/**
+ * Count Type CredentialCountOutputType
+ */
+
+export type CredentialCountOutputType = {
+  actions: number
+}
+
+export type CredentialCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  actions?: boolean | CredentialCountOutputTypeCountActionsArgs
+}
+
+/**
+ * CredentialCountOutputType without action
+ */
+export type CredentialCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CredentialCountOutputType
+   */
+  select?: Prisma.CredentialCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * CredentialCountOutputType without action
+ */
+export type CredentialCountOutputTypeCountActionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ProposedActionWhereInput
+}
+
 
 export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -620,6 +749,8 @@ export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   createdAt?: boolean
   updatedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  actions?: boolean | Prisma.Credential$actionsArgs<ExtArgs>
+  _count?: boolean | Prisma.CredentialCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["credential"]>
 
 export type CredentialSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -666,6 +797,8 @@ export type CredentialSelectScalar = {
 export type CredentialOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "platform" | "organizationUrl" | "label" | "encryptedPatToken" | "lastValidatedAt" | "lastValidationStatus" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["credential"]>
 export type CredentialInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  actions?: boolean | Prisma.Credential$actionsArgs<ExtArgs>
+  _count?: boolean | Prisma.CredentialCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type CredentialIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
@@ -678,6 +811,7 @@ export type $CredentialPayload<ExtArgs extends runtime.Types.Extensions.Internal
   name: "Credential"
   objects: {
     user: Prisma.$UserPayload<ExtArgs>
+    actions: Prisma.$ProposedActionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1085,6 +1219,7 @@ readonly fields: CredentialFieldRefs;
 export interface Prisma__CredentialClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  actions<T extends Prisma.Credential$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Credential$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProposedActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1522,6 +1657,30 @@ export type CredentialDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.In
    * Limit how many Credentials to delete.
    */
   limit?: number
+}
+
+/**
+ * Credential.actions
+ */
+export type Credential$actionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ProposedAction
+   */
+  select?: Prisma.ProposedActionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ProposedAction
+   */
+  omit?: Prisma.ProposedActionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ProposedActionInclude<ExtArgs> | null
+  where?: Prisma.ProposedActionWhereInput
+  orderBy?: Prisma.ProposedActionOrderByWithRelationInput | Prisma.ProposedActionOrderByWithRelationInput[]
+  cursor?: Prisma.ProposedActionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ProposedActionScalarFieldEnum | Prisma.ProposedActionScalarFieldEnum[]
 }
 
 /**
