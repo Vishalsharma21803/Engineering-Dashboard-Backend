@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import {
   createCredentialSchema,
   credentialIdSchema,
+  updateCredentialSchema,
 } from "../schemas/credential.schema.js";
 import {
   createCredential,
@@ -10,6 +11,7 @@ import {
   getCredentialWithSecret,
   listCredentials,
   recordValidationResult,
+  updateCredential,
 } from "../services/credential.service.js";
 import {
   AzureDevOpsUpstreamError,
@@ -88,6 +90,77 @@ export async function createCredentialController(
 
     console.error(
       "Creating credential failed:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function updateCredentialController(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const userId = getAuthenticatedUserId(req, res);
+
+  if (!userId) {
+    return;
+  }
+
+  const idResult = credentialIdSchema.safeParse(req.params.id);
+
+  if (!idResult.success) {
+    sendInvalidId(res);
+    return;
+  }
+
+  const result = updateCredentialSchema.safeParse(req.body ?? {});
+
+  if (!result.success) {
+    res.status(400).json({
+      message: "Validation failed",
+      errors: result.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
+    return;
+  }
+
+  try {
+    const credential = await updateCredential(
+      userId,
+      idResult.data,
+      result.data
+    );
+
+    if (!credential) {
+      res.status(404).json({
+        message: "Credential not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Credential updated",
+      credential,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "CREDENTIAL_ALREADY_EXISTS"
+    ) {
+      res.status(409).json({
+        message:
+          "A credential for this Azure DevOps organization already exists",
+      });
+      return;
+    }
+
+    console.error(
+      "Updating credential failed:",
       error instanceof Error ? error.message : "Unknown error"
     );
 

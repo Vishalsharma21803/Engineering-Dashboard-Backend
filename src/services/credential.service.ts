@@ -1,7 +1,11 @@
 import { prisma } from "../lib/prisma.js";
 import { encryptSecret } from "../lib/encryption.js";
 import { ValidationStatus } from "../generated/prisma/enums.js";
-import type { CreateCredentialInput } from "../types/credential.types.js";
+import type { Prisma } from "../generated/prisma/client.js";
+import type {
+  CreateCredentialInput,
+  UpdateCredentialInput,
+} from "../types/credential.types.js";
 
 const credentialSelect = {
   id: true,
@@ -35,6 +39,62 @@ export async function createCredential(
         organizationUrl: input.organizationUrl,
         label: input.label ?? null,
         encryptedPatToken: encryptSecret(input.patToken),
+      },
+      select: credentialSelect,
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new Error("CREDENTIAL_ALREADY_EXISTS");
+    }
+
+    throw error;
+  }
+}
+
+export async function updateCredential(
+  userId: string,
+  credentialId: string,
+  input: UpdateCredentialInput
+) {
+  const data: Prisma.CredentialUpdateManyMutationInput = {};
+
+  if (input.organizationUrl !== undefined) {
+    data.organizationUrl = input.organizationUrl;
+  }
+
+  if (input.label !== undefined) {
+    data.label = input.label;
+  }
+
+  if (input.patToken !== undefined) {
+    data.encryptedPatToken = encryptSecret(input.patToken);
+  }
+
+  if (
+    input.organizationUrl !== undefined ||
+    input.patToken !== undefined
+  ) {
+    data.lastValidatedAt = null;
+    data.lastValidationStatus = null;
+  }
+
+  try {
+    const result = await prisma.credential.updateMany({
+      where: {
+        id: credentialId,
+        userId,
+      },
+      data,
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    return await prisma.credential.findFirst({
+      where: {
+        id: credentialId,
+        userId,
       },
       select: credentialSelect,
     });

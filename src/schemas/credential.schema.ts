@@ -127,6 +127,24 @@ export const createCredentialSchema = z.object({
   patToken: patTokenSchema,
 });
 
+export const updateCredentialSchema = z
+  .object({
+    organizationUrl: organizationUrlSchema.optional(),
+    label: z
+      .string()
+      .trim()
+      .min(1, "Label must not be empty")
+      .max(100, "Label must not exceed 100 characters")
+      .nullable()
+      .optional(),
+    patToken: patTokenSchema.optional(),
+  })
+  .refine((input) => Object.keys(input).length > 0, {
+    message:
+      "At least one of organizationUrl, label, or patToken is required",
+    path: ["body"],
+  });
+
 export const credentialIdSchema = z
   .string()
   .uuid("Invalid credential id");
