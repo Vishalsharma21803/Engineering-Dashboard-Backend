@@ -126,7 +126,11 @@ export const listWorkItemsController = azureRead(
     }
 
     return {
-      workItems: await listAssignedWorkItems(client, { projectName, scope: query.state }),
+      workItems: await listAssignedWorkItems(client, {
+        projectName,
+        scope: query.state,
+        assignee: query.assignee,
+      }),
     };
   }
 );

@@ -73,6 +73,8 @@ export type WorkItemScope = "open" | "all" | "compliance";
 export interface WorkItemQuery {
   projectName?: string | undefined;
   scope: WorkItemScope;
+  /** "any" lists the whole project (all assignees); it requires projectName. */
+  assignee?: "me" | "any" | undefined;
 }
 
 function buildAssignedWiql(query: WorkItemQuery, recentDays: number): string {
@@ -80,7 +82,13 @@ function buildAssignedWiql(query: WorkItemQuery, recentDays: number): string {
     (name) => `'${name}'`
   ).join(", ")})`;
 
-  const clauses = ["[System.AssignedTo] = @Me"];
+  const everyone = query.assignee === "any";
+
+  if (everyone && query.projectName === undefined) {
+    throw new Error("PROJECT_REQUIRED_FOR_ALL_ASSIGNEES");
+  }
+
+  const clauses = everyone ? [] : ["[System.AssignedTo] = @Me"];
 
   if (query.projectName !== undefined) {
     clauses.push("[System.TeamProject] = @project");
@@ -94,9 +102,12 @@ function buildAssignedWiql(query: WorkItemQuery, recentDays: number): string {
     clauses.push("[System.ChangedDate] >= @Today - 90");
   }
 
-  return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(
-    " AND "
-  )} ORDER BY [Microsoft.VSTS.Common.Priority] ASC, [System.ChangedDate] DESC`;
+  // Team-wide lists show what moved recently; personal lists show what matters most.
+  const order = everyone
+    ? "[System.ChangedDate] DESC"
+    : "[Microsoft.VSTS.Common.Priority] ASC, [System.ChangedDate] DESC";
+
+  return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(" AND ")} ORDER BY ${order}`;
 }
 
 export async function listAssignedWorkItemIds(

@@ -28,15 +28,26 @@ export const dashboardQuerySchema = z.object({
   projectId: azureProjectIdSchema.optional(),
 });
 
-export const workItemsQuerySchema = z.object({
-  projectId: azureProjectIdSchema.optional(),
-  state: z.enum(["open", "all"]).default("open"),
-});
+export const workItemsQuerySchema = z
+  .object({
+    projectId: azureProjectIdSchema.optional(),
+    state: z.enum(["open", "all"]).default("open"),
+    assignee: z.enum(["me", "any"]).default("me"),
+  })
+  .refine((query) => query.assignee === "me" || query.projectId !== undefined, {
+    message: "projectId is required when assignee is any",
+    path: ["projectId"],
+  });
 
-export const pullRequestsQuerySchema = z.object({
-  projectId: azureProjectIdSchema.optional(),
-  role: z.enum(["author", "reviewer", "all"]).default("all"),
-});
+export const pullRequestsQuerySchema = z
+  .object({
+    projectId: azureProjectIdSchema.optional(),
+    role: z.enum(["author", "reviewer", "all", "everyone"]).default("all"),
+  })
+  .refine((query) => query.role !== "everyone" || query.projectId !== undefined, {
+    message: "projectId is required when role is everyone",
+    path: ["projectId"],
+  });
 
 export const runsQuerySchema = z.object({
   top: z.coerce.number().int().min(1).max(100).default(20),

@@ -516,7 +516,11 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
 
         const openOnly = query.includes("NOT IN") && !query.includes(" OR ");
         const ids = [...fake.workItems.values()]
-          .filter((item) => (item.fields["System.AssignedTo"] as { id?: string })?.id === ME.id)
+          .filter(
+            (item) =>
+              !query.includes("[System.AssignedTo] = @Me") ||
+              (item.fields["System.AssignedTo"] as { id?: string })?.id === ME.id
+          )
           .filter((item) => !project || item.fields["System.TeamProject"] === project.name)
           .filter((item) => !openOnly || !["Closed", "Done", "Removed"].includes(String(item.fields["System.State"])))
           .map((item) => ({ id: item.id }));

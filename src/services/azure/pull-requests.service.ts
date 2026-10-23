@@ -22,7 +22,8 @@ const MAX_PULL_REQUESTS = 50;
 const POLICY_API_VERSION = "7.1-preview.1";
 const UNRESOLVED_THREAD_STATUSES = new Set(["active", "pending"]);
 
-export type PullRequestRole = "author" | "reviewer" | "all";
+/** "all" = mine (authored or reviewing); "everyone" = every active PR in the projects. */
+export type PullRequestRole = "author" | "reviewer" | "all" | "everyone";
 
 function voteLabel(vote: number): PullRequestReviewer["voteLabel"] {
   if (vote >= 10) return "approved";
@@ -145,6 +146,10 @@ export async function listMyPullRequests(
   const threadLimit = createLimiter(4);
 
   const perProject = await mapWithLimit(projectIds, projectLimit, async (projectId) => {
+    if (role === "everyone") {
+      return searchPullRequests(client, projectId, {});
+    }
+
     const [authored, reviewing] = await Promise.all([
       role === "reviewer"
         ? Promise.resolve([])

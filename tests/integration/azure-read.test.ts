@@ -113,6 +113,45 @@ describe("Azure read API — data", () => {
     expect(blocked).toMatchObject({ blocked: true, stateCategory: "Proposed", tags: ["Blocked", "vendor"] });
   });
 
+  it("lists the whole project's work items, including other people's, for the project overview", async () => {
+    const response = await get("/work-items?projectId=Alpha&assignee=any").expect(200);
+    const items = response.body.workItems as Array<{ id: number; assignedTo: { displayName: string } | null }>;
+
+    expect(items.map((item) => item.id).sort()).toEqual([101, 102, 103, 105, 106]);
+    expect(items.find((item) => item.id === 105)?.assignedTo?.displayName).toBe("Reviewer Two");
+
+    const wiql = fake.requests.find((entry) => entry.path.endsWith("/wiql"));
+    expect(JSON.stringify(wiql?.body)).not.toContain("@Me");
+  });
+
+  it("requires a project for team-wide lists", async () => {
+    await get("/work-items?assignee=any").expect(400);
+    await get("/pull-requests?role=everyone").expect(400);
+  });
+
+  it("keeps My work scoped to the signed-in user", async () => {
+    const response = await get("/work-items?projectId=Alpha").expect(200);
+    expect(response.body.workItems.map((item: { id: number }) => item.id)).not.toContain(105);
+  });
+
+  it("lists every active PR in a project", async () => {
+    fake.pullRequests.push({
+      ...fake.pullRequests[2]!,
+      pullRequestId: 4,
+      title: "Someone else's PR",
+      reviewers: [],
+    });
+
+    const response = await get("/pull-requests?projectId=Alpha&role=everyone").expect(200);
+    const prs = response.body.pullRequests as Array<{ pullRequestId: number; myRole: string }>;
+
+    expect(prs.map((pr) => pr.pullRequestId).sort()).toEqual([1, 3, 4]);
+    expect(prs.find((pr) => pr.pullRequestId === 4)?.myRole).toBe("other");
+
+    const mine = (await get("/pull-requests?projectId=Alpha").expect(200)).body.pullRequests;
+    expect(mine.map((pr: { pullRequestId: number }) => pr.pullRequestId).sort()).toEqual([1, 3]);
+  });
+
   it("filters work items by project", async () => {
     const response = await get("/work-items?projectId=Beta&state=all").expect(200);
     expect(response.body.workItems.map((item: { id: number }) => item.id)).toEqual([104]);
