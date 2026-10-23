@@ -43,8 +43,23 @@ const blockExternal = http.all(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, ({ requ
   return HttpResponse.error();
 });
 
+// A second, nearly empty organization with a different project, for org-switching tests.
+const SECOND_ORG = "https://dev.azure.com/fake-org-2";
+const GAMMA = { id: "eeeeeeee-0000-4000-8000-000000000005", name: "Gamma", state: "wellFormed", visibility: "private" };
+const secondOrg = http.all(`${SECOND_ORG}/*`, ({ request }) => {
+  const path = new URL(request.url).pathname.replace(/^\/fake-org-2/, "").toLowerCase();
+
+  if (path === "/_apis/connectiondata") {
+    return HttpResponse.json({ authenticatedUser: { id: "11111111-1111-4111-8111-111111111111", providerDisplayName: "Dev Example" } });
+  }
+  if (path === "/_apis/projects") return HttpResponse.json({ count: 1, value: [GAMMA] });
+  if (path.startsWith("/_apis/projects/") && !path.includes("/teams")) return HttpResponse.json(GAMMA);
+  if (path.endsWith("/_apis/wit/wiql")) return HttpResponse.json({ workItems: [] });
+  return HttpResponse.json({ count: 0, value: [] });
+});
+
 let fake = createFakeAzure();
-const server = setupServer(...fakeAzureHandlers(fake), blockExternal);
+const server = setupServer(...fakeAzureHandlers(fake), secondOrg, blockExternal);
 server.listen({ onUnhandledFrame: "bypass" });
 
 async function reset(): Promise<void> {
@@ -53,7 +68,7 @@ async function reset(): Promise<void> {
   );
   clearAzureCache();
   fake = createFakeAzure();
-  server.resetHandlers(...fakeAzureHandlers(fake), blockExternal);
+  server.resetHandlers(...fakeAzureHandlers(fake), secondOrg, blockExternal);
 }
 
 await reset();
