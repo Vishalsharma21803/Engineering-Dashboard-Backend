@@ -4,6 +4,7 @@ import type { WorkItemSummary } from "../../src/types/azure.types.js";
 import { WORK_ITEM_FIELDS } from "../../src/services/azure/work-items.service.js";
 import { localDay, mentionsDate, runCodeCheck } from "../../src/services/sop/code-checker.js";
 import type { TicketDossier } from "../../src/services/sop/dossier.js";
+import { profileFromSettings, projectSettingsSchema } from "../../src/services/sop/project-settings.js";
 import { parseRulebook } from "../../src/services/sop/rulebook.parser.js";
 import type { CodeRuleCard, ProjectProfile, RuleCard } from "../../src/services/sop/rulebook.types.js";
 import { evaluateDossier } from "../../src/services/sop/sop-evaluator.js";
@@ -13,22 +14,14 @@ const NOW = new Date("2025-10-15T12:00:00Z");
 const ME = { id: "me", displayName: "Me", uniqueName: "me@example.com" };
 const OTHER = { id: "other", displayName: "Other", uniqueName: "other@example.com" };
 
-const PROFILE = parseRulebook(
-  `---
-kind: project
-project: Alpha
-stages:
-  ready: [New]
-  active: [Active]
-  review: [Review]
-  testing: [Testing]
-  done: [Closed]
-pr_target_branch: develop
-timezone: Asia/Kolkata
----
-`,
-  "default"
-).projects[0] as ProjectProfile;
+const PROFILE: ProjectProfile = profileFromSettings(
+  "Alpha",
+  projectSettingsSchema.parse({
+    stages: { ready: ["New"], active: ["Active"], review: ["Review"], testing: ["Testing"], done: ["Closed"] },
+    prTargetBranch: "develop",
+    timeZone: "Asia/Kolkata",
+  })
+);
 
 function workItem(overrides: Partial<WorkItemSummary> = {}): WorkItemSummary {
   return {
@@ -328,7 +321,26 @@ when: always
 `,
     "default"
   );
-  const effective = { projects: [PROFILE], cards: rulebook.cards as RuleCard[], issues: [], defaultVersion: 3, personalVersion: 1 };
+  const effective = { projects: [PROFILE], cards: rulebook.cards as RuleCard[], issues: [], switchedOff: [], defaultVersion: 3, personalVersion: 1 };
+
+  it("checks estimate rules at Estimation, or once work starts when the project has no Estimation stage", () => {
+    const estimate = parseRulebook(
+      "---\nid: E-01\ntitle: Estimate exists\nchecker: code\nuses: estimate-present\napplies_to: [task]\nwhen: at-estimation\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const rules = { ...effective, cards: estimate };
+    const noEstimate = workItem({ originalEstimate: null });
+    const newTicket = { workItem: noEstimate, stage: "ready" as const, stageHistory: [] };
+
+    // PROFILE has no Estimation stage: a New ticket is not checked, an Active one is.
+    expect(evaluateDossier(dossier(newTicket), rules, NOW).violations).toEqual([]);
+    expect(evaluateDossier(dossier({ workItem: noEstimate }), rules, NOW).violations).toHaveLength(1);
+
+    const withEstimation = { ...PROFILE, stages: { ...PROFILE.stages, estimation: ["Estimations"] } };
+    const estimating = dossier({ ...newTicket, profile: withEstimation, stage: "estimation", stageHistory: [{ value: "Estimations", stage: "estimation", at: new Date("2025-10-05T05:00:00Z"), by: ME, initial: false }] });
+    expect(evaluateDossier(estimating, rules, NOW).violations).toHaveLength(1);
+    expect(evaluateDossier(dossier({ ...newTicket, profile: withEstimation }), rules, NOW).violations).toEqual([]);
+  });
 
   it("only runs rules for this kind once their stage is reached, and explains missing stages", () => {
     const result = evaluateDossier(dossier({ workItem: workItem({ originalEstimate: null }) }), effective, NOW);

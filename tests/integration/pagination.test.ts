@@ -56,9 +56,10 @@ describe("My work pagination", () => {
     expect(bugs).toMatchObject({ page: 1, total: 1, totalPages: 1 });
     expect(ids(bugs)).toEqual([103]);
 
+    // #106 is still New, so it is not flagged; 102, 103 and the 23 active tasks are.
     const gaps = await myWork("?sop=T-01");
-    expect(gaps.total).toBe(26);
-    expect(gaps.facets.sop).toEqual(expect.arrayContaining([{ value: "T-01", label: "T-01 · Estimate exists", count: 26 }]));
+    expect(gaps.total).toBe(25);
+    expect(gaps.facets.sop).toEqual(expect.arrayContaining([{ value: "T-01", label: "T-01 · Estimate exists", count: 25 }]));
 
     // Tampered filter values just match nothing.
     const nonsense = await myWork(`?type=${"x".repeat(500)}&sop=%3Cscript%3E&stateCategory=Nope`);
@@ -134,15 +135,16 @@ describe("SOP report pagination", () => {
   it("pages the tickets with gaps while totals cover all, reusing the built report", async () => {
     const report = (query: string) => agent.get(azurePath(credentialId, `/projects/Alpha/sop-report${query}`)).expect(200);
 
+    // 102, 103, 105 and the 23 active tasks (106 is New and not flagged).
     const first = (await report("")).body.report;
-    expect(first.itemsWithGaps).toBe(27);
-    expect(first.items).toMatchObject({ page: 1, pageSize: 10, total: 27, totalPages: 3 });
+    expect(first.itemsWithGaps).toBe(26);
+    expect(first.items).toMatchObject({ page: 1, pageSize: 10, total: 26, totalPages: 3 });
     expect(first.items.items).toHaveLength(10);
 
     const before = fake.requests.length;
     const last = (await report("?page=50")).body.report;
     expect(last.items).toMatchObject({ page: 3 });
-    expect(last.items.items).toHaveLength(7);
+    expect(last.items.items).toHaveLength(6);
     // At most the project lookup; the report itself is reused, not rebuilt.
     expect(fake.requests.length).toBeLessThanOrEqual(before + 1);
   });

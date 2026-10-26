@@ -95,6 +95,23 @@ export type AppSetting = Prisma.AppSettingModel
  */
 export type Rulebook = Prisma.RulebookModel
 /**
+ * Model SopProject
+ * How one Azure DevOps project maps onto the SOP (stages, fields, categories...).
+ * Shared: anyone may set a project up or change it; every change is kept in SopProjectChange.
+ * Matched by project name (case-insensitive), as project facts always were.
+ */
+export type SopProject = Prisma.SopProjectModel
+/**
+ * Model SopProjectChange
+ * History of project set-ups: who changed what, when (kept after a set-up is removed).
+ */
+export type SopProjectChange = Prisma.SopProjectChangeModel
+/**
+ * Model SopProjectExclusion
+ * Projects a user switched SOP checks off for (all set-up projects are on by default).
+ */
+export type SopProjectExclusion = Prisma.SopProjectExclusionModel
+/**
  * Model UserRulebook
  * Versions of one user's personal rule file (overrides + MY- rules). Latest is active.
  */

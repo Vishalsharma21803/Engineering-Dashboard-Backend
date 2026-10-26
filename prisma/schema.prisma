@@ -74,21 +74,22 @@ enum AuditEvent {
 }
 
 model User {
-  id            String           @id @default(uuid())
-  name          String
-  email         String           @unique
-  password      String
-  credentials   Credential[]
-  actions       ProposedAction[]
-  auditLogs     AuditLog[]
-  triageMarks   TriageMark[]
-  aiCredentials AiCredential[]
-  aiPreference  AiPreference?
-  aiUsage       AiUsage[]
-  userRulebooks UserRulebook[]
-  sopAiChecks   SopAiCheck[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id                   String                @id @default(uuid())
+  name                 String
+  email                String                @unique
+  password             String
+  credentials          Credential[]
+  actions              ProposedAction[]
+  auditLogs            AuditLog[]
+  triageMarks          TriageMark[]
+  aiCredentials        AiCredential[]
+  aiPreference         AiPreference?
+  aiUsage              AiUsage[]
+  userRulebooks        UserRulebook[]
+  sopAiChecks          SopAiCheck[]
+  sopProjectExclusions SopProjectExclusion[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 }
 
 model Credential {
@@ -260,6 +261,56 @@ model Rulebook {
   note      String?
   createdBy String?
   createdAt DateTime @default(now())
+}
+
+/// How one Azure DevOps project maps onto the SOP (stages, fields, categories...).
+/// Shared: anyone may set a project up or change it; every change is kept in SopProjectChange.
+/// Matched by project name (case-insensitive), as project facts always were.
+model SopProject {
+  id          String                @id @default(uuid())
+  /// Lower-cased project name; the lookup key.
+  nameKey     String                @unique
+  projectName String
+  /// Validated project settings (see project-settings.ts).
+  settings    Json
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  changes     SopProjectChange[]
+  exclusions  SopProjectExclusion[]
+}
+
+enum SopProjectChangeKind {
+  CREATED
+  UPDATED
+  REMOVED
+  IMPORTED
+}
+
+/// History of project set-ups: who changed what, when (kept after a set-up is removed).
+model SopProjectChange {
+  id           String               @id @default(uuid())
+  sopProjectId String?
+  sopProject   SopProject?          @relation(fields: [sopProjectId], references: [id], onDelete: SetNull)
+  projectName  String
+  kind         SopProjectChangeKind
+  settings     Json?
+  changedBy    String?
+  createdAt    DateTime             @default(now())
+
+  @@index([projectName, createdAt])
+}
+
+/// Projects a user switched SOP checks off for (all set-up projects are on by default).
+model SopProjectExclusion {
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sopProjectId String
+  sopProject   SopProject @relation(fields: [sopProjectId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([userId, sopProjectId])
 }
 
 /// Versions of one user's personal rule file (overrides + MY- rules). Latest is active.

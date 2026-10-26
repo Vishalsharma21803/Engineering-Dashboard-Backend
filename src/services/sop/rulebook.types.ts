@@ -1,5 +1,5 @@
 /** SOP stages a project's states or board columns map onto (WI-002 terminology). */
-export const SOP_STAGES = ["ready", "active", "review", "testing", "qa", "uat", "done"] as const;
+export const SOP_STAGES = ["ready", "estimation", "active", "review", "testing", "qa", "uat", "done"] as const;
 export type SopStage = (typeof SOP_STAGES)[number];
 
 /** Logical work item kinds; each project maps them to its Azure type names. */
@@ -8,6 +8,9 @@ export type ItemKind = (typeof ITEM_KINDS)[number];
 
 /** When a rule is evaluated, relative to the ticket's stage history. */
 export const RULE_WHEN = [
+  /** Checked once the ticket reaches Estimations (projects without that stage: once work starts). */
+  "at-estimation",
+  /** Must be true before work starts: checked once the ticket reaches Active, never on new tickets. */
   "before-active",
   "at-review",
   "at-testing",

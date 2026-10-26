@@ -9,9 +9,14 @@ import type { ProjectProfile, RuleCard, RuleWhen, SopStage } from "./rulebook.ty
 export interface RulebookForChecks extends EffectiveRulebook {
   defaultVersion: number;
   personalVersion: number;
+  /** Set-up projects the user switched SOP checks off for (shown as such, not "not set up"). */
+  switchedOff: string[];
 }
 
+/** When a rule starts to apply. "before-active" rules must be done before work starts, so they are checked once it has. */
 const STAGE_OF_WHEN: Partial<Record<RuleWhen, SopStage>> = {
+  "at-estimation": "estimation",
+  "before-active": "active",
   "at-review": "review",
   "at-testing": "testing",
   "at-qa": "qa",
@@ -33,10 +38,15 @@ function candidateCards(rulebook: RulebookForChecks, profile: ProjectProfile, ty
  * rule is not listed; a reason is shown as a skipped rule.
  */
 export function cardApplies(card: RuleCard, dossier: TicketDossier): Applicability {
-  const stage = STAGE_OF_WHEN[card.when];
+  let stage = STAGE_OF_WHEN[card.when];
 
   if (!stage) {
     return { applies: true };
+  }
+
+  // Projects without an Estimations state estimate when work starts.
+  if (stage === "estimation" && dossier.profile.stages.estimation.length === 0) {
+    stage = "active";
   }
 
   if (dossier.profile.stages[stage].length === 0) {
@@ -62,7 +72,12 @@ function needsFor(cards: RuleCard[]): Set<DossierNeed> {
   return needs;
 }
 
-function baseResult(workItem: WorkItemSummary, rulebook: RulebookForChecks, configured: boolean): ComplianceResult {
+function baseResult(
+  workItem: WorkItemSummary,
+  rulebook: RulebookForChecks,
+  sopProject: ComplianceResult["sopProject"]
+): ComplianceResult {
+  const configured = sopProject === "checked";
   return {
     workItemId: workItem.id,
     projectName: workItem.projectName,
@@ -71,6 +86,7 @@ function baseResult(workItem: WorkItemSummary, rulebook: RulebookForChecks, conf
     state: workItem.state,
     stateCategory: workItem.stateCategory,
     configured,
+    sopProject,
     rulebook: { defaultVersion: rulebook.defaultVersion, personalVersion: rulebook.personalVersion },
     violations: [],
     passedRules: [],
@@ -82,7 +98,7 @@ function baseResult(workItem: WorkItemSummary, rulebook: RulebookForChecks, conf
 
 /** Runs the code rules on an already-built dossier. AI rules are only listed. */
 export function evaluateDossier(dossier: TicketDossier, rulebook: RulebookForChecks, now: Date): ComplianceResult {
-  const result = baseResult(dossier.workItem, rulebook, true);
+  const result = baseResult(dossier.workItem, rulebook, "checked");
 
   for (const card of candidateCards(rulebook, dossier.profile, dossier.workItem.type)) {
     const ref = { ruleId: card.id, ruleTitle: card.title };
@@ -138,7 +154,8 @@ export async function evaluateTicket(
   const profile = findProjectProfile(rulebook.projects, workItem.projectName);
 
   if (!profile) {
-    return baseResult(workItem, rulebook, false);
+    const off = rulebook.switchedOff.some((name) => name.toLowerCase() === workItem.projectName.toLowerCase());
+    return baseResult(workItem, rulebook, off ? "switched-off" : "not-set-up");
   }
 
   const cards = candidateCards(rulebook, profile, workItem.type);

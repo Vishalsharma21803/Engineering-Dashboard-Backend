@@ -17,7 +17,7 @@ export function getApp(): Express {
 
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook" CASCADE'
+    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook", "SopProject", "SopProjectChange" CASCADE'
   );
 }
 
@@ -52,8 +52,8 @@ export async function addCredential(agent: Agent, patToken = FAKE_PAT): Promise<
 }
 
 /** Signed-in user with a credential pointing at the fake org. */
-export async function setupUser(): Promise<{ agent: Agent; credentialId: string }> {
-  const agent = await signIn();
+export async function setupUser(email?: string): Promise<{ agent: Agent; credentialId: string }> {
+  const agent = await signIn(email);
   const credentialId = await addCredential(agent);
   return { agent, credentialId };
 }

@@ -54,11 +54,13 @@ function allAiCards(rulebook: RulebookForChecks): AiRuleCard[] {
 function inputHash(
   rev: number,
   cards: AiRuleCard[],
-  categories: Record<string, string>,
+  profile: ProjectProfile,
   settings: { provider: string; model: string; effort: string }
 ): string {
+  // The whole project set-up counts: stages decide which rules apply, categories what a fix may suggest.
+  const { line: _line, ...project } = profile;
   return createHash("sha256")
-    .update(JSON.stringify({ rev, settings, categories, cards: cards.map((card) => [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]) }))
+    .update(JSON.stringify({ rev, settings, project, cards: cards.map((card) => [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]) }))
     .digest("hex");
 }
 
@@ -146,7 +148,7 @@ export async function enqueueAiChecks(
       continue;
     }
 
-    const hash = inputHash(raw.rev, cards, profile.categories, settings);
+    const hash = inputHash(raw.rev, cards, profile, settings);
     const before = previous.get(id);
     const retryable = before && (before.status === "FAILED" || before.status === "SKIPPED") && RETRYABLE_REASONS.has(before.errorReason ?? "");
 

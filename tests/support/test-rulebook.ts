@@ -1,17 +1,12 @@
 import { prisma } from "../../src/lib/prisma.js";
 
-/** A small default rulebook for the fake "Alpha" project (Beta stays unconfigured). */
-export const ALPHA_RULEBOOK = `---
-kind: project
-project: Alpha
-stages:
-  ready: [New]
-  active: [Active]
-  review: [Resolved]
-  done: [Closed]
----
+/** The fake "Alpha" project's SOP set-up (Beta stays not set up). */
+export const ALPHA_SETTINGS = {
+  stages: { ready: ["New"], active: ["Active"], review: ["Resolved"], done: ["Closed"] },
+};
 
----
+/** A small default rulebook used with the Alpha set-up. */
+export const ALPHA_RULEBOOK = `---
 id: T-01
 title: Estimate exists
 checker: code
@@ -78,6 +73,9 @@ severity: off
 **Rule:** Not checked.
 `;
 
-export async function useAlphaRulebook(content = ALPHA_RULEBOOK) {
+/** Saves the rulebook as version 1 and sets Alpha up (projects already live on the Projects screen). */
+export async function useAlphaRulebook(content = ALPHA_RULEBOOK, settings: object = ALPHA_SETTINGS) {
+  await prisma.appSetting.create({ data: { key: "sop.projectsMovedFromRulebook", value: { test: true } } });
   await prisma.rulebook.create({ data: { version: 1, content, note: "test" } });
+  await prisma.sopProject.create({ data: { nameKey: "alpha", projectName: "Alpha", settings } });
 }

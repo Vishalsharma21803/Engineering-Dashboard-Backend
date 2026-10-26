@@ -10,7 +10,7 @@ const MAX_LISTED_ITEMS = 200;
 
 export interface SopReport {
   projectName: string;
-  /** False when the default rulebook has no facts for this project. */
+  /** False when the project is not set up for SOP checks. */
   configured: boolean;
   defaultVersion: number;
   generatedAt: string;

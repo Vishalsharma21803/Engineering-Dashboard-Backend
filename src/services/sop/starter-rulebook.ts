@@ -5,62 +5,10 @@
  */
 export const STARTER_RULEBOOK = `# Engineer Cockpit SOP rulebook (WI-002 v1.3 starter)
 
-Each block between --- lines is either project facts (kind: project) or one rule card.
-Rule cards: checker "code" = a fixed built-in check; checker "ai" = judged by the user's AI model
+Each block between --- lines is one rule card. Projects (their states, fields and categories)
+are set up on the SOP rules → Projects tab. Rule cards: checker "code" = a fixed built-in check; checker "ai" = judged by the user's AI model
 from the plain-English sections below the header. Every rule starts as "warn" until a baseline
 is measured. A line containing only --- always starts or ends a header, so do not use one inside text.
-
----
-kind: project
-project: automations
-stage_source: state
-stages:
-  ready: [New, Estimations]
-  active: [Active]
-  review: [Review]
-  testing: [Testing]
-  done: [Closed]
-roles:
-  tl: []
-  qa: []
-  po: []
-fields:
-  category: Microsoft.VSTS.Common.Activity
-  target_completion: Microsoft.VSTS.Scheduling.DueDate
-categories:
-  Development: Writing or changing application code, including bug fixes and refactoring.
-  Deployment: Releasing, pipelines, environments, infrastructure and configuration changes.
-  Design: UI/UX design, technical design or architecture work before implementation.
-  Documentation: Writing or updating documentation, guides, READMEs or runbooks.
-  Requirements: Analysing scope, clarifying requirements, writing stories or acceptance criteria.
-  Testing: Writing or running tests, QA verification and test evidence.
-pr_target_branch: develop
-timezone: UTC
----
-Pilot project. Roles (TL, QA, PO) are still to be filled in by the SOP owner.
-
----
-kind: project
-project: DevOps
-stage_source: state
-stages:
-  ready: [New]
-  active: [Active]
-  done: [Closed]
-fields:
-  category: Microsoft.VSTS.Common.Activity
-  target_completion: null
-categories:
-  Development: Writing or changing application code, including bug fixes and refactoring.
-  Deployment: Releasing, pipelines, environments, infrastructure and configuration changes.
-  Design: UI/UX design, technical design or architecture work before implementation.
-  Documentation: Writing or updating documentation, guides, READMEs or runbooks.
-  Requirements: Analysing scope, clarifying requirements, writing stories or acceptance criteria.
-  Testing: Writing or running tests, QA verification and test evidence.
-pr_target_branch: develop
-timezone: UTC
----
-Test project (plain Agile process: no Review or Testing states).
 
 ---
 id: STR-01
@@ -93,10 +41,10 @@ checker: code
 uses: field-present
 params: { field: due-date }
 applies_to: [story, task, bug]
-when: before-active
+when: at-estimation
 severity: warn
 ---
-**Rule:** Due Date is set before work starts.
+**Rule:** Due Date is set once the ticket is estimated (Estimations, or Active where there is no Estimations state).
 
 ---
 id: STR-05
@@ -104,10 +52,10 @@ title: Estimate exists
 checker: code
 uses: estimate-present
 applies_to: [story, task, bug]
-when: before-active
+when: at-estimation
 severity: warn
 ---
-**Rule:** Stories have story points; tasks and bugs have an original estimate in hours, before work starts.
+**Rule:** Stories have story points; tasks and bugs have an original estimate in hours, once the ticket is estimated.
 
 ---
 id: STR-06
@@ -177,7 +125,7 @@ applies_to: [task, bug]
 when: before-active
 severity: warn
 ---
-**Rule:** A team lead approves the technical approach in a comment before work starts. The approver must be listed as a TL in the project facts and must not be the ticket's developer.
+**Rule:** A team lead approves the technical approach in a comment before work starts. The approver must be listed as a TL in the project's set-up (SOP rules → Projects) and must not be the ticket's developer.
 
 **Passes when:** A comment by a TL, written after the approach, clearly approves it (for example "approved", "looks good, go ahead", "LGTM").
 
@@ -238,10 +186,10 @@ title: Time fields are filled in
 checker: code
 uses: time-fields-present
 applies_to: [task, bug]
-when: before-active
+when: at-estimation
 severity: warn
 ---
-**Rule:** Original estimate, remaining work and completed work (and the target completion date where configured) are filled in.
+**Rule:** Once the ticket is estimated, original estimate, remaining work and completed work (and the target completion date where configured) are filled in.
 
 ---
 id: STR-15
@@ -511,4 +459,62 @@ when: always
 severity: warn
 ---
 **Rule:** If the title marks the ticket as blocked, on hold, paused or under discussion, it starts with exactly [Blocked], [On Hold], [Paused] or [Discuss].
+`;
+
+/**
+ * Project facts that version 0 used to carry. When Cockpit moves project set-ups out of the
+ * rulebook and the organization still uses the built-in starter, these become the first set-ups.
+ */
+export const STARTER_PROJECT_BLOCKS = `---
+kind: project
+project: automations
+stage_source: state
+stages:
+  ready: [New, Estimations]
+  active: [Active]
+  review: [Review]
+  testing: [Testing]
+  done: [Closed]
+roles:
+  tl: []
+  qa: []
+  po: []
+fields:
+  category: Microsoft.VSTS.Common.Activity
+  target_completion: Microsoft.VSTS.Scheduling.DueDate
+categories:
+  Development: Writing or changing application code, including bug fixes and refactoring.
+  Deployment: Releasing, pipelines, environments, infrastructure and configuration changes.
+  Design: UI/UX design, technical design or architecture work before implementation.
+  Documentation: Writing or updating documentation, guides, READMEs or runbooks.
+  Requirements: Analysing scope, clarifying requirements, writing stories or acceptance criteria.
+  Testing: Writing or running tests, QA verification and test evidence.
+pr_target_branch: develop
+timezone: UTC
+---
+Pilot project. Roles (TL, QA, PO) are still to be filled in by the SOP owner.
+
+---
+kind: project
+project: DevOps
+stage_source: state
+stages:
+  ready: [New]
+  active: [Active]
+  done: [Closed]
+fields:
+  category: Microsoft.VSTS.Common.Activity
+  target_completion: null
+categories:
+  Development: Writing or changing application code, including bug fixes and refactoring.
+  Deployment: Releasing, pipelines, environments, infrastructure and configuration changes.
+  Design: UI/UX design, technical design or architecture work before implementation.
+  Documentation: Writing or updating documentation, guides, READMEs or runbooks.
+  Requirements: Analysing scope, clarifying requirements, writing stories or acceptance criteria.
+  Testing: Writing or running tests, QA verification and test evidence.
+pr_target_branch: develop
+timezone: UTC
+---
+Test project (plain Agile process: no Review or Testing states).
+
 `;

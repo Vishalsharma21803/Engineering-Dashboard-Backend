@@ -61,6 +61,9 @@ export const ModelName = {
   AiUsage: 'AiUsage',
   AppSetting: 'AppSetting',
   Rulebook: 'Rulebook',
+  SopProject: 'SopProject',
+  SopProjectChange: 'SopProjectChange',
+  SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
   SopAiCheck: 'SopAiCheck'
 } as const
@@ -231,6 +234,42 @@ export const RulebookScalarFieldEnum = {
 } as const
 
 export type RulebookScalarFieldEnum = (typeof RulebookScalarFieldEnum)[keyof typeof RulebookScalarFieldEnum]
+
+
+export const SopProjectScalarFieldEnum = {
+  id: 'id',
+  nameKey: 'nameKey',
+  projectName: 'projectName',
+  settings: 'settings',
+  createdBy: 'createdBy',
+  updatedBy: 'updatedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SopProjectScalarFieldEnum = (typeof SopProjectScalarFieldEnum)[keyof typeof SopProjectScalarFieldEnum]
+
+
+export const SopProjectChangeScalarFieldEnum = {
+  id: 'id',
+  sopProjectId: 'sopProjectId',
+  projectName: 'projectName',
+  kind: 'kind',
+  settings: 'settings',
+  changedBy: 'changedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type SopProjectChangeScalarFieldEnum = (typeof SopProjectChangeScalarFieldEnum)[keyof typeof SopProjectChangeScalarFieldEnum]
+
+
+export const SopProjectExclusionScalarFieldEnum = {
+  userId: 'userId',
+  sopProjectId: 'sopProjectId',
+  createdAt: 'createdAt'
+} as const
+
+export type SopProjectExclusionScalarFieldEnum = (typeof SopProjectExclusionScalarFieldEnum)[keyof typeof SopProjectExclusionScalarFieldEnum]
 
 
 export const UserRulebookScalarFieldEnum = {

@@ -113,3 +113,13 @@ export const AiEffort = {
 } as const
 
 export type AiEffort = (typeof AiEffort)[keyof typeof AiEffort]
+
+
+export const SopProjectChangeKind = {
+  CREATED: 'CREATED',
+  UPDATED: 'UPDATED',
+  REMOVED: 'REMOVED',
+  IMPORTED: 'IMPORTED'
+} as const
+
+export type SopProjectChangeKind = (typeof SopProjectChangeKind)[keyof typeof SopProjectChangeKind]

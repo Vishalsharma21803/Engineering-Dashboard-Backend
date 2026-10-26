@@ -5,10 +5,10 @@ import { verifyVerdicts } from "../../src/services/sop/ai/sop-ai-verifier.js";
 import type { TicketDossier } from "../../src/services/sop/dossier.js";
 import { parseRulebook } from "../../src/services/sop/rulebook.parser.js";
 import type { AiRuleCard, ProjectProfile } from "../../src/services/sop/rulebook.types.js";
-import { STARTER_RULEBOOK } from "../../src/services/sop/starter-rulebook.js";
+import { STARTER_PROJECT_BLOCKS, STARTER_RULEBOOK } from "../../src/services/sop/starter-rulebook.js";
 
 const starter = parseRulebook(STARTER_RULEBOOK, "default");
-const profile = starter.projects[0] as ProjectProfile;
+const profile = parseRulebook(STARTER_PROJECT_BLOCKS, "default", { legacyProjects: true }).projects[0] as ProjectProfile;
 const cards = starter.cards.filter((card): card is AiRuleCard => card.checker === "ai");
 const story = cards.find((card) => card.id === "STR-06") as AiRuleCard;
 const steps = cards.find((card) => card.id === "STR-08") as AiRuleCard;

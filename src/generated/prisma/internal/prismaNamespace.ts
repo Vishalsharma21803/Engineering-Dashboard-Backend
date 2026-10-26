@@ -407,6 +407,9 @@ export const ModelName = {
   AiUsage: 'AiUsage',
   AppSetting: 'AppSetting',
   Rulebook: 'Rulebook',
+  SopProject: 'SopProject',
+  SopProjectChange: 'SopProjectChange',
+  SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
   SopAiCheck: 'SopAiCheck'
 } as const
@@ -424,7 +427,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "userRulebook" | "sopAiCheck"
+    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1168,6 +1171,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    SopProject: {
+      payload: Prisma.$SopProjectPayload<ExtArgs>
+      fields: Prisma.SopProjectFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SopProjectFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SopProjectFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        findFirst: {
+          args: Prisma.SopProjectFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SopProjectFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        findMany: {
+          args: Prisma.SopProjectFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>[]
+        }
+        create: {
+          args: Prisma.SopProjectCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        createMany: {
+          args: Prisma.SopProjectCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SopProjectCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>[]
+        }
+        delete: {
+          args: Prisma.SopProjectDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        update: {
+          args: Prisma.SopProjectUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        deleteMany: {
+          args: Prisma.SopProjectDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SopProjectUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SopProjectUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>[]
+        }
+        upsert: {
+          args: Prisma.SopProjectUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectPayload>
+        }
+        aggregate: {
+          args: Prisma.SopProjectAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSopProject>
+        }
+        groupBy: {
+          args: Prisma.SopProjectGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SopProjectCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectCountAggregateOutputType> | number
+        }
+      }
+    }
+    SopProjectChange: {
+      payload: Prisma.$SopProjectChangePayload<ExtArgs>
+      fields: Prisma.SopProjectChangeFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SopProjectChangeFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SopProjectChangeFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        findFirst: {
+          args: Prisma.SopProjectChangeFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SopProjectChangeFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        findMany: {
+          args: Prisma.SopProjectChangeFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>[]
+        }
+        create: {
+          args: Prisma.SopProjectChangeCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        createMany: {
+          args: Prisma.SopProjectChangeCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SopProjectChangeCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>[]
+        }
+        delete: {
+          args: Prisma.SopProjectChangeDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        update: {
+          args: Prisma.SopProjectChangeUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        deleteMany: {
+          args: Prisma.SopProjectChangeDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SopProjectChangeUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SopProjectChangeUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>[]
+        }
+        upsert: {
+          args: Prisma.SopProjectChangeUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectChangePayload>
+        }
+        aggregate: {
+          args: Prisma.SopProjectChangeAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSopProjectChange>
+        }
+        groupBy: {
+          args: Prisma.SopProjectChangeGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectChangeGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SopProjectChangeCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectChangeCountAggregateOutputType> | number
+        }
+      }
+    }
+    SopProjectExclusion: {
+      payload: Prisma.$SopProjectExclusionPayload<ExtArgs>
+      fields: Prisma.SopProjectExclusionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SopProjectExclusionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SopProjectExclusionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        findFirst: {
+          args: Prisma.SopProjectExclusionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SopProjectExclusionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        findMany: {
+          args: Prisma.SopProjectExclusionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>[]
+        }
+        create: {
+          args: Prisma.SopProjectExclusionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        createMany: {
+          args: Prisma.SopProjectExclusionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SopProjectExclusionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>[]
+        }
+        delete: {
+          args: Prisma.SopProjectExclusionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        update: {
+          args: Prisma.SopProjectExclusionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        deleteMany: {
+          args: Prisma.SopProjectExclusionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SopProjectExclusionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SopProjectExclusionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>[]
+        }
+        upsert: {
+          args: Prisma.SopProjectExclusionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopProjectExclusionPayload>
+        }
+        aggregate: {
+          args: Prisma.SopProjectExclusionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSopProjectExclusion>
+        }
+        groupBy: {
+          args: Prisma.SopProjectExclusionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectExclusionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SopProjectExclusionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopProjectExclusionCountAggregateOutputType> | number
+        }
+      }
+    }
     UserRulebook: {
       payload: Prisma.$UserRulebookPayload<ExtArgs>
       fields: Prisma.UserRulebookFieldRefs
@@ -1507,6 +1732,42 @@ export const RulebookScalarFieldEnum = {
 export type RulebookScalarFieldEnum = (typeof RulebookScalarFieldEnum)[keyof typeof RulebookScalarFieldEnum]
 
 
+export const SopProjectScalarFieldEnum = {
+  id: 'id',
+  nameKey: 'nameKey',
+  projectName: 'projectName',
+  settings: 'settings',
+  createdBy: 'createdBy',
+  updatedBy: 'updatedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SopProjectScalarFieldEnum = (typeof SopProjectScalarFieldEnum)[keyof typeof SopProjectScalarFieldEnum]
+
+
+export const SopProjectChangeScalarFieldEnum = {
+  id: 'id',
+  sopProjectId: 'sopProjectId',
+  projectName: 'projectName',
+  kind: 'kind',
+  settings: 'settings',
+  changedBy: 'changedBy',
+  createdAt: 'createdAt'
+} as const
+
+export type SopProjectChangeScalarFieldEnum = (typeof SopProjectChangeScalarFieldEnum)[keyof typeof SopProjectChangeScalarFieldEnum]
+
+
+export const SopProjectExclusionScalarFieldEnum = {
+  userId: 'userId',
+  sopProjectId: 'sopProjectId',
+  createdAt: 'createdAt'
+} as const
+
+export type SopProjectExclusionScalarFieldEnum = (typeof SopProjectExclusionScalarFieldEnum)[keyof typeof SopProjectExclusionScalarFieldEnum]
+
+
 export const UserRulebookScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1793,6 +2054,20 @@ export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMode
 
 
 /**
+ * Reference to a field of type 'SopProjectChangeKind'
+ */
+export type EnumSopProjectChangeKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SopProjectChangeKind'>
+    
+
+
+/**
+ * Reference to a field of type 'SopProjectChangeKind[]'
+ */
+export type ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SopProjectChangeKind[]'>
+    
+
+
+/**
  * Reference to a field of type 'SopAiStatus'
  */
 export type EnumSopAiStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SopAiStatus'>
@@ -1966,6 +2241,9 @@ export type GlobalOmitConfig = {
   aiUsage?: Prisma.AiUsageOmit
   appSetting?: Prisma.AppSettingOmit
   rulebook?: Prisma.RulebookOmit
+  sopProject?: Prisma.SopProjectOmit
+  sopProjectChange?: Prisma.SopProjectChangeOmit
+  sopProjectExclusion?: Prisma.SopProjectExclusionOmit
   userRulebook?: Prisma.UserRulebookOmit
   sopAiCheck?: Prisma.SopAiCheckOmit
 }

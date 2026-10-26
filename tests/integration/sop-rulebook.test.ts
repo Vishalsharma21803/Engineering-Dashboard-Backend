@@ -72,7 +72,8 @@ describe("default rulebook", () => {
   it("validates without saving (dry run for the editor)", async () => {
     const response = await developer.post("/api/sop/validate").send({ content: STARTER_RULEBOOK, scope: "default" }).expect(200);
     expect(response.body.valid).toBe(true);
-    expect(response.body.summary.projects.map((project: { project: string }) => project.project)).toEqual(["automations", "DevOps"]);
+    // Projects are set up on the Projects screen, not in the rulebook text.
+    expect(response.body.summary.projects).toEqual([]);
     expect(response.body.summary.cards.find((card: { id: string }) => card.id === "STR-08")).toMatchObject({ checker: "ai", severity: "warn" });
   });
 });
@@ -95,7 +96,7 @@ describe("personal rules", () => {
     expect(unknown.body.errors[0].message).toContain("no default rule");
 
     const facts = await developer.put("/api/sop/my-rules").send({ content: "---\nkind: project\nproject: automations\n---\n" }).expect(422);
-    expect(facts.body.errors[0].message).toContain("default rulebook");
+    expect(facts.body.errors[0].message).toContain("Projects tab");
   });
 
   it("keeps personal rules private", async () => {
@@ -157,18 +158,19 @@ describe("team SOP report", () => {
 
     const report = (await agent.get(`/api/azure/${credentialId}/projects/Alpha/sop-report`).expect(200)).body.report;
 
-    expect(report).toMatchObject({ projectName: "Alpha", configured: true, defaultVersion: 1, itemsChecked: 5, itemsWithGaps: 4, compliantShare: 0.2 });
+    // #106 is still New: "before work starts" rules are only checked once work starts.
+    expect(report).toMatchObject({ projectName: "Alpha", configured: true, defaultVersion: 1, itemsChecked: 5, itemsWithGaps: 3, compliantShare: 0.4 });
     expect(report.byRule).toEqual([
-      { ruleId: "T-01", ruleTitle: "Estimate exists", severity: "high", failing: 4, checked: 5 },
-      { ruleId: "T-03", ruleTitle: "Priority is set", severity: "medium", failing: 1, checked: 5 },
+      { ruleId: "T-01", ruleTitle: "Estimate exists", severity: "high", failing: 3, checked: 4 },
+      { ruleId: "T-03", ruleTitle: "Priority is set", severity: "medium", failing: 1, checked: 4 },
       { ruleId: "T-02", ruleTitle: "Pull request linked at review", severity: "medium", failing: 0, checked: 1 },
     ]);
     expect(report.byPerson.map((person: { assignee: { displayName: string }; items: number; gaps: number }) => [person.assignee.displayName, person.items, person.gaps])).toEqual([
-      ["Dev Example", 4, 3],
+      ["Dev Example", 4, 2],
       ["Reviewer Two", 1, 2],
     ]);
-    expect(report.items).toMatchObject({ page: 1, pageSize: 10, total: 4, totalPages: 1 });
-    expect(report.items.items.map((item: { workItemId: number }) => item.workItemId).sort()).toEqual([102, 103, 105, 106]);
+    expect(report.items).toMatchObject({ page: 1, pageSize: 10, total: 3, totalPages: 1 });
+    expect(report.items.items.map((item: { workItemId: number }) => item.workItemId).sort()).toEqual([102, 103, 105]);
 
     const beta = (await agent.get(`/api/azure/${credentialId}/projects/Beta/sop-report`).expect(200)).body.report;
     expect(beta).toMatchObject({ configured: false, itemsChecked: 0, byRule: [] });

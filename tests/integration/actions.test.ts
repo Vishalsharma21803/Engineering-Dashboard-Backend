@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { ALPHA_REPO, writeRequests, type FakeAzure } from "../support/fake-azure.js";
-import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
+import { ALPHA_RULEBOOK, ALPHA_SETTINGS, useAlphaRulebook } from "../support/test-rulebook.js";
 import {
   azurePath,
   installFakeAzure,
@@ -353,7 +353,7 @@ describe("executing each action kind", () => {
   });
 
   it("refuses to close after merge when the project's SOP has a Testing stage", async () => {
-    await useAlphaRulebook(ALPHA_RULEBOOK.replace("  review: [Resolved]", "  review: [Resolved]\n  testing: [Testing]"));
+    await useAlphaRulebook(ALPHA_RULEBOOK, { stages: { ...ALPHA_SETTINGS.stages, testing: ["Testing"] } });
 
     const response = await agent.post("/api/actions").send({
       credentialId,
@@ -500,10 +500,11 @@ describe("execution failures", () => {
 });
 
 describe("AI fix actions", () => {
-  const CATEGORY_RULEBOOK = ALPHA_RULEBOOK.replace(
-    "  done: [Closed]\n---",
-    "  done: [Closed]\nfields:\n  category: Microsoft.VSTS.Common.Activity\ncategories:\n  Development: Writing code.\n  Testing: Writing or running tests.\n---"
-  );
+  const CATEGORY_SETTINGS = {
+    ...ALPHA_SETTINGS,
+    fields: { category: "Microsoft.VSTS.Common.Activity", targetCompletion: null },
+    categories: { Development: "Writing code.", Testing: "Writing or running tests." },
+  };
 
   it("replaces a description with escaped HTML after approval, and records the old value", async () => {
     const action = await propose({
@@ -542,7 +543,7 @@ describe("AI fix actions", () => {
   });
 
   it("sets the category only to one of the project's categories", async () => {
-    await useAlphaRulebook(CATEGORY_RULEBOOK);
+    await useAlphaRulebook(ALPHA_RULEBOOK, CATEGORY_SETTINGS);
 
     const wrong = await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEM_SET_CATEGORY", target: { projectId: "Alpha", workItemId: 102 }, params: { category: "Coding" } });
     expect(wrong.status).toBe(422);

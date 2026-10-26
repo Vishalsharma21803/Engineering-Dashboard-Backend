@@ -16,6 +16,7 @@ import {
   type RulebookError,
   type SopStage,
 } from "./rulebook.types.js";
+import { DEFAULT_BRANCH_PATTERN, DEFAULT_WORK_ITEM_TYPES, isTimeZone } from "./project-settings.js";
 
 /**
  * Rulebook format (Markdown "rule cards"):
@@ -26,7 +27,7 @@ import {
  *   <plain-English body with **Rule:**, **Passes when:**, ... sections>
  *
  * A line that is exactly `---` always starts or ends a header, so bodies
- * must not contain one. Project facts are blocks with `kind: project`.
+ * must not contain one. Projects are set up on the Projects screen, not here.
  */
 
 export const MAX_CONTENT_LENGTH = 200_000;
@@ -34,17 +35,6 @@ export const MAX_PERSONAL_RULES = 20;
 const SEPARATOR = "---";
 const CUSTOM_PREFIX = "MY-";
 const ID_PATTERN = /^[A-Z][A-Z0-9]*-[A-Za-z0-9-]+$/;
-
-export const DEFAULT_WORK_ITEM_TYPES: Record<ItemKind, string[]> = {
-  story: ["User Story", "Product Backlog Item", "Requirement"],
-  task: ["Task"],
-  bug: ["Bug"],
-  feature: ["Feature"],
-  epic: ["Epic"],
-  impediment: ["Issue", "Impediment"],
-};
-
-export const DEFAULT_BRANCH_PATTERN = "^(feature|bugfix|hotfix)/[A-Za-z]*-?{id}-[a-z0-9]+(-[a-z0-9]+)*$";
 
 const SECTION_LABELS = {
   rule: "rule",
@@ -105,6 +95,35 @@ function splitBlocks(content: string, errors: RulebookError[]): RawBlock[] {
   return blocks;
 }
 
+export interface BlockSpan {
+  /** 0-based index of the opening --- line. */
+  start: number;
+  /** 0-based index just past the block (the next block's --- line, or the end). */
+  end: number;
+  /** The parsed header, or null when it is not valid YAML. */
+  header: Record<string, unknown> | null;
+}
+
+/** Where each block sits in the text, for careful automated edits (e.g. moving project blocks out). */
+export function blockSpans(content: string): { lines: string[]; spans: BlockSpan[] } {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const blocks = splitBlocks(content, []);
+  const spans = blocks.map((block, index) => {
+    let header: Record<string, unknown> | null = null;
+
+    try {
+      const parsed: unknown = parseYaml(block.header);
+      header = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      header = null;
+    }
+
+    return { start: block.headerLine - 1, end: (blocks[index + 1]?.headerLine ?? lines.length + 1) - 1, header };
+  });
+
+  return { lines, spans };
+}
+
 function parseSections(body: string): Partial<Record<SectionKey, string>> {
   const sections: Partial<Record<SectionKey, string>> = {};
   const pattern = /^\s*\*\*([A-Za-z ]+):\*\*\s*/gm;
@@ -124,15 +143,6 @@ function parseSections(body: string): Partial<Record<SectionKey, string>> {
   });
 
   return sections;
-}
-
-function isTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 const stringList = z.union([z.string().min(1), z.array(z.string().min(1))]).transform((value) => (Array.isArray(value) ? value : [value]));
@@ -227,8 +237,19 @@ function toProject(raw: z.infer<typeof projectSchema>, line: number): ProjectPro
   };
 }
 
-/** Parses and validates a rulebook. `personal` files may only override or add MY- AI rules. */
-export function parseRulebook(content: string, scope: "default" | "personal"): ParsedRulebook {
+/** Message for a `kind: project` block now that projects are set up on their own screen. */
+export const PROJECT_BLOCK_MOVED =
+  "Projects are set up on the SOP rules → Projects tab now, not in the rulebook. Remove this block (its settings were moved there).";
+
+/**
+ * Parses and validates a rulebook. `personal` files may only override or add MY- AI rules.
+ * `legacyProjects` reads old `kind: project` blocks (only for moving them to the Projects screen).
+ */
+export function parseRulebook(
+  content: string,
+  scope: "default" | "personal",
+  options: { legacyProjects?: boolean } = {}
+): ParsedRulebook {
   const result: ParsedRulebook = { projects: [], cards: [], overrides: [], errors: [] };
 
   if (content.length > MAX_CONTENT_LENGTH) {
@@ -258,7 +279,12 @@ export function parseRulebook(content: string, scope: "default" | "personal"): P
 
     if (record.kind === "project") {
       if (scope === "personal") {
-        result.errors.push({ line: block.headerLine, message: "Project facts can only be set in the default rulebook" });
+        result.errors.push({ line: block.headerLine, message: "Projects are set up on the SOP rules → Projects tab, not in rule files." });
+        continue;
+      }
+
+      if (!options.legacyProjects) {
+        result.errors.push({ line: block.headerLine, message: PROJECT_BLOCK_MOVED });
         continue;
       }
 
@@ -293,7 +319,7 @@ export function parseRulebook(content: string, scope: "default" | "personal"): P
     const id = typeof record.id === "string" ? record.id : null;
 
     if (!id) {
-      result.errors.push({ line: block.headerLine, message: "Every block needs either `kind: project` or an `id`" });
+      result.errors.push({ line: block.headerLine, message: "Every rule block needs an `id`" });
       continue;
     }
 

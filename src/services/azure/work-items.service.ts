@@ -52,6 +52,7 @@ export const WORK_ITEM_FIELDS = {
   dueDate: "Microsoft.VSTS.Scheduling.DueDate",
   blocked: "Microsoft.VSTS.CMMI.Blocked",
   boardColumn: "System.BoardColumn",
+  activity: "Microsoft.VSTS.Common.Activity",
 } as const;
 
 const METADATA_CACHE_TTL_MS = 10 * 60_000;
@@ -164,6 +165,16 @@ export async function getWorkItem(
     query: { $expand: "relations" },
     ...(options.cacheTtlMs === undefined ? {} : { cacheTtlMs: options.cacheTtlMs }),
   });
+}
+
+/** Names of the project's enabled work item types. */
+export async function listWorkItemTypeNames(client: AzureClient, projectName: string): Promise<string[]> {
+  const data = await client.get<RawList<{ name: string; isDisabled?: boolean }>>(
+    [projectName, "_apis", "wit", "workitemtypes"],
+    { cacheTtlMs: METADATA_CACHE_TTL_MS }
+  );
+
+  return (data.value ?? []).filter((type) => !type.isDisabled).map((type) => type.name);
 }
 
 export async function getWorkItemTypeStates(

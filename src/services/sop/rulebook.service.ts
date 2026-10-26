@@ -1,6 +1,7 @@
 import { AppError } from "../../lib/app-error.js";
 import { prisma } from "../../lib/prisma.js";
-import { findProjectProfile, mergeRulebooks, type EffectiveRulebook } from "./rulebook.merge.js";
+import { mergeRulebooks, type EffectiveRulebook } from "./rulebook.merge.js";
+import { ensureProjectsMoved, getProjectProfiles, getSharedProjectProfile } from "./sop-projects.service.js";
 import { parseRulebook } from "./rulebook.parser.js";
 import type { ParsedRulebook, ProjectProfile, RulebookError } from "./rulebook.types.js";
 import { STARTER_RULEBOOK } from "./starter-rulebook.js";
@@ -33,6 +34,8 @@ async function authorNames(userIds: Array<string | null>): Promise<Map<string, s
 }
 
 export async function getDefaultRulebook(): Promise<RulebookVersion> {
+  // Old rulebooks carried project blocks; they move to the Projects screen the first time.
+  await ensureProjectsMoved();
   const latest = await prisma.rulebook.findFirst({ orderBy: { version: "desc" } });
 
   if (!latest) {
@@ -164,6 +167,8 @@ export async function savePersonalRulebook(userId: string, content: string) {
 export interface EffectiveRulebookInfo extends EffectiveRulebook {
   defaultVersion: number;
   personalVersion: number;
+  /** Set-up projects this user switched SOP checks off for. */
+  switchedOff: string[];
 }
 
 /**
@@ -173,9 +178,11 @@ export interface EffectiveRulebookInfo extends EffectiveRulebook {
 export async function getEffectiveRulebook(userId: string, options: { forTeamReports?: boolean } = {}): Promise<EffectiveRulebookInfo> {
   const defaults = await getDefaultRulebook();
   const parsedDefaults = validateDefaultContent(defaults.content);
+  // Projects come from the shared set-ups; a user's own checks skip the ones they switched off.
+  const { profiles, switchedOff } = await getProjectProfiles(options.forTeamReports ? null : userId);
 
   if (options.forTeamReports) {
-    return { ...mergeRulebooks(parsedDefaults, null), defaultVersion: defaults.version, personalVersion: 0 };
+    return { ...mergeRulebooks(parsedDefaults, null), projects: profiles, switchedOff: [], defaultVersion: defaults.version, personalVersion: 0 };
   }
 
   const personal = await getPersonalRulebook(userId);
@@ -183,15 +190,16 @@ export async function getEffectiveRulebook(userId: string, options: { forTeamRep
 
   return {
     ...mergeRulebooks(parsedDefaults, parsedPersonal),
+    projects: profiles,
+    switchedOff,
     defaultVersion: defaults.version,
     personalVersion: personal.version,
   };
 }
 
-/** Project facts always come from the default rulebook. */
+/** Project facts (stages, fields) from the shared set-up, whoever asks. */
 export async function getDefaultProjectProfile(projectName: string): Promise<ProjectProfile | null> {
-  const parsed = validateDefaultContent((await getDefaultRulebook()).content);
-  return findProjectProfile(parsed.projects, projectName);
+  return getSharedProjectProfile(projectName);
 }
 
 /** Projects with a Testing stage move merged work to Testing, so "close after merge" would skip it. */

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { mergeRulebooks, findProjectProfile } from "../../src/services/sop/rulebook.merge.js";
 import { MAX_PERSONAL_RULES, parseRulebook } from "../../src/services/sop/rulebook.parser.js";
-import { STARTER_RULEBOOK } from "../../src/services/sop/starter-rulebook.js";
+import { STARTER_PROJECT_BLOCKS, STARTER_RULEBOOK } from "../../src/services/sop/starter-rulebook.js";
+import { projectSettingsSchema, settingsFromLegacyProfile } from "../../src/services/sop/project-settings.js";
 
 const AI_CARD = `---
 id: STR-08
@@ -34,19 +35,28 @@ when: while-active
 `;
 
 describe("starter rulebook", () => {
-  it("parses without errors into projects and rule cards", () => {
+  it("parses without errors into rule cards only (projects are set up on the Projects screen)", () => {
     const parsed = parseRulebook(STARTER_RULEBOOK, "default");
     expect(parsed.errors).toEqual([]);
-    expect(parsed.projects.map((project) => project.project)).toEqual(["automations", "DevOps"]);
+    expect(parsed.projects).toEqual([]);
     expect(parsed.cards.length).toBeGreaterThan(30);
     expect(new Set(parsed.cards.map((card) => card.id)).size).toBe(parsed.cards.length);
   });
 
-  it("maps the automations stages and the Activity field as Category", () => {
-    const profile = findProjectProfile(parseRulebook(STARTER_RULEBOOK, "default").projects, "AUTOMATIONS");
-    expect(profile?.stages).toMatchObject({ ready: ["New", "Estimations"], review: ["Review"], testing: ["Testing"], qa: [], uat: [], done: ["Closed"] });
-    expect(profile?.fields).toEqual({ category: "Microsoft.VSTS.Common.Activity", targetCompletion: "Microsoft.VSTS.Scheduling.DueDate" });
-    expect(profile?.workItemTypes.impediment).toEqual(["Issue", "Impediment"]);
+  it("checks estimate, time and due-date rules at Estimations, the rest once work starts", () => {
+    const cards = parseRulebook(STARTER_RULEBOOK, "default").cards;
+    const when = (id: string) => cards.find((card) => card.id === id)?.when;
+    expect(["STR-04", "STR-05", "STR-14"].map(when)).toEqual(["at-estimation", "at-estimation", "at-estimation"]);
+    expect(when("STR-08")).toBe("before-active");
+  });
+
+  it("keeps the old starter projects for the one-time move, with Estimations as its own stage", () => {
+    const legacy = parseRulebook(STARTER_PROJECT_BLOCKS, "default", { legacyProjects: true });
+    expect(legacy.errors).toEqual([]);
+    const automations = findProjectProfile(legacy.projects, "AUTOMATIONS")!;
+    const settings = settingsFromLegacyProfile(automations)!;
+    expect(settings.stages).toMatchObject({ ready: ["New"], estimation: ["Estimations"], active: ["Active"], review: ["Review"], testing: ["Testing"], done: ["Closed"] });
+    expect(settings.fields).toEqual({ category: "Microsoft.VSTS.Common.Activity", targetCompletion: "Microsoft.VSTS.Scheduling.DueDate" });
   });
 });
 
@@ -135,7 +145,7 @@ describe("parseRulebook", () => {
     const personalCard = AI_CARD.replace("STR-08", "MY-01");
 
     expect(parseRulebook(personalCard, "default").errors[0]?.message).toContain("reserved for personal rules");
-    expect(parseRulebook("---\nkind: project\nproject: x\n---\n", "personal").errors[0]?.message).toContain("default rulebook");
+    expect(parseRulebook("---\nkind: project\nproject: x\n---\n", "personal").errors[0]?.message).toContain("Projects tab");
     expect(parseRulebook(CODE_CARD.replace("DEV-01", "MY-02"), "personal").errors[0]?.message).toContain("must use checker: ai");
     expect(parseRulebook(personalCard, "personal").cards[0]).toMatchObject({ id: "MY-01", origin: "personal" });
   });
@@ -154,9 +164,15 @@ describe("parseRulebook", () => {
     expect(parseRulebook(many, "personal").errors[0]?.message).toContain(`At most ${MAX_PERSONAL_RULES}`);
   });
 
-  it("validates branch patterns", () => {
-    const parsed = parseRulebook("---\nkind: project\nproject: x\nbranch_pattern: \"([\"\n---\n", "default");
-    expect(parsed.errors[0]?.message).toContain("branch_pattern");
+  it("refuses project blocks, pointing to the Projects screen", () => {
+    const parsed = parseRulebook("---\nkind: project\nproject: x\n---\n", "default");
+    expect(parsed.errors[0]?.message).toContain("Projects tab");
+  });
+
+  it("validates branch patterns in project settings", () => {
+    expect(projectSettingsSchema.safeParse({ branchPattern: "([" }).success).toBe(false);
+    expect(projectSettingsSchema.safeParse({ stages: { ready: ["New"], active: ["new"] } }).success).toBe(false);
+    expect(projectSettingsSchema.safeParse({ timeZone: "Mars/Base" }).success).toBe(false);
   });
 });
 

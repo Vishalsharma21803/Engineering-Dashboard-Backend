@@ -488,6 +488,23 @@ export type IntWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedIntFilter<$PrismaModel>
 }
 
+export type EnumSopProjectChangeKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopProjectChangeKind | Prisma.EnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  in?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel> | $Enums.SopProjectChangeKind
+}
+
+export type EnumSopProjectChangeKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopProjectChangeKind | Prisma.EnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  in?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopProjectChangeKindWithAggregatesFilter<$PrismaModel> | $Enums.SopProjectChangeKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel>
+}
+
 export type EnumSopAiStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
   in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
@@ -952,6 +969,23 @@ export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
   _sum?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedIntFilter<$PrismaModel>
   _max?: Prisma.NestedIntFilter<$PrismaModel>
+}
+
+export type NestedEnumSopProjectChangeKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopProjectChangeKind | Prisma.EnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  in?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel> | $Enums.SopProjectChangeKind
+}
+
+export type NestedEnumSopProjectChangeKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopProjectChangeKind | Prisma.EnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  in?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopProjectChangeKind[] | Prisma.ListEnumSopProjectChangeKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopProjectChangeKindWithAggregatesFilter<$PrismaModel> | $Enums.SopProjectChangeKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel>
 }
 
 export type NestedEnumSopAiStatusFilter<$PrismaModel = never> = {

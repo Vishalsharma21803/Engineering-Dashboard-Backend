@@ -537,6 +537,10 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
       if (rest[1] === "workitemtypes") {
         const type = decodeURIComponent(restRaw[2] ?? "");
 
+        if (!type) {
+          return json({ value: Object.keys(STATES).map((name) => ({ name, isDisabled: false })) });
+        }
+
         if (rest[3] === "states") {
           return STATES[type] ? json({ value: STATES[type] }) : notFound();
         }

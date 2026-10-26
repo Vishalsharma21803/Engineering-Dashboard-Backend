@@ -12,6 +12,7 @@ import {
 } from "./rulebook.service.js";
 import type { RulebookError } from "./rulebook.types.js";
 import { evaluateTicket, type RulebookForChecks } from "./sop-evaluator.js";
+import { getProjectProfiles } from "./sop-projects.service.js";
 
 export interface SopTestInput {
   projectId: string;
@@ -34,22 +35,27 @@ function toFieldErrors(problems: RulebookError[]) {
 }
 
 async function draftRulebook(
+  userId: string,
   draft: NonNullable<SopTestInput["draft"]>
 ): Promise<RulebookForChecks | RulebookError[]> {
   if (draft.scope === "default") {
     // A default draft is tested as the team sees it: without anyone's personal rules.
     const parsed = parseRulebook(draft.content, "default");
-    return parsed.errors.length ? parsed.errors : { ...mergeRulebooks(parsed, null), defaultVersion: DRAFT_VERSION, personalVersion: 0 };
+    const { profiles } = await getProjectProfiles(null);
+    return parsed.errors.length
+      ? parsed.errors
+      : { ...mergeRulebooks(parsed, null), projects: profiles, switchedOff: [], defaultVersion: DRAFT_VERSION, personalVersion: 0 };
   }
 
   const defaults = await getDefaultRulebook();
   const personal = parseRulebook(draft.content, "personal");
   const merged = mergeRulebooks(validateDefaultContent(defaults.content), personal);
   const problems = [...personal.errors, ...merged.issues];
+  const { profiles, switchedOff } = await getProjectProfiles(userId);
 
   return problems.length
     ? problems
-    : { ...merged, defaultVersion: defaults.version, personalVersion: DRAFT_VERSION };
+    : { ...merged, projects: profiles, switchedOff, defaultVersion: defaults.version, personalVersion: DRAFT_VERSION };
 }
 
 /** Runs the code rules on one real ticket, read-only, without saving anything. */
@@ -57,7 +63,7 @@ export async function testRulesOnTicket(client: AzureClient, userId: string, inp
   let rulebook: RulebookForChecks;
 
   if (input.draft) {
-    const draft = await draftRulebook(input.draft);
+    const draft = await draftRulebook(userId, input.draft);
 
     if (Array.isArray(draft)) {
       return { result: null, errors: toFieldErrors(draft) };

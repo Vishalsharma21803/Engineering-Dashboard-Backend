@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { MAX_CONTENT_LENGTH } from "../services/sop/rulebook.parser.js";
+import { azureProjectIdSchema } from "./azure.schema.js";
 
 const content = z.string().max(MAX_CONTENT_LENGTH, `Rulebook must not exceed ${MAX_CONTENT_LENGTH} characters`);
 
@@ -35,3 +36,9 @@ export const aiResultsQuerySchema = z.object({
     .transform((value) => value.split(",").map(Number))
     .pipe(workItemIds),
 });
+
+export const projectNameParamSchema = azureProjectIdSchema;
+
+export const saveProjectSetUpSchema = z.object({ settings: z.unknown() }).strict();
+
+export const projectCheckedSchema = z.object({ checked: z.boolean() }).strict();

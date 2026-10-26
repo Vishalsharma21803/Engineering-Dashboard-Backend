@@ -71,7 +71,7 @@ server.listen({ onUnhandledFrame: "bypass" });
 
 async function reset(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook" CASCADE'
+    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook", "SopProject", "SopProjectChange" CASCADE'
   );
   clearAzureCache();
   fake = createFakeAzure();

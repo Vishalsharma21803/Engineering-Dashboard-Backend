@@ -11,6 +11,13 @@ import {
   saveDefaultRulebookController,
   enqueueAiChecksController,
   listAiChecksController,
+  listAzureProjectsForSopController,
+  listProjectChangesController,
+  listProjectSetUpsController,
+  removeProjectSetUpController,
+  saveProjectSetUpController,
+  setProjectCheckedController,
+  suggestProjectSetUpController,
   savePersonalRulebookController,
   testSopRulesController,
   validateRulebookController,
@@ -35,6 +42,15 @@ router.get("/my-rules/versions/:version", getPersonalVersionController);
 router.put("/my-rules", requireJson, savePersonalRulebookController);
 router.post("/validate", requireJson, validateRulebookController);
 router.get("/effective", getEffectiveRulebookController);
+// Projects: anyone may set one up (changes are recorded); each user chooses which are checked for them.
+router.get("/projects", listProjectSetUpsController);
+router.put("/projects/:projectName", requireJson, saveProjectSetUpController);
+router.delete("/projects/:projectName", removeProjectSetUpController);
+router.get("/projects/:projectName/history", listProjectChangesController);
+router.put("/projects/:projectName/checked", requireJson, setProjectCheckedController);
+// Reads the organization's projects from Azure to offer and pre-fill set-ups.
+router.get("/azure-projects/:credentialId", loadAzureCredential, listAzureProjectsForSopController);
+router.get("/azure-projects/:credentialId/:projectId/suggestion", loadAzureCredential, suggestProjectSetUpController);
 // Reads one ticket from Azure to try rules on it; never writes to Azure.
 router.post("/test/:credentialId", requireJson, loadAzureCredential, testSopRulesController);
 // AI checks: results are private to the signed-in user.

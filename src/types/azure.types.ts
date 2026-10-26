@@ -381,8 +381,10 @@ export interface ComplianceResult {
   type: string;
   state: string;
   stateCategory: StateCategory;
-  /** False when the rulebook has no facts for this project; nothing is checked. */
+  /** False when the project is not set up for SOP checks, or the user switched it off; nothing is checked. */
   configured: boolean;
+  /** Why a project is or is not checked. */
+  sopProject: "checked" | "not-set-up" | "switched-off";
   rulebook: { defaultVersion: number; personalVersion: number };
   violations: ComplianceViolation[];
   passedRules: ComplianceRuleRef[];
