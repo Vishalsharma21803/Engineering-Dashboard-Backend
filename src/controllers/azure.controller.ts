@@ -7,6 +7,9 @@ import {
   buildsQuerySchema,
   commitsQuerySchema,
   dashboardQuerySchema,
+  myWorkQuerySchema,
+  sopReportQuerySchema,
+  teamWorkQuerySchema,
   positiveIntParam,
   pullRequestsQuerySchema,
   repositoryIdSchema,
@@ -39,7 +42,8 @@ import {
 import { getWorkItemDetail } from "../services/azure/work-item-detail.service.js";
 import { listAssignedWorkItems } from "../services/azure/work-items.service.js";
 import { listCompliance } from "../services/compliance/compliance.service.js";
-import { getSopReport } from "../services/sop/sop-report.service.js";
+import { getPagedSopReport } from "../services/sop/sop-report.service.js";
+import { getMyWorkPage, getTeamWorkPage } from "../services/work-item-list/my-work.service.js";
 import { MAX_DASHBOARD_PROJECTS, getDashboard } from "../services/dashboard.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -279,5 +283,37 @@ export const getDashboardController = azureRead(
 /** Team SOP report for one project: default rules only, code rules only. */
 export const getSopReportController = azureRead("Building the SOP report failed", async (req, client, userId) => {
   const project = await getProject(client, projectParam(req));
-  return { report: await getSopReport(client, userId, project.name) };
+  const { page } = parse(sopReportQuerySchema, req.query);
+
+  return {
+    report: await getPagedSopReport(client, userId, project.name, {
+      page,
+      refresh: req.query.refresh === "1" || req.query.refresh === "true",
+    }),
+  };
+});
+
+/** My work tickets, filtered and paged on the server (10 per page). */
+export const getMyWorkController = azureRead("Listing your work items failed", async (req, client, userId) => {
+  const query = parse(myWorkQuerySchema, req.query);
+  const projectName = query.projectId === undefined ? undefined : (await getProject(client, query.projectId)).name;
+  const { projectId: _projectId, page, hidden, ...filters } = query;
+
+  return {
+    myWork: await getMyWorkPage(client, userId, {
+      projectName,
+      filters,
+      page,
+      hidden,
+      refresh: req.query.refresh === "1" || req.query.refresh === "true",
+    }),
+  };
+});
+
+/** Everyone's tickets in one project, filtered and paged on the server (10 per page). */
+export const getTeamWorkController = azureRead("Listing team work items failed", async (req, client) => {
+  const { scope, page, ...filters } = parse(teamWorkQuerySchema, req.query);
+  const project = await getProject(client, projectParam(req));
+
+  return { teamWork: await getTeamWorkPage(client, { projectName: project.name, scope, filters, page }) };
 });

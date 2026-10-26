@@ -36,10 +36,12 @@ process.env.FRONTEND_ORIGIN = process.env.E2E_FRONTEND_ORIGIN ?? "http://localho
 const { createApp } = await import("../../src/app.js");
 const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
-const { createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
+const { addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
 const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
 const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
 const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
+const { clearMyWorkSnapshots } = await import("../../src/services/work-item-list/my-work.service.js");
+const { clearSopReportCache } = await import("../../src/services/sop/sop-report.service.js");
 const { useAlphaRulebook } = await import("../support/test-rulebook.js");
 
 const blockExternal = http.all(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, ({ request }) => {
@@ -76,6 +78,8 @@ async function reset(): Promise<void> {
   fakeAi = createFakeAi();
   clearOpenRouterModelsCache();
   clearOpenCodeModelsCache();
+  clearMyWorkSnapshots();
+  clearSopReportCache();
   server.resetHandlers(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
 }
 
@@ -95,6 +99,13 @@ app.post("/__e2e/ai-fix", (req, res) => {
   fakeAi.verdicts = (rules) =>
     rules.map((ruleId) => ({ ruleId, verdict: "fail", reason: `Fake verdict for ${ruleId}.`, advice: `Fake advice for ${ruleId}.`, quotes: [], fix }));
   res.json({ ok: true });
+});
+
+// Adds open Alpha tasks assigned to the developer, for pagination tests: { "count": 23 }.
+app.post("/__e2e/tickets", (req, res) => {
+  const count = Math.min(Number((req.body as { count?: unknown }).count) || 0, 200);
+  addFakeTasks(fake, count);
+  res.json({ ok: true, count });
 });
 
 // Default SOP rules covering the fake Alpha project (Beta stays unconfigured).

@@ -755,3 +755,13 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
     http.all(`${FAKE_VSRM_URL}/*`, ({ request }) => handle(request, "vsrm")),
   ];
 }
+
+/** Adds `count` open tasks in Alpha (ids from `firstId`), assigned to the signed-in user unless `assignee` is given. */
+export function addFakeTasks(fake: FakeAzure, count: number, firstId = 1001, assignee: typeof ME = ME) {
+  for (let index = 0; index < count; index += 1) {
+    const id = firstId + index;
+    const item = workItem(id, "Alpha", "Task", `Seeded task ${id}`, "Active", { "Microsoft.VSTS.Common.Priority": 2 });
+    item.fields["System.AssignedTo"] = assignee;
+    fake.workItems.set(id, item);
+  }
+}

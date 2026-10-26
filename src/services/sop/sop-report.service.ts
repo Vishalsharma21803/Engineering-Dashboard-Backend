@@ -1,4 +1,5 @@
 import type { AzureClient } from "../../lib/azure/client.js";
+import { paginate, type Page } from "../../lib/pagination.js";
 import type { ComplianceResult, IdentityRef } from "../../types/azure.types.js";
 import { checkCompliance } from "../compliance/compliance.service.js";
 import { listAssignedWorkItemRecords } from "../azure/work-items.service.js";
@@ -102,6 +103,48 @@ export function summarizeReport(results: ComplianceResult[], context: ReportCont
       })),
     })),
   };
+}
+
+/** A built report is reused for page changes for this long; "Rebuild" bypasses it. */
+const REPORT_TTL_MS = 10 * 60_000;
+const MAX_CACHED_REPORTS = 200;
+const reports = new Map<string, { expiresAt: number; report: SopReport }>();
+
+/** Exposed for tests. */
+export function clearSopReportCache(): void {
+  reports.clear();
+}
+
+export type PagedSopReport = Omit<SopReport, "items"> & { items: Page<SopReport["items"][number]> };
+
+/** The report with its tickets-with-gaps list paged (10 per page); the totals cover every ticket. */
+export async function getPagedSopReport(
+  client: AzureClient,
+  userId: string,
+  projectName: string,
+  input: { page: number; refresh: boolean }
+): Promise<PagedSopReport> {
+  // Team reports use the default rules only, so one built report serves everyone with this connection.
+  const key = `${client.credentialId}|${projectName.toLowerCase()}`;
+  const cached = reports.get(key);
+  let report = cached && cached.expiresAt > Date.now() && !input.refresh ? cached.report : null;
+
+  if (!report) {
+    report = await getSopReport(client, userId, projectName);
+
+    if (reports.size >= MAX_CACHED_REPORTS) {
+      const oldest = reports.keys().next().value;
+
+      if (oldest !== undefined) {
+        reports.delete(oldest);
+      }
+    }
+
+    reports.delete(key);
+    reports.set(key, { expiresAt: Date.now() + REPORT_TTL_MS, report });
+  }
+
+  return { ...report, items: paginate(report.items, input.page) };
 }
 
 /**

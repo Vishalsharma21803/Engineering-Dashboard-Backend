@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { pageParam } from "../lib/pagination.js";
+import { workItemFiltersSchema } from "../services/work-item-list/work-item-filters.js";
+
 /** Azure project name or GUID. Encoded per path segment by AzureClient. */
 export const azureProjectIdSchema = z
   .string()
@@ -66,3 +69,20 @@ export const commitsQuerySchema = z.object({
   branch: z.string().trim().min(1).max(256).optional(),
   top: z.coerce.number().int().min(1).max(100).default(30),
 });
+
+/** Any page value is accepted and made safe (see pageParam); it never fails validation. */
+const pageQuery = z.unknown().optional().transform(pageParam);
+
+export const myWorkQuerySchema = workItemFiltersSchema.extend({
+  projectId: azureProjectIdSchema.optional(),
+  page: pageQuery,
+  /** Show snoozed and abandoned tickets instead of the active ones. */
+  hidden: booleanFlag.catch(false),
+});
+
+export const teamWorkQuerySchema = workItemFiltersSchema.extend({
+  scope: z.enum(["open", "all"]).catch("open").default("open"),
+  page: pageQuery,
+});
+
+export const sopReportQuerySchema = z.object({ page: pageQuery });

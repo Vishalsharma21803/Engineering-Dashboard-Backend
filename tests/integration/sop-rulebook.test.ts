@@ -167,7 +167,8 @@ describe("team SOP report", () => {
       ["Dev Example", 4, 3],
       ["Reviewer Two", 1, 2],
     ]);
-    expect(report.items.map((item: { workItemId: number }) => item.workItemId).sort()).toEqual([102, 103, 105, 106]);
+    expect(report.items).toMatchObject({ page: 1, pageSize: 10, total: 4, totalPages: 1 });
+    expect(report.items.items.map((item: { workItemId: number }) => item.workItemId).sort()).toEqual([102, 103, 105, 106]);
 
     const beta = (await agent.get(`/api/azure/${credentialId}/projects/Beta/sop-report`).expect(200)).body.report;
     expect(beta).toMatchObject({ configured: false, itemsChecked: 0, byRule: [] });

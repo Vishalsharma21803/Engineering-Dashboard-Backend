@@ -3,6 +3,8 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 
 import { clearAzureCache } from "../src/lib/azure/cache.js";
+import { clearSopReportCache } from "../src/services/sop/sop-report.service.js";
+import { clearMyWorkSnapshots } from "../src/services/work-item-list/my-work.service.js";
 
 /**
  * Intercepts outgoing calls. Test handlers (server.use) win; anything else
@@ -21,6 +23,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   clearAzureCache();
+  clearMyWorkSnapshots();
+  clearSopReportCache();
 });
 
 afterEach(() => {
