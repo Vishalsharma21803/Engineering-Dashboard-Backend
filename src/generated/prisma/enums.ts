@@ -31,6 +31,9 @@ export const ActionKind = {
   WORK_ITEM_TRANSITION_STATE: 'WORK_ITEM_TRANSITION_STATE',
   WORK_ITEM_LINK_PR: 'WORK_ITEM_LINK_PR',
   WORK_ITEM_CLOSE_AFTER_MERGE: 'WORK_ITEM_CLOSE_AFTER_MERGE',
+  WORK_ITEM_EDIT_TEXT: 'WORK_ITEM_EDIT_TEXT',
+  WORK_ITEM_SET_CATEGORY: 'WORK_ITEM_SET_CATEGORY',
+  WORK_ITEM_ADD_TAGS: 'WORK_ITEM_ADD_TAGS',
   PIPELINE_QUEUE_RUN: 'PIPELINE_QUEUE_RUN',
   BUILD_RETRY_STAGE: 'BUILD_RETRY_STAGE',
   BUILD_CANCEL: 'BUILD_CANCEL'
@@ -54,10 +57,22 @@ export type ActionStatus = (typeof ActionStatus)[keyof typeof ActionStatus]
 
 export const ActionSource = {
   RECOMMENDATION: 'RECOMMENDATION',
-  USER: 'USER'
+  USER: 'USER',
+  AI_SUGGESTION: 'AI_SUGGESTION'
 } as const
 
 export type ActionSource = (typeof ActionSource)[keyof typeof ActionSource]
+
+
+export const SopAiStatus = {
+  QUEUED: 'QUEUED',
+  RUNNING: 'RUNNING',
+  DONE: 'DONE',
+  FAILED: 'FAILED',
+  SKIPPED: 'SKIPPED'
+} as const
+
+export type SopAiStatus = (typeof SopAiStatus)[keyof typeof SopAiStatus]
 
 
 export const TriageStatus = {
@@ -80,3 +95,21 @@ export const AuditEvent = {
 } as const
 
 export type AuditEvent = (typeof AuditEvent)[keyof typeof AuditEvent]
+
+
+export const AiProvider = {
+  CLAUDE: 'CLAUDE',
+  OPENROUTER: 'OPENROUTER',
+  OPENCODE: 'OPENCODE'
+} as const
+
+export type AiProvider = (typeof AiProvider)[keyof typeof AiProvider]
+
+
+export const AiEffort = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH'
+} as const
+
+export type AiEffort = (typeof AiEffort)[keyof typeof AiEffort]

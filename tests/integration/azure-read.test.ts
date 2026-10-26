@@ -2,6 +2,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
+import { useAlphaRulebook } from "../support/test-rulebook.js";
 import {
   ALPHA,
   ALPHA_REPO,
@@ -183,19 +184,26 @@ describe("Azure read API — data", () => {
     await get(`/projects/%2E%2E/pipelines`).expect(400);
   });
 
-  it("evaluates SOP compliance for my tickets", async () => {
-    const response = await get("/compliance").expect(200);
-    const byId = new Map(
-      response.body.items.map((item: { workItemId: number; violations: Array<{ ruleId: string }> }) => [
-        item.workItemId,
-        item.violations.map((violation) => violation.ruleId),
-      ])
-    );
+  it("evaluates SOP compliance for my tickets with the rulebook", async () => {
+    await useAlphaRulebook();
+    const items = (await get("/compliance").expect(200)).body.items;
+    const byId = new Map<number, any>(items.map((item: { workItemId: number }) => [item.workItemId, item]));
+    const ids = (rules: Array<{ ruleId: string }>) => rules.map((rule) => rule.ruleId);
 
-    expect(byId.get(101)).toEqual([]);
-    expect(byId.get(102)).toEqual(["MISSING_APPROACH", "MISSING_COMMENT", "MISSING_ESTIMATE", "MISSING_WORK_LOG"]);
-    expect(byId.get(103)).toEqual(["NOT_CLOSED_AFTER_MERGE"]);
-    expect(byId.get(104)).toEqual(["MISSING_PR_LINK", "REMAINING_NOT_ZERO_ON_CLOSE"]);
+    expect(ids(byId.get(101).violations)).toEqual([]);
+    expect(ids(byId.get(101).passedRules)).toEqual(["T-01", "T-03"]);
+    expect(ids(byId.get(101).aiRules)).toEqual(["T-05"]);
+    expect(byId.get(101).skippedRules).toEqual([{ ruleId: "T-04", ruleTitle: "Evidence before UAT", reason: "Alpha has no uat stage" }]);
+
+    expect(byId.get(102).violations).toEqual([
+      expect.objectContaining({ ruleId: "T-01", checker: "code", severity: "high", message: "No original estimate (hours).", suggestedAction: expect.objectContaining({ kind: "WORK_ITEM_UPDATE_FIELDS" }) }),
+    ]);
+    // Bugs need an original estimate; story points do not count. Resolved = review, so the PR rule applies.
+    expect(ids(byId.get(103).violations)).toEqual(["T-01"]);
+    expect(ids(byId.get(103).passedRules)).toEqual(["T-02", "T-03"]);
+    // Beta has no project facts in the rulebook: nothing is checked.
+    expect(byId.get(104)).toMatchObject({ configured: false, violations: [], passedRules: [] });
+    expect(byId.get(104).rulebook).toEqual({ defaultVersion: 1, personalVersion: 0 });
   });
 
   it("lists my pull requests with review state and unresolved threads", async () => {
@@ -272,6 +280,7 @@ describe("Azure read API — data", () => {
   });
 
   it("builds a prioritized dashboard", async () => {
+    await useAlphaRulebook();
     const dashboard = (await get("/dashboard").expect(200)).body.dashboard;
 
     expect(dashboard.projectsScanned).toBe(2);
@@ -279,8 +288,10 @@ describe("Azure read API — data", () => {
     expect(dashboard.sections.pipelines.data.map((build: { id: number }) => build.id)).toEqual([501, 502]);
 
     const ids = dashboard.recommendations.map((recommendation: { id: string }) => recommendation.id);
-    expect(ids).toEqual(expect.arrayContaining(["wi:102", "wi:103", "wi:104", "wi:106", "build:501", `pr:${ALPHA_REPO.id}:1`, `pr:${ALPHA_REPO.id}:3`]));
+    expect(ids).toEqual(expect.arrayContaining(["wi:102", "wi:103", "wi:106", "build:501", `pr:${ALPHA_REPO.id}:1`, `pr:${ALPHA_REPO.id}:3`]));
+    // 101 passes every rule; 104 is closed and in an unconfigured project.
     expect(ids).not.toContain("wi:101");
+    expect(ids).not.toContain("wi:104");
 
     const scores = dashboard.recommendations.map((recommendation: { score: number }) => recommendation.score);
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
@@ -370,5 +381,6 @@ describe("Azure read API — safety", () => {
     expect(fake.requests.length).toBeGreaterThan(paths.length);
     expect(writeRequests(fake)).toEqual([]);
     expect(await prisma.auditLog.count()).toBe(0);
-  });
+    // 17 routes in sequence: the default 5s limit is too tight when the full suite runs in parallel.
+  }, 30_000);
 });

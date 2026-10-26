@@ -1,13 +1,9 @@
 import type { AzureClient } from "../../lib/azure/client.js";
 import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText } from "../../lib/html-to-text.js";
-import type {
-  AzureIdentity,
-  SupportedWorkFields,
-  WorkItemDetail,
-} from "../../types/azure.types.js";
-import { complianceConfig } from "../compliance/compliance.config.js";
-import { evaluateCompliance } from "../compliance/rules.js";
+import type { SupportedWorkFields, WorkItemDetail } from "../../types/azure.types.js";
+import { getEffectiveRulebook, isCloseAfterMergeAllowed } from "../sop/rulebook.service.js";
+import { evaluateTicket } from "../sop/sop-evaluator.js";
 import { asString } from "./mappers.js";
 import { sectionData, toSection } from "./section.js";
 import {
@@ -41,7 +37,7 @@ export function belongsToProject(projectId: string, projectName: string): boolea
 
 export async function getWorkItemDetail(
   client: AzureClient,
-  identity: AzureIdentity,
+  userId: string,
   projectId: string,
   workItemId: number
 ): Promise<WorkItemDetail> {
@@ -61,22 +57,13 @@ export async function getWorkItemDetail(
 
   const summary = toWorkItemSummary(raw, sectionData(states, []), client.organizationUrl);
 
-  const [comments, history, linkedPullRequests] = await Promise.all([
+  const [comments, history, linkedPullRequests, compliance, closeAfterMergeAllowed] = await Promise.all([
     toSection(() => getWorkItemComments(client, projectName, workItemId)),
     toSection(() => getWorkFieldHistory(client, projectName, workItemId)),
     toSection(() => getLinkedPullRequests(client, summary.links.pullRequests)),
+    getEffectiveRulebook(userId).then((rulebook) => evaluateTicket(client, rulebook, summary, raw, new Date())),
+    isCloseAfterMergeAllowed(projectName),
   ]);
-
-  const compliance = evaluateCompliance({
-    workItem: summary,
-    me: identity,
-    now: new Date(),
-    config: complianceConfig,
-    comments: comments.data,
-    history: history.data,
-    linkedPullRequests: linkedPullRequests.data,
-    supportedFields: supportedFields.data,
-  });
 
   return {
     ...summary,
@@ -89,5 +76,6 @@ export async function getWorkItemDetail(
     allowedStates: sectionData(states, []),
     supportedFields: sectionData(supportedFields, NO_SUPPORTED_FIELDS),
     compliance,
+    closeAfterMergeAllowed,
   };
 }

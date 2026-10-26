@@ -51,6 +51,7 @@ export const WORK_ITEM_FIELDS = {
   effort: "Microsoft.VSTS.Scheduling.Effort",
   dueDate: "Microsoft.VSTS.Scheduling.DueDate",
   blocked: "Microsoft.VSTS.CMMI.Blocked",
+  boardColumn: "System.BoardColumn",
 } as const;
 
 const METADATA_CACHE_TTL_MS = 10 * 60_000;
@@ -183,17 +184,26 @@ export async function getWorkItemTypeStates(
   }));
 }
 
-export async function getSupportedFields(
+/** Reference names of every field on a work item type. */
+export async function getWorkItemTypeFieldNames(
   client: AzureClient,
   projectName: string,
   type: string
-): Promise<SupportedWorkFields> {
+): Promise<Set<string>> {
   const data = await client.get<RawList<RawWorkItemTypeField>>(
     [projectName, "_apis", "wit", "workitemtypes", type, "fields"],
     { cacheTtlMs: METADATA_CACHE_TTL_MS }
   );
 
-  const names = new Set((data.value ?? []).map((field) => field.referenceName));
+  return new Set((data.value ?? []).map((field) => field.referenceName));
+}
+
+export async function getSupportedFields(
+  client: AzureClient,
+  projectName: string,
+  type: string
+): Promise<SupportedWorkFields> {
+  const names = await getWorkItemTypeFieldNames(client, projectName, type);
 
   return {
     originalEstimate: names.has(WORK_ITEM_FIELDS.originalEstimate),
@@ -364,10 +374,16 @@ export async function toWorkItemSummaries(
   );
 }
 
-export async function listAssignedWorkItems(
+export interface WorkItemRecord {
+  summary: WorkItemSummary;
+  /** All fields, for checks that need more than the summary (description, custom fields). */
+  raw: RawWorkItem;
+}
+
+export async function listAssignedWorkItemRecords(
   client: AzureClient,
   query: WorkItemQuery
-): Promise<WorkItemSummary[]> {
+): Promise<WorkItemRecord[]> {
   const ids = await listAssignedWorkItemIds(client, query);
 
   if (ids.length === 0) {
@@ -379,12 +395,20 @@ export async function listAssignedWorkItems(
   const summaries = await toWorkItemSummaries(client, rawItems);
 
   return summaries
+    .map((summary, index) => ({ summary, raw: rawItems[index] as RawWorkItem }))
     .filter(
-      (item) =>
+      ({ summary }) =>
         query.scope !== "open" ||
-        (item.stateCategory !== "Completed" && item.stateCategory !== "Removed")
+        (summary.stateCategory !== "Completed" && summary.stateCategory !== "Removed")
     )
-    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    .sort((a, b) => (order.get(a.summary.id) ?? 0) - (order.get(b.summary.id) ?? 0));
+}
+
+export async function listAssignedWorkItems(
+  client: AzureClient,
+  query: WorkItemQuery
+): Promise<WorkItemSummary[]> {
+  return (await listAssignedWorkItemRecords(client, query)).map((record) => record.summary);
 }
 
 export async function getWorkItemComments(
@@ -420,11 +444,12 @@ function historyValue(value: unknown): string | number | null {
   return typeof value === "string" || typeof value === "number" ? value : null;
 }
 
-export async function getWorkFieldHistory(
+/** Every revision's field changes, oldest first. */
+export async function getWorkItemUpdates(
   client: AzureClient,
   projectName: string,
   workItemId: number
-): Promise<WorkFieldChange[]> {
+): Promise<RawWorkItemUpdate[]> {
   const updates: RawWorkItemUpdate[] = [];
 
   for (let page = 0; page < UPDATES_MAX_PAGES; page += 1) {
@@ -440,11 +465,24 @@ export async function getWorkFieldHistory(
     }
   }
 
+  return updates;
+}
+
+/** When a revision happened; the last revision's revisedDate is a far-future placeholder. */
+export function updateDate(update: RawWorkItemUpdate): string {
+  return asString(update.fields?.[WORK_ITEM_FIELDS.changedDate]?.newValue) ?? update.revisedDate ?? "";
+}
+
+export async function getWorkFieldHistory(
+  client: AzureClient,
+  projectName: string,
+  workItemId: number
+): Promise<WorkFieldChange[]> {
+  const updates = await getWorkItemUpdates(client, projectName, workItemId);
   const changes: WorkFieldChange[] = [];
 
   for (const update of updates) {
-    const changedDate = asString(update.fields?.[WORK_ITEM_FIELDS.changedDate]?.newValue);
-    const revisedDate = changedDate ?? update.revisedDate ?? "";
+    const revisedDate = updateDate(update);
 
     for (const [referenceName, field] of Object.entries(HISTORY_FIELDS)) {
       const change = update.fields?.[referenceName];

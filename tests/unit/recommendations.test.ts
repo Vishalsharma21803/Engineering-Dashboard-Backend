@@ -134,10 +134,15 @@ describe("buildRecommendations", () => {
           type: "Task",
           state: "Active",
           stateCategory: "InProgress",
+          configured: true,
+          rulebook: { defaultVersion: 0, personalVersion: 0 },
+          passedRules: [],
+          pendingRules: [],
           skippedRules: [],
+          aiRules: [],
           violations: [
-            { ruleId: "MISSING_COMMENT", severity: "medium", message: "No comment", suggestedAction: { kind: "WORK_ITEM_COMMENT", target: {}, params: {}, requiresInput: true } },
-            { ruleId: "NOT_CLOSED_AFTER_MERGE", severity: "high", message: "Close it", suggestedAction: { kind: "WORK_ITEM_CLOSE_AFTER_MERGE", target: {}, params: {}, requiresInput: false } },
+            { ruleId: "ALW-01", ruleTitle: "Comment on every state change", checker: "code", severity: "medium", message: "No comment", evidence: [], suggestedAction: { kind: "WORK_ITEM_COMMENT", target: {}, params: {}, requiresInput: true } },
+            { ruleId: "DONE-07", ruleTitle: "Time logged at Done", checker: "code", severity: "high", message: "Remaining work", evidence: [], suggestedAction: { kind: "WORK_ITEM_UPDATE_FIELDS", target: {}, params: { remainingWork: 0 }, requiresInput: false } },
           ],
         },
       ],
@@ -146,8 +151,8 @@ describe("buildRecommendations", () => {
     });
 
     expect(recommendation).toMatchObject({ category: "SOP", score: 20 + 10 + 20 });
-    expect(recommendation?.suggestedAction?.kind).toBe("WORK_ITEM_CLOSE_AFTER_MERGE");
-    expect(recommendation?.signals).toEqual(["SOP:MISSING_COMMENT", "SOP:NOT_CLOSED_AFTER_MERGE"]);
+    expect(recommendation?.suggestedAction?.kind).toBe("WORK_ITEM_UPDATE_FIELDS");
+    expect(recommendation?.signals).toEqual(["SOP:ALW-01", "SOP:DONE-07"]);
   });
 
   it("emits stable signal codes that do not change as display text ages", () => {

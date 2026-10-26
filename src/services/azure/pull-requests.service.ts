@@ -97,7 +97,7 @@ export function toPullRequestSummary(
   };
 }
 
-async function getThreads(
+export async function getThreads(
   client: AzureClient,
   projectId: string,
   repositoryId: string,

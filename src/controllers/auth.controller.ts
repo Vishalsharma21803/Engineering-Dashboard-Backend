@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 
 import { registerSchema, loginSchema } from "../schemas/auth.schema.js";
 import { registerUser, loginUser, getCurrentUser } from "../services/auth.service.js";
+import { isSopAdmin } from "../lib/sop-admin.js";
 
 export async function register(
   req: Request,
@@ -89,7 +90,7 @@ export async function login(
     const token = jwt.sign(
       { sub: user.id },
       jwtSecret,
-      { expiresIn: "1d" }
+      { expiresIn: "1d", algorithm: "HS256" }
     );
 
     res.cookie("token", token, {
@@ -135,7 +136,7 @@ export async function me(
       return;
     }
 
-    res.status(200).json({ user });
+    res.status(200).json({ user: { ...user, isSopAdmin: isSopAdmin(user.email) } });
   } catch (error) {
     console.error("Fetching current user failed:", error);
 

@@ -37,6 +37,10 @@ const { createApp } = await import("../../src/app.js");
 const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
 const { createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
+const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
+const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
+const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
+const { useAlphaRulebook } = await import("../support/test-rulebook.js");
 
 const blockExternal = http.all(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, ({ request }) => {
   console.error(`Unmocked external request blocked: ${request.method} ${request.url}`);
@@ -59,16 +63,20 @@ const secondOrg = http.all(`${SECOND_ORG}/*`, ({ request }) => {
 });
 
 let fake = createFakeAzure();
-const server = setupServer(...fakeAzureHandlers(fake), secondOrg, blockExternal);
+let fakeAi = createFakeAi();
+const server = setupServer(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
 server.listen({ onUnhandledFrame: "bypass" });
 
 async function reset(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User" CASCADE'
+    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook" CASCADE'
   );
   clearAzureCache();
   fake = createFakeAzure();
-  server.resetHandlers(...fakeAzureHandlers(fake), secondOrg, blockExternal);
+  fakeAi = createFakeAi();
+  clearOpenRouterModelsCache();
+  clearOpenCodeModelsCache();
+  server.resetHandlers(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
 }
 
 await reset();
@@ -78,6 +86,20 @@ const app = createApp();
 // Test-only inspection of what reached "Azure DevOps".
 app.post("/__e2e/reset", async (_req, res) => {
   await reset();
+  res.json({ ok: true });
+});
+
+// Makes the fake AI fail every rule with this fix, e.g. { "target": "comment", "text": "..." }.
+app.post("/__e2e/ai-fix", (req, res) => {
+  const fix = req.body as { target: string; text: string };
+  fakeAi.verdicts = (rules) =>
+    rules.map((ruleId) => ({ ruleId, verdict: "fail", reason: `Fake verdict for ${ruleId}.`, advice: `Fake advice for ${ruleId}.`, quotes: [], fix }));
+  res.json({ ok: true });
+});
+
+// Default SOP rules covering the fake Alpha project (Beta stays unconfigured).
+app.post("/__e2e/rulebook", async (_req, res) => {
+  await useAlphaRulebook();
   res.json({ ok: true });
 });
 

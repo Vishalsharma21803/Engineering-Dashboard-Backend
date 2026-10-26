@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { ALPHA_REPO, writeRequests, type FakeAzure } from "../support/fake-azure.js";
+import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
 import {
   azurePath,
   installFakeAzure,
@@ -26,6 +27,7 @@ interface ActionBody {
   status: string;
   payloadHash: string;
   preview: Array<{ field: string; before: unknown; after: unknown }>;
+  summary: string;
   params: Record<string, unknown>;
   errorCode: string | null;
   result: Record<string, unknown> | null;
@@ -350,6 +352,24 @@ describe("executing each action kind", () => {
     });
   });
 
+  it("refuses to close after merge when the project's SOP has a Testing stage", async () => {
+    await useAlphaRulebook(ALPHA_RULEBOOK.replace("  review: [Resolved]", "  review: [Resolved]\n  testing: [Testing]"));
+
+    const response = await agent.post("/api/actions").send({
+      credentialId,
+      kind: "WORK_ITEM_CLOSE_AFTER_MERGE",
+      target: { projectId: "Alpha", workItemId: 103 },
+      params: {},
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body.reason).toBe("CLOSE_AFTER_MERGE_DISABLED");
+    expect(writeRequests(fake)).toEqual([]);
+
+    const detail = await agent.get(azurePath(credentialId, "/projects/Alpha/work-items/103")).expect(200);
+    expect(detail.body.workItem.closeAfterMergeAllowed).toBe(false);
+  });
+
   it("links a pull request", async () => {
     const action = await propose({
       kind: "WORK_ITEM_LINK_PR",
@@ -476,5 +496,107 @@ describe("execution failures", () => {
       expect.arrayContaining(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_SUCCEEDED"])
     );
     expect(JSON.stringify(logs.body)).not.toContain("fake-pat");
+  });
+});
+
+describe("AI fix actions", () => {
+  const CATEGORY_RULEBOOK = ALPHA_RULEBOOK.replace(
+    "  done: [Closed]\n---",
+    "  done: [Closed]\nfields:\n  category: Microsoft.VSTS.Common.Activity\ncategories:\n  Development: Writing code.\n  Testing: Writing or running tests.\n---"
+  );
+
+  it("replaces a description with escaped HTML after approval, and records the old value", async () => {
+    const action = await propose({
+      kind: "WORK_ITEM_EDIT_TEXT",
+      source: "AI_SUGGESTION",
+      target: { projectId: "Alpha", workItemId: 101 },
+      params: { field: "description", text: "As a user I want <login> & logout\nso that I stay safe." },
+    });
+
+    expect(action.preview).toEqual([{ field: "Description", before: "Use JWT & cookies", after: "As a user I want <login> & logout\nso that I stay safe." }]);
+    expect(action.summary).not.toContain("not kept");
+    expect(writeRequests(fake)).toEqual([]);
+
+    const response = await approve(action).expect(200);
+    expect(response.body.verification.verified).toBe(true);
+    expect(fake.workItems.get(101)?.fields["System.Description"]).toBe("As a user I want &lt;login&gt; &amp; logout<br>so that I stay safe.");
+    expect(response.body.action.result).toMatchObject({ field: "System.Description", previousValue: expect.stringContaining("JWT") });
+    expect((await prisma.proposedAction.findUniqueOrThrow({ where: { id: action.id } })).source).toBe("AI_SUGGESTION");
+  });
+
+  it("warns that rich formatting is replaced by plain text", async () => {
+    fake.workItems.get(101)!.fields["System.Description"] = '<p>See <a href="https://x.test">spec</a></p><table><tr><td>1</td></tr></table>';
+    const action = await propose({ kind: "WORK_ITEM_EDIT_TEXT", target: { projectId: "Alpha", workItemId: 101 }, params: { field: "description", text: "Plain" } });
+    expect(action.summary).toContain("current links, lists, tables and images are not kept");
+  });
+
+  it("refuses multi-line titles and stale text", async () => {
+    await propose({ kind: "WORK_ITEM_EDIT_TEXT", target: { projectId: "Alpha", workItemId: 101 }, params: { field: "title", text: "Two\nlines" } }, 400);
+
+    const action = await propose({ kind: "WORK_ITEM_EDIT_TEXT", target: { projectId: "Alpha", workItemId: 101 }, params: { field: "title", text: "[Blocked] Implement login" } });
+    fake.workItems.get(101)!.fields["System.Title"] = "Implement login v2";
+
+    const response = await approve(action).expect(409);
+    expect(response.body.reason).toBe("ACTION_STALE");
+    expect(writeRequests(fake)).toEqual([]);
+  });
+
+  it("sets the category only to one of the project's categories", async () => {
+    await useAlphaRulebook(CATEGORY_RULEBOOK);
+
+    const wrong = await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEM_SET_CATEGORY", target: { projectId: "Alpha", workItemId: 102 }, params: { category: "Coding" } });
+    expect(wrong.status).toBe(422);
+    expect(wrong.body.reason).toBe("INVALID_CATEGORY");
+
+    const action = await propose({ kind: "WORK_ITEM_SET_CATEGORY", target: { projectId: "Alpha", workItemId: 102 }, params: { category: "development" } });
+    expect(action.preview).toEqual([{ field: "Category", before: null, after: "Development" }]);
+
+    await approve(action).expect(200);
+    expect(fake.workItems.get(102)?.fields["Microsoft.VSTS.Common.Activity"]).toBe("Development");
+  });
+
+  it("refuses a category when the rulebook has no category field", async () => {
+    const response = await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEM_SET_CATEGORY", target: { projectId: "Alpha", workItemId: 102 }, params: { category: "Development" } });
+    expect(response.body.reason).toBe("CATEGORY_NOT_CONFIGURED");
+  });
+
+  it("adds only new tags and keeps the existing ones", async () => {
+    await propose({ kind: "WORK_ITEM_ADD_TAGS", target: { projectId: "Alpha", workItemId: 106 }, params: { tags: ["a;b"] } }, 400);
+    const unchanged = await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEM_ADD_TAGS", target: { projectId: "Alpha", workItemId: 106 }, params: { tags: ["VENDOR"] } });
+    expect(unchanged.body.reason).toBe("NO_CHANGES");
+
+    const action = await propose({ kind: "WORK_ITEM_ADD_TAGS", target: { projectId: "Alpha", workItemId: 106 }, params: { tags: ["vendor", "Backend"] } });
+    expect(action.preview).toEqual([{ field: "Tags", before: "Blocked; vendor", after: "Blocked; vendor; Backend" }]);
+
+    const response = await approve(action).expect(200);
+    expect(response.body.verification.verified).toBe(true);
+    expect(fake.workItems.get(106)?.fields["System.Tags"]).toBe("Blocked; vendor; Backend");
+  });
+});
+
+describe("hardening", () => {
+  it("refuses AI drafts that still contain [[fill in]] gaps", async () => {
+    const response = await agent.post("/api/actions").send({
+      credentialId,
+      kind: "WORK_ITEM_COMMENT",
+      source: "AI_SUGGESTION",
+      target: { projectId: "Alpha", workItemId: 102 },
+      params: { text: "Root cause: [[fill in: root cause]]" },
+    });
+    expect(response.status).toBe(422);
+    expect(response.body.reason).toBe("PLACEHOLDER_NOT_FILLED");
+    expect(fake.requests).toEqual([]);
+  });
+
+  it("answers malformed JSON with a JSON 400 and no stack trace", async () => {
+    const response = await agent.post("/api/actions").set("Content-Type", "application/json").send("{not json");
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "The request body is not valid JSON", reason: "INVALID_JSON" });
+    expect(response.text).not.toContain("at ");
+  });
+
+  it("does not advertise the framework", async () => {
+    const response = await agent.get("/");
+    expect(response.headers["x-powered-by"]).toBeUndefined();
   });
 });

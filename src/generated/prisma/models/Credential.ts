@@ -225,6 +225,7 @@ export type CredentialWhereInput = {
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   actions?: Prisma.ProposedActionListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  sopAiChecks?: Prisma.SopAiCheckListRelationFilter
 }
 
 export type CredentialOrderByWithRelationInput = {
@@ -241,6 +242,7 @@ export type CredentialOrderByWithRelationInput = {
   user?: Prisma.UserOrderByWithRelationInput
   actions?: Prisma.ProposedActionOrderByRelationAggregateInput
   triageMarks?: Prisma.TriageMarkOrderByRelationAggregateInput
+  sopAiChecks?: Prisma.SopAiCheckOrderByRelationAggregateInput
 }
 
 export type CredentialWhereUniqueInput = Prisma.AtLeast<{
@@ -261,6 +263,7 @@ export type CredentialWhereUniqueInput = Prisma.AtLeast<{
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   actions?: Prisma.ProposedActionListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  sopAiChecks?: Prisma.SopAiCheckListRelationFilter
 }, "id" | "userId_platform_organizationUrl">
 
 export type CredentialOrderByWithAggregationInput = {
@@ -308,6 +311,7 @@ export type CredentialCreateInput = {
   user: Prisma.UserCreateNestedOneWithoutCredentialsInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateInput = {
@@ -323,6 +327,7 @@ export type CredentialUncheckedCreateInput = {
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUpdateInput = {
@@ -338,6 +343,7 @@ export type CredentialUpdateInput = {
   user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateInput = {
@@ -353,6 +359,7 @@ export type CredentialUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialCreateManyInput = {
@@ -546,6 +553,20 @@ export type CredentialUpdateOneRequiredWithoutTriageMarksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.CredentialUpdateToOneWithWhereWithoutTriageMarksInput, Prisma.CredentialUpdateWithoutTriageMarksInput>, Prisma.CredentialUncheckedUpdateWithoutTriageMarksInput>
 }
 
+export type CredentialCreateNestedOneWithoutSopAiChecksInput = {
+  create?: Prisma.XOR<Prisma.CredentialCreateWithoutSopAiChecksInput, Prisma.CredentialUncheckedCreateWithoutSopAiChecksInput>
+  connectOrCreate?: Prisma.CredentialCreateOrConnectWithoutSopAiChecksInput
+  connect?: Prisma.CredentialWhereUniqueInput
+}
+
+export type CredentialUpdateOneRequiredWithoutSopAiChecksNestedInput = {
+  create?: Prisma.XOR<Prisma.CredentialCreateWithoutSopAiChecksInput, Prisma.CredentialUncheckedCreateWithoutSopAiChecksInput>
+  connectOrCreate?: Prisma.CredentialCreateOrConnectWithoutSopAiChecksInput
+  upsert?: Prisma.CredentialUpsertWithoutSopAiChecksInput
+  connect?: Prisma.CredentialWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.CredentialUpdateToOneWithWhereWithoutSopAiChecksInput, Prisma.CredentialUpdateWithoutSopAiChecksInput>, Prisma.CredentialUncheckedUpdateWithoutSopAiChecksInput>
+}
+
 export type CredentialCreateWithoutUserInput = {
   id?: string
   platform: $Enums.Platform
@@ -558,6 +579,7 @@ export type CredentialCreateWithoutUserInput = {
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateWithoutUserInput = {
@@ -572,6 +594,7 @@ export type CredentialUncheckedCreateWithoutUserInput = {
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialCreateOrConnectWithoutUserInput = {
@@ -628,6 +651,7 @@ export type CredentialCreateWithoutActionsInput = {
   updatedAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutCredentialsInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateWithoutActionsInput = {
@@ -642,6 +666,7 @@ export type CredentialUncheckedCreateWithoutActionsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialCreateOrConnectWithoutActionsInput = {
@@ -672,6 +697,7 @@ export type CredentialUpdateWithoutActionsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateWithoutActionsInput = {
@@ -686,6 +712,7 @@ export type CredentialUncheckedUpdateWithoutActionsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialCreateWithoutTriageMarksInput = {
@@ -700,6 +727,7 @@ export type CredentialCreateWithoutTriageMarksInput = {
   updatedAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutCredentialsInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialUncheckedCreateWithoutTriageMarksInput = {
@@ -714,6 +742,7 @@ export type CredentialUncheckedCreateWithoutTriageMarksInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutCredentialInput
 }
 
 export type CredentialCreateOrConnectWithoutTriageMarksInput = {
@@ -744,6 +773,7 @@ export type CredentialUpdateWithoutTriageMarksInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateWithoutTriageMarksInput = {
@@ -758,6 +788,83 @@ export type CredentialUncheckedUpdateWithoutTriageMarksInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutCredentialNestedInput
+}
+
+export type CredentialCreateWithoutSopAiChecksInput = {
+  id?: string
+  platform: $Enums.Platform
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  user: Prisma.UserCreateNestedOneWithoutCredentialsInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutCredentialInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutCredentialInput
+}
+
+export type CredentialUncheckedCreateWithoutSopAiChecksInput = {
+  id?: string
+  platform: $Enums.Platform
+  organizationUrl: string
+  label?: string | null
+  encryptedPatToken: string
+  lastValidatedAt?: Date | string | null
+  lastValidationStatus?: $Enums.ValidationStatus | null
+  userId: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutCredentialInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutCredentialInput
+}
+
+export type CredentialCreateOrConnectWithoutSopAiChecksInput = {
+  where: Prisma.CredentialWhereUniqueInput
+  create: Prisma.XOR<Prisma.CredentialCreateWithoutSopAiChecksInput, Prisma.CredentialUncheckedCreateWithoutSopAiChecksInput>
+}
+
+export type CredentialUpsertWithoutSopAiChecksInput = {
+  update: Prisma.XOR<Prisma.CredentialUpdateWithoutSopAiChecksInput, Prisma.CredentialUncheckedUpdateWithoutSopAiChecksInput>
+  create: Prisma.XOR<Prisma.CredentialCreateWithoutSopAiChecksInput, Prisma.CredentialUncheckedCreateWithoutSopAiChecksInput>
+  where?: Prisma.CredentialWhereInput
+}
+
+export type CredentialUpdateToOneWithWhereWithoutSopAiChecksInput = {
+  where?: Prisma.CredentialWhereInput
+  data: Prisma.XOR<Prisma.CredentialUpdateWithoutSopAiChecksInput, Prisma.CredentialUncheckedUpdateWithoutSopAiChecksInput>
+}
+
+export type CredentialUpdateWithoutSopAiChecksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  user?: Prisma.UserUpdateOneRequiredWithoutCredentialsNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutCredentialNestedInput
+}
+
+export type CredentialUncheckedUpdateWithoutSopAiChecksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.EnumPlatformFieldUpdateOperationsInput | $Enums.Platform
+  organizationUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  label?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  encryptedPatToken?: Prisma.StringFieldUpdateOperationsInput | string
+  lastValidatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastValidationStatus?: Prisma.NullableEnumValidationStatusFieldUpdateOperationsInput | $Enums.ValidationStatus | null
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialCreateManyUserInput = {
@@ -784,6 +891,7 @@ export type CredentialUpdateWithoutUserInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUpdateManyWithoutCredentialNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateWithoutUserInput = {
@@ -798,6 +906,7 @@ export type CredentialUncheckedUpdateWithoutUserInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutCredentialNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutCredentialNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutCredentialNestedInput
 }
 
 export type CredentialUncheckedUpdateManyWithoutUserInput = {
@@ -820,11 +929,13 @@ export type CredentialUncheckedUpdateManyWithoutUserInput = {
 export type CredentialCountOutputType = {
   actions: number
   triageMarks: number
+  sopAiChecks: number
 }
 
 export type CredentialCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   actions?: boolean | CredentialCountOutputTypeCountActionsArgs
   triageMarks?: boolean | CredentialCountOutputTypeCountTriageMarksArgs
+  sopAiChecks?: boolean | CredentialCountOutputTypeCountSopAiChecksArgs
 }
 
 /**
@@ -851,6 +962,13 @@ export type CredentialCountOutputTypeCountTriageMarksArgs<ExtArgs extends runtim
   where?: Prisma.TriageMarkWhereInput
 }
 
+/**
+ * CredentialCountOutputType without action
+ */
+export type CredentialCountOutputTypeCountSopAiChecksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.SopAiCheckWhereInput
+}
+
 
 export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -866,6 +984,7 @@ export type CredentialSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   actions?: boolean | Prisma.Credential$actionsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.Credential$triageMarksArgs<ExtArgs>
+  sopAiChecks?: boolean | Prisma.Credential$sopAiChecksArgs<ExtArgs>
   _count?: boolean | Prisma.CredentialCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["credential"]>
 
@@ -915,6 +1034,7 @@ export type CredentialInclude<ExtArgs extends runtime.Types.Extensions.InternalA
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   actions?: boolean | Prisma.Credential$actionsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.Credential$triageMarksArgs<ExtArgs>
+  sopAiChecks?: boolean | Prisma.Credential$sopAiChecksArgs<ExtArgs>
   _count?: boolean | Prisma.CredentialCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type CredentialIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -930,6 +1050,7 @@ export type $CredentialPayload<ExtArgs extends runtime.Types.Extensions.Internal
     user: Prisma.$UserPayload<ExtArgs>
     actions: Prisma.$ProposedActionPayload<ExtArgs>[]
     triageMarks: Prisma.$TriageMarkPayload<ExtArgs>[]
+    sopAiChecks: Prisma.$SopAiCheckPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1339,6 +1460,7 @@ export interface Prisma__CredentialClient<T, Null = never, ExtArgs extends runti
   user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   actions<T extends Prisma.Credential$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Credential$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProposedActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   triageMarks<T extends Prisma.Credential$triageMarksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Credential$triageMarksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TriageMarkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  sopAiChecks<T extends Prisma.Credential$sopAiChecksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Credential$sopAiChecksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SopAiCheckPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1824,6 +1946,30 @@ export type Credential$triageMarksArgs<ExtArgs extends runtime.Types.Extensions.
   take?: number
   skip?: number
   distinct?: Prisma.TriageMarkScalarFieldEnum | Prisma.TriageMarkScalarFieldEnum[]
+}
+
+/**
+ * Credential.sopAiChecks
+ */
+export type Credential$sopAiChecksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the SopAiCheck
+   */
+  select?: Prisma.SopAiCheckSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the SopAiCheck
+   */
+  omit?: Prisma.SopAiCheckOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.SopAiCheckInclude<ExtArgs> | null
+  where?: Prisma.SopAiCheckWhereInput
+  orderBy?: Prisma.SopAiCheckOrderByWithRelationInput | Prisma.SopAiCheckOrderByWithRelationInput[]
+  cursor?: Prisma.SopAiCheckWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.SopAiCheckScalarFieldEnum | Prisma.SopAiCheckScalarFieldEnum[]
 }
 
 /**

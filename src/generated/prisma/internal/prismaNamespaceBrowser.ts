@@ -55,7 +55,14 @@ export const ModelName = {
   Credential: 'Credential',
   ProposedAction: 'ProposedAction',
   AuditLog: 'AuditLog',
-  TriageMark: 'TriageMark'
+  TriageMark: 'TriageMark',
+  AiCredential: 'AiCredential',
+  AiPreference: 'AiPreference',
+  AiUsage: 'AiUsage',
+  AppSetting: 'AppSetting',
+  Rulebook: 'Rulebook',
+  UserRulebook: 'UserRulebook',
+  SopAiCheck: 'SopAiCheck'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -157,6 +164,108 @@ export const TriageMarkScalarFieldEnum = {
 } as const
 
 export type TriageMarkScalarFieldEnum = (typeof TriageMarkScalarFieldEnum)[keyof typeof TriageMarkScalarFieldEnum]
+
+
+export const AiCredentialScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  provider: 'provider',
+  label: 'label',
+  encryptedApiKey: 'encryptedApiKey',
+  keyHint: 'keyHint',
+  lastValidatedAt: 'lastValidatedAt',
+  lastValidationStatus: 'lastValidationStatus',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AiCredentialScalarFieldEnum = (typeof AiCredentialScalarFieldEnum)[keyof typeof AiCredentialScalarFieldEnum]
+
+
+export const AiPreferenceScalarFieldEnum = {
+  userId: 'userId',
+  provider: 'provider',
+  model: 'model',
+  effort: 'effort',
+  dailyLimitUsd: 'dailyLimitUsd',
+  dataCollectionAcceptedAt: 'dataCollectionAcceptedAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AiPreferenceScalarFieldEnum = (typeof AiPreferenceScalarFieldEnum)[keyof typeof AiPreferenceScalarFieldEnum]
+
+
+export const AiUsageScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  provider: 'provider',
+  model: 'model',
+  purpose: 'purpose',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cacheReadTokens: 'cacheReadTokens',
+  cacheWriteTokens: 'cacheWriteTokens',
+  costUsd: 'costUsd',
+  createdAt: 'createdAt'
+} as const
+
+export type AiUsageScalarFieldEnum = (typeof AiUsageScalarFieldEnum)[keyof typeof AiUsageScalarFieldEnum]
+
+
+export const AppSettingScalarFieldEnum = {
+  key: 'key',
+  value: 'value',
+  updatedBy: 'updatedBy',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AppSettingScalarFieldEnum = (typeof AppSettingScalarFieldEnum)[keyof typeof AppSettingScalarFieldEnum]
+
+
+export const RulebookScalarFieldEnum = {
+  version: 'version',
+  content: 'content',
+  note: 'note',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt'
+} as const
+
+export type RulebookScalarFieldEnum = (typeof RulebookScalarFieldEnum)[keyof typeof RulebookScalarFieldEnum]
+
+
+export const UserRulebookScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  version: 'version',
+  content: 'content',
+  createdAt: 'createdAt'
+} as const
+
+export type UserRulebookScalarFieldEnum = (typeof UserRulebookScalarFieldEnum)[keyof typeof UserRulebookScalarFieldEnum]
+
+
+export const SopAiCheckScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  workItemId: 'workItemId',
+  projectName: 'projectName',
+  inputHash: 'inputHash',
+  status: 'status',
+  results: 'results',
+  errorReason: 'errorReason',
+  errorDetail: 'errorDetail',
+  provider: 'provider',
+  model: 'model',
+  costUsd: 'costUsd',
+  notBefore: 'notBefore',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SopAiCheckScalarFieldEnum = (typeof SopAiCheckScalarFieldEnum)[keyof typeof SopAiCheckScalarFieldEnum]
 
 
 export const SortOrder = {

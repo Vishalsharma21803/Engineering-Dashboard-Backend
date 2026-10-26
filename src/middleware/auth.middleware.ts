@@ -27,7 +27,7 @@ export function authenticate(
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret);
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] });
 
     if (
       typeof decoded === "string" ||

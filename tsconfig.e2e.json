@@ -7,6 +7,6 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["src/**/*.ts", "tests/support/fake-azure.ts", "tests/e2e/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/support/fake-azure.ts", "tests/support/fake-ai.ts", "tests/support/test-rulebook.ts", "tests/e2e/**/*.ts"],
   "exclude": ["node_modules", "dist", ".e2e-dist"]
 }

@@ -18,6 +18,7 @@ import {
   listPullRequestsController,
   listRepositoriesController,
   listWorkItemsController,
+  getSopReportController,
 } from "../controllers/azure.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { loadAzureCredential } from "../middleware/azure-credential.middleware.js";
@@ -35,6 +36,7 @@ router.get("/work-items", listWorkItemsController);
 router.get("/compliance", listComplianceController);
 router.get("/pull-requests", listPullRequestsController);
 router.get("/projects/:projectId/work-items/:workItemId", getWorkItemController);
+router.get("/projects/:projectId/sop-report", getSopReportController);
 router.get(
   "/projects/:projectId/repos/:repositoryId/pull-requests/:pullRequestId",
   getPullRequestController

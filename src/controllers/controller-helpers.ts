@@ -3,6 +3,7 @@ import type { z } from "zod";
 
 import { AppError } from "../lib/app-error.js";
 import { AzureApiError } from "../lib/azure/errors.js";
+import { AiProviderError } from "../lib/ai/types.js";
 import { ActionExecutionError } from "../services/actions/action.service.js";
 import type { RequestContext } from "../services/audit.service.js";
 import { markCredentialInvalid } from "../services/azure/azure-context.service.js";
@@ -42,6 +43,15 @@ export async function sendError(
 
   if (error instanceof AppError) {
     res.status(error.status).json({ message: error.message, reason: error.reason });
+    return;
+  }
+
+  if (error instanceof AiProviderError) {
+    if (error.retryAfterSeconds !== null) {
+      res.setHeader("Retry-After", String(error.retryAfterSeconds));
+    }
+
+    res.status(error.httpStatus).json({ message: error.publicMessage, reason: error.reason });
     return;
   }
 

@@ -50,7 +50,12 @@ export interface RawIteration {
 export interface RawWorkItemRelation {
   rel: string;
   url: string;
-  attributes?: { name?: string };
+  attributes?: {
+    name?: string;
+    /** When the link was added (links and attachments). */
+    authorizedDate?: string;
+    resourceCreatedDate?: string;
+  };
 }
 
 export interface RawWorkItem {

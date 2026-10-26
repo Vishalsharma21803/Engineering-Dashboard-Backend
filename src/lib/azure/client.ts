@@ -6,6 +6,7 @@ import {
 import { clearAzureCache, getCached, setCached } from "./cache.js";
 import { AzureApiError, reasonForStatus } from "./errors.js";
 import { createLimiter, type Limiter } from "./limiter.js";
+import { redactSecrets } from "../redact.js";
 
 export const AZURE_API_VERSION = "7.1";
 
@@ -454,7 +455,7 @@ async function readUpstreamMessage(response: Response): Promise<string | null> {
       .filter((part): part is string => Boolean(part))
       .join(" ");
 
-    return message ? message.slice(0, MAX_UPSTREAM_MESSAGE_LENGTH) : null;
+    return message ? redactSecrets(message).slice(0, MAX_UPSTREAM_MESSAGE_LENGTH) : null;
   } catch {
     return null;
   }

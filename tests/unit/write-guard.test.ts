@@ -50,8 +50,14 @@ describe("write guard", () => {
     ]);
   });
 
-  it("only the Azure client and the existing PAT validator call fetch", () => {
-    expect(filesMatching(/\bfetch\(/)).toEqual(["lib/azure/client.ts", "services/azure.service.ts"]);
+  it("only the Azure client, the PAT validator and the AI gateway clients call fetch", () => {
+    // OpenRouter and OpenCode are AI providers; they never receive Azure credentials.
+    expect(filesMatching(/\bfetch\(/)).toEqual([
+      "lib/ai/opencode.ts",
+      "lib/ai/openrouter.ts",
+      "lib/azure/client.ts",
+      "services/azure.service.ts",
+    ]);
   });
 
   it("Azure read routes register GET handlers only", () => {

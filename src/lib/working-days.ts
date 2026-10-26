@@ -24,7 +24,3 @@ export function workingDaysBetween(from: Date, to: Date): number {
 
   return count;
 }
-
-export function hoursBetween(from: Date, to: Date): number {
-  return (to.getTime() - from.getTime()) / (60 * 60 * 1000);
-}

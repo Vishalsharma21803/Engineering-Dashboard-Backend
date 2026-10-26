@@ -39,6 +39,7 @@ import {
 import { getWorkItemDetail } from "../services/azure/work-item-detail.service.js";
 import { listAssignedWorkItems } from "../services/azure/work-items.service.js";
 import { listCompliance } from "../services/compliance/compliance.service.js";
+import { getSopReport } from "../services/sop/sop-report.service.js";
 import { MAX_DASHBOARD_PROJECTS, getDashboard } from "../services/dashboard.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -58,7 +59,7 @@ function parse<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
   return result.data;
 }
 
-type AzureHandler = (req: Request, client: AzureClient) => Promise<unknown>;
+type AzureHandler = (req: Request, client: AzureClient, userId: string) => Promise<unknown>;
 
 /** Every Azure route is a read: validate, call the service, map errors. */
 function azureRead(label: string, handler: AzureHandler) {
@@ -71,7 +72,7 @@ function azureRead(label: string, handler: AzureHandler) {
     }
 
     try {
-      res.status(200).json(await handler(req, azure.client));
+      res.status(200).json(await handler(req, azure.client, req.userId));
     } catch (error) {
       if (error instanceof RequestValidationError) {
         sendValidationError(res, error.zodError);
@@ -137,24 +138,21 @@ export const listWorkItemsController = azureRead(
 
 export const getWorkItemController = azureRead(
   "Fetching work item failed",
-  async (req, client) => {
+  async (req, client, userId) => {
     const projectId = projectParam(req);
     const workItemId = parse(positiveIntParam("work item id"), req.params.workItemId);
-    const identity = await getIdentity(client);
-
-    return { workItem: await getWorkItemDetail(client, identity, projectId, workItemId) };
+    return { workItem: await getWorkItemDetail(client, userId, projectId, workItemId) };
   }
 );
 
 export const listComplianceController = azureRead(
   "Checking compliance failed",
-  async (req, client) => {
+  async (req, client, userId) => {
     const { projectId } = parse(dashboardQuerySchema, req.query);
-    const identity = await getIdentity(client);
     const projectName =
       projectId === undefined ? undefined : (await getProject(client, projectId)).name;
 
-    return { items: await listCompliance(client, identity, projectName) };
+    return { items: await listCompliance(client, userId, projectName) };
   }
 );
 
@@ -272,8 +270,14 @@ export const listCommitsController = azureRead(
 
 export const getDashboardController = azureRead(
   "Building dashboard failed",
-  async (req, client) => {
+  async (req, client, userId) => {
     const { projectId } = parse(dashboardQuerySchema, req.query);
-    return { dashboard: await getDashboard(client, projectId) };
+    return { dashboard: await getDashboard(client, userId, projectId) };
   }
 );
+
+/** Team SOP report for one project: default rules only, code rules only. */
+export const getSopReportController = azureRead("Building the SOP report failed", async (req, client, userId) => {
+  const project = await getProject(client, projectParam(req));
+  return { report: await getSopReport(client, userId, project.name) };
+});

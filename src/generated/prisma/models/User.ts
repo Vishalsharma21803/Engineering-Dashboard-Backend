@@ -194,6 +194,11 @@ export type UserWhereInput = {
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  aiCredentials?: Prisma.AiCredentialListRelationFilter
+  aiPreference?: Prisma.XOR<Prisma.AiPreferenceNullableScalarRelationFilter, Prisma.AiPreferenceWhereInput> | null
+  aiUsage?: Prisma.AiUsageListRelationFilter
+  userRulebooks?: Prisma.UserRulebookListRelationFilter
+  sopAiChecks?: Prisma.SopAiCheckListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -207,6 +212,11 @@ export type UserOrderByWithRelationInput = {
   actions?: Prisma.ProposedActionOrderByRelationAggregateInput
   auditLogs?: Prisma.AuditLogOrderByRelationAggregateInput
   triageMarks?: Prisma.TriageMarkOrderByRelationAggregateInput
+  aiCredentials?: Prisma.AiCredentialOrderByRelationAggregateInput
+  aiPreference?: Prisma.AiPreferenceOrderByWithRelationInput
+  aiUsage?: Prisma.AiUsageOrderByRelationAggregateInput
+  userRulebooks?: Prisma.UserRulebookOrderByRelationAggregateInput
+  sopAiChecks?: Prisma.SopAiCheckOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -223,6 +233,11 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  aiCredentials?: Prisma.AiCredentialListRelationFilter
+  aiPreference?: Prisma.XOR<Prisma.AiPreferenceNullableScalarRelationFilter, Prisma.AiPreferenceWhereInput> | null
+  aiUsage?: Prisma.AiUsageListRelationFilter
+  userRulebooks?: Prisma.UserRulebookListRelationFilter
+  sopAiChecks?: Prisma.SopAiCheckListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -260,6 +275,11 @@ export type UserCreateInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -273,6 +293,11 @@ export type UserUncheckedCreateInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -286,6 +311,11 @@ export type UserUpdateInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -299,6 +329,11 @@ export type UserUncheckedUpdateInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -424,6 +459,76 @@ export type UserUpdateOneRequiredWithoutTriageMarksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutTriageMarksInput, Prisma.UserUpdateWithoutTriageMarksInput>, Prisma.UserUncheckedUpdateWithoutTriageMarksInput>
 }
 
+export type UserCreateNestedOneWithoutAiCredentialsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiCredentialsInput, Prisma.UserUncheckedCreateWithoutAiCredentialsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiCredentialsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutAiCredentialsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiCredentialsInput, Prisma.UserUncheckedCreateWithoutAiCredentialsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiCredentialsInput
+  upsert?: Prisma.UserUpsertWithoutAiCredentialsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutAiCredentialsInput, Prisma.UserUpdateWithoutAiCredentialsInput>, Prisma.UserUncheckedUpdateWithoutAiCredentialsInput>
+}
+
+export type UserCreateNestedOneWithoutAiPreferenceInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiPreferenceInput, Prisma.UserUncheckedCreateWithoutAiPreferenceInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiPreferenceInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutAiPreferenceNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiPreferenceInput, Prisma.UserUncheckedCreateWithoutAiPreferenceInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiPreferenceInput
+  upsert?: Prisma.UserUpsertWithoutAiPreferenceInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutAiPreferenceInput, Prisma.UserUpdateWithoutAiPreferenceInput>, Prisma.UserUncheckedUpdateWithoutAiPreferenceInput>
+}
+
+export type UserCreateNestedOneWithoutAiUsageInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiUsageInput, Prisma.UserUncheckedCreateWithoutAiUsageInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiUsageInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutAiUsageNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutAiUsageInput, Prisma.UserUncheckedCreateWithoutAiUsageInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiUsageInput
+  upsert?: Prisma.UserUpsertWithoutAiUsageInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutAiUsageInput, Prisma.UserUpdateWithoutAiUsageInput>, Prisma.UserUncheckedUpdateWithoutAiUsageInput>
+}
+
+export type UserCreateNestedOneWithoutUserRulebooksInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUserRulebooksInput, Prisma.UserUncheckedCreateWithoutUserRulebooksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUserRulebooksInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutUserRulebooksNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutUserRulebooksInput, Prisma.UserUncheckedCreateWithoutUserRulebooksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutUserRulebooksInput
+  upsert?: Prisma.UserUpsertWithoutUserRulebooksInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUserRulebooksInput, Prisma.UserUpdateWithoutUserRulebooksInput>, Prisma.UserUncheckedUpdateWithoutUserRulebooksInput>
+}
+
+export type UserCreateNestedOneWithoutSopAiChecksInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSopAiChecksInput, Prisma.UserUncheckedCreateWithoutSopAiChecksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSopAiChecksInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutSopAiChecksNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSopAiChecksInput, Prisma.UserUncheckedCreateWithoutSopAiChecksInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSopAiChecksInput
+  upsert?: Prisma.UserUpsertWithoutSopAiChecksInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSopAiChecksInput, Prisma.UserUpdateWithoutSopAiChecksInput>, Prisma.UserUncheckedUpdateWithoutSopAiChecksInput>
+}
+
 export type UserCreateWithoutCredentialsInput = {
   id?: string
   name: string
@@ -434,6 +539,11 @@ export type UserCreateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutCredentialsInput = {
@@ -446,6 +556,11 @@ export type UserUncheckedCreateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutCredentialsInput = {
@@ -474,6 +589,11 @@ export type UserUpdateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutCredentialsInput = {
@@ -486,6 +606,11 @@ export type UserUncheckedUpdateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutActionsInput = {
@@ -498,6 +623,11 @@ export type UserCreateWithoutActionsInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutActionsInput = {
@@ -510,6 +640,11 @@ export type UserUncheckedCreateWithoutActionsInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutActionsInput = {
@@ -538,6 +673,11 @@ export type UserUpdateWithoutActionsInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutActionsInput = {
@@ -550,6 +690,11 @@ export type UserUncheckedUpdateWithoutActionsInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAuditLogsInput = {
@@ -562,6 +707,11 @@ export type UserCreateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAuditLogsInput = {
@@ -574,6 +724,11 @@ export type UserUncheckedCreateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAuditLogsInput = {
@@ -602,6 +757,11 @@ export type UserUpdateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAuditLogsInput = {
@@ -614,6 +774,11 @@ export type UserUncheckedUpdateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutTriageMarksInput = {
@@ -626,6 +791,11 @@ export type UserCreateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutTriageMarksInput = {
@@ -638,6 +808,11 @@ export type UserUncheckedCreateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutTriageMarksInput = {
@@ -666,6 +841,11 @@ export type UserUpdateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutTriageMarksInput = {
@@ -678,6 +858,431 @@ export type UserUncheckedUpdateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutAiCredentialsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutAiCredentialsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutAiCredentialsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiCredentialsInput, Prisma.UserUncheckedCreateWithoutAiCredentialsInput>
+}
+
+export type UserUpsertWithoutAiCredentialsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutAiCredentialsInput, Prisma.UserUncheckedUpdateWithoutAiCredentialsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiCredentialsInput, Prisma.UserUncheckedCreateWithoutAiCredentialsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutAiCredentialsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutAiCredentialsInput, Prisma.UserUncheckedUpdateWithoutAiCredentialsInput>
+}
+
+export type UserUpdateWithoutAiCredentialsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutAiCredentialsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutAiPreferenceInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutAiPreferenceInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutAiPreferenceInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiPreferenceInput, Prisma.UserUncheckedCreateWithoutAiPreferenceInput>
+}
+
+export type UserUpsertWithoutAiPreferenceInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutAiPreferenceInput, Prisma.UserUncheckedUpdateWithoutAiPreferenceInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiPreferenceInput, Prisma.UserUncheckedCreateWithoutAiPreferenceInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutAiPreferenceInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutAiPreferenceInput, Prisma.UserUncheckedUpdateWithoutAiPreferenceInput>
+}
+
+export type UserUpdateWithoutAiPreferenceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutAiPreferenceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutAiUsageInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutAiUsageInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutAiUsageInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiUsageInput, Prisma.UserUncheckedCreateWithoutAiUsageInput>
+}
+
+export type UserUpsertWithoutAiUsageInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutAiUsageInput, Prisma.UserUncheckedUpdateWithoutAiUsageInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutAiUsageInput, Prisma.UserUncheckedCreateWithoutAiUsageInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutAiUsageInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutAiUsageInput, Prisma.UserUncheckedUpdateWithoutAiUsageInput>
+}
+
+export type UserUpdateWithoutAiUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutAiUsageInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutUserRulebooksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutUserRulebooksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutUserRulebooksInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutUserRulebooksInput, Prisma.UserUncheckedCreateWithoutUserRulebooksInput>
+}
+
+export type UserUpsertWithoutUserRulebooksInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutUserRulebooksInput, Prisma.UserUncheckedUpdateWithoutUserRulebooksInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutUserRulebooksInput, Prisma.UserUncheckedCreateWithoutUserRulebooksInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutUserRulebooksInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutUserRulebooksInput, Prisma.UserUncheckedUpdateWithoutUserRulebooksInput>
+}
+
+export type UserUpdateWithoutUserRulebooksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutUserRulebooksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutSopAiChecksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutSopAiChecksInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutSopAiChecksInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutSopAiChecksInput, Prisma.UserUncheckedCreateWithoutSopAiChecksInput>
+}
+
+export type UserUpsertWithoutSopAiChecksInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutSopAiChecksInput, Prisma.UserUncheckedUpdateWithoutSopAiChecksInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutSopAiChecksInput, Prisma.UserUncheckedCreateWithoutSopAiChecksInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutSopAiChecksInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutSopAiChecksInput, Prisma.UserUncheckedUpdateWithoutSopAiChecksInput>
+}
+
+export type UserUpdateWithoutSopAiChecksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutSopAiChecksInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -690,6 +1295,10 @@ export type UserCountOutputType = {
   actions: number
   auditLogs: number
   triageMarks: number
+  aiCredentials: number
+  aiUsage: number
+  userRulebooks: number
+  sopAiChecks: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -697,6 +1306,10 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   actions?: boolean | UserCountOutputTypeCountActionsArgs
   auditLogs?: boolean | UserCountOutputTypeCountAuditLogsArgs
   triageMarks?: boolean | UserCountOutputTypeCountTriageMarksArgs
+  aiCredentials?: boolean | UserCountOutputTypeCountAiCredentialsArgs
+  aiUsage?: boolean | UserCountOutputTypeCountAiUsageArgs
+  userRulebooks?: boolean | UserCountOutputTypeCountUserRulebooksArgs
+  sopAiChecks?: boolean | UserCountOutputTypeCountSopAiChecksArgs
 }
 
 /**
@@ -737,6 +1350,34 @@ export type UserCountOutputTypeCountTriageMarksArgs<ExtArgs extends runtime.Type
   where?: Prisma.TriageMarkWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountAiCredentialsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.AiCredentialWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountAiUsageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.AiUsageWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountUserRulebooksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UserRulebookWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountSopAiChecksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.SopAiCheckWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -749,6 +1390,11 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
+  aiCredentials?: boolean | Prisma.User$aiCredentialsArgs<ExtArgs>
+  aiPreference?: boolean | Prisma.User$aiPreferenceArgs<ExtArgs>
+  aiUsage?: boolean | Prisma.User$aiUsageArgs<ExtArgs>
+  userRulebooks?: boolean | Prisma.User$userRulebooksArgs<ExtArgs>
+  sopAiChecks?: boolean | Prisma.User$sopAiChecksArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -785,6 +1431,11 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
+  aiCredentials?: boolean | Prisma.User$aiCredentialsArgs<ExtArgs>
+  aiPreference?: boolean | Prisma.User$aiPreferenceArgs<ExtArgs>
+  aiUsage?: boolean | Prisma.User$aiUsageArgs<ExtArgs>
+  userRulebooks?: boolean | Prisma.User$userRulebooksArgs<ExtArgs>
+  sopAiChecks?: boolean | Prisma.User$sopAiChecksArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -797,6 +1448,11 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     actions: Prisma.$ProposedActionPayload<ExtArgs>[]
     auditLogs: Prisma.$AuditLogPayload<ExtArgs>[]
     triageMarks: Prisma.$TriageMarkPayload<ExtArgs>[]
+    aiCredentials: Prisma.$AiCredentialPayload<ExtArgs>[]
+    aiPreference: Prisma.$AiPreferencePayload<ExtArgs> | null
+    aiUsage: Prisma.$AiUsagePayload<ExtArgs>[]
+    userRulebooks: Prisma.$UserRulebookPayload<ExtArgs>[]
+    sopAiChecks: Prisma.$SopAiCheckPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1203,6 +1859,11 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   actions<T extends Prisma.User$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProposedActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   auditLogs<T extends Prisma.User$auditLogsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$auditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AuditLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   triageMarks<T extends Prisma.User$triageMarksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$triageMarksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TriageMarkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  aiCredentials<T extends Prisma.User$aiCredentialsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiCredentialsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiCredentialPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  aiPreference<T extends Prisma.User$aiPreferenceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiPreferenceArgs<ExtArgs>>): Prisma.Prisma__AiPreferenceClient<runtime.Types.Result.GetResult<Prisma.$AiPreferencePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  aiUsage<T extends Prisma.User$aiUsageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiUsageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiUsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  userRulebooks<T extends Prisma.User$userRulebooksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$userRulebooksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRulebookPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  sopAiChecks<T extends Prisma.User$sopAiChecksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sopAiChecksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SopAiCheckPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1724,6 +2385,121 @@ export type User$triageMarksArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.TriageMarkScalarFieldEnum | Prisma.TriageMarkScalarFieldEnum[]
+}
+
+/**
+ * User.aiCredentials
+ */
+export type User$aiCredentialsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AiCredential
+   */
+  select?: Prisma.AiCredentialSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AiCredential
+   */
+  omit?: Prisma.AiCredentialOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AiCredentialInclude<ExtArgs> | null
+  where?: Prisma.AiCredentialWhereInput
+  orderBy?: Prisma.AiCredentialOrderByWithRelationInput | Prisma.AiCredentialOrderByWithRelationInput[]
+  cursor?: Prisma.AiCredentialWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.AiCredentialScalarFieldEnum | Prisma.AiCredentialScalarFieldEnum[]
+}
+
+/**
+ * User.aiPreference
+ */
+export type User$aiPreferenceArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AiPreference
+   */
+  select?: Prisma.AiPreferenceSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AiPreference
+   */
+  omit?: Prisma.AiPreferenceOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AiPreferenceInclude<ExtArgs> | null
+  where?: Prisma.AiPreferenceWhereInput
+}
+
+/**
+ * User.aiUsage
+ */
+export type User$aiUsageArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AiUsage
+   */
+  select?: Prisma.AiUsageSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AiUsage
+   */
+  omit?: Prisma.AiUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AiUsageInclude<ExtArgs> | null
+  where?: Prisma.AiUsageWhereInput
+  orderBy?: Prisma.AiUsageOrderByWithRelationInput | Prisma.AiUsageOrderByWithRelationInput[]
+  cursor?: Prisma.AiUsageWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.AiUsageScalarFieldEnum | Prisma.AiUsageScalarFieldEnum[]
+}
+
+/**
+ * User.userRulebooks
+ */
+export type User$userRulebooksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the UserRulebook
+   */
+  select?: Prisma.UserRulebookSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the UserRulebook
+   */
+  omit?: Prisma.UserRulebookOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UserRulebookInclude<ExtArgs> | null
+  where?: Prisma.UserRulebookWhereInput
+  orderBy?: Prisma.UserRulebookOrderByWithRelationInput | Prisma.UserRulebookOrderByWithRelationInput[]
+  cursor?: Prisma.UserRulebookWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.UserRulebookScalarFieldEnum | Prisma.UserRulebookScalarFieldEnum[]
+}
+
+/**
+ * User.sopAiChecks
+ */
+export type User$sopAiChecksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the SopAiCheck
+   */
+  select?: Prisma.SopAiCheckSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the SopAiCheck
+   */
+  omit?: Prisma.SopAiCheckOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.SopAiCheckInclude<ExtArgs> | null
+  where?: Prisma.SopAiCheckWhereInput
+  orderBy?: Prisma.SopAiCheckOrderByWithRelationInput | Prisma.SopAiCheckOrderByWithRelationInput[]
+  cursor?: Prisma.SopAiCheckWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.SopAiCheckScalarFieldEnum | Prisma.SopAiCheckScalarFieldEnum[]
 }
 
 /**

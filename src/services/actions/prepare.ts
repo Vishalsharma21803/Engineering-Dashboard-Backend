@@ -1,18 +1,22 @@
 import { AppError } from "../../lib/app-error.js";
 import type { AzureClient } from "../../lib/azure/client.js";
 import type { RawRepository, RawWorkItem } from "../../lib/azure/azure-api.types.js";
-import type { ActionVariant, UpdatableWorkField } from "../../schemas/action.schema.js";
+import { htmlToText } from "../../lib/html-to-text.js";
+import { hasPlaceholder } from "../../lib/placeholders.js";
+import type { ActionVariant, EditableTextField, UpdatableWorkField } from "../../schemas/action.schema.js";
 import type { StateCategory } from "../../types/azure.types.js";
 import { asNumber, asString, stripRefPrefix } from "../azure/mappers.js";
 import { getBuild, getBuildTimeline, getPipelineDefinition } from "../azure/pipelines.service.js";
 import { getPullRequest } from "../azure/pull-requests.service.js";
 import { belongsToProject } from "../azure/work-item-detail.service.js";
+import { getDefaultProjectProfile, isCloseAfterMergeAllowed } from "../sop/rulebook.service.js";
 import {
   WORK_ITEM_FIELDS,
   extractLinks,
   getLinkedPullRequests,
   getSupportedFields,
   getWorkItem,
+  getWorkItemTypeFieldNames,
   getWorkItemTypeStates,
   workItemProjectName,
   workItemType,
@@ -59,6 +63,30 @@ const WORK_FIELD_LABEL: Record<UpdatableWorkField, string> = {
   priority: "Priority",
 };
 
+export const TEXT_FIELD_REFERENCE: Record<EditableTextField, string> = {
+  title: WORK_ITEM_FIELDS.title,
+  description: WORK_ITEM_FIELDS.description,
+  acceptanceCriteria: WORK_ITEM_FIELDS.acceptanceCriteria,
+};
+
+const TEXT_FIELD_LABEL: Record<EditableTextField, string> = {
+  title: "Title",
+  description: "Description",
+  acceptanceCriteria: "Acceptance criteria",
+};
+
+/** Rich-text fields store HTML; the title is plain text. */
+export function isHtmlField(field: EditableTextField): boolean {
+  return field !== "title";
+}
+
+export function splitTags(value: unknown): string[] {
+  return (asString(value) ?? "")
+    .split(";")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
 const RUNNING_BUILD_STATUSES = new Set(["inProgress", "notStarted", "postponed"]);
 const RETRYABLE_STAGE_RESULTS = new Set(["failed", "canceled"]);
 const PREFERRED_CLOSED_STATES = ["Closed", "Done", "Completed"];
@@ -90,6 +118,13 @@ function workItemTarget(workItem: RawWorkItem) {
   return { projectId: workItemProjectName(workItem), workItemId: workItem.id };
 }
 
+/** AI drafts mark missing facts as [[fill in: …]]; such text must be completed before it can be written. */
+function assertNoPlaceholders(text: string): void {
+  if (hasPlaceholder(text)) {
+    throw invalid("PLACEHOLDER_NOT_FILLED", "Replace every [[fill in: …]] gap with the real information first");
+  }
+}
+
 export function pickClosedState(
   states: Array<{ name: string; category: StateCategory }>
 ): string | null {
@@ -108,6 +143,7 @@ export async function prepareAction(
 ): Promise<PreparedAction> {
   switch (action.kind) {
     case "WORK_ITEM_COMMENT": {
+      assertNoPlaceholders(action.params.text);
       const workItem = await loadWorkItemForAction(
         client,
         action.target.projectId,
@@ -268,6 +304,13 @@ export async function prepareAction(
       const projectName = workItemProjectName(workItem);
       const links = extractLinks(workItem).pullRequests;
 
+      if (!(await isCloseAfterMergeAllowed(projectName))) {
+        throw invalid(
+          "CLOSE_AFTER_MERGE_DISABLED",
+          `${projectName} has a Testing stage in the SOP rulebook; merged work moves to Testing, not Closed`
+        );
+      }
+
       if (links.length === 0) {
         throw invalid("NO_LINKED_PRS", "The work item has no linked pull requests");
       }
@@ -313,6 +356,95 @@ export async function prepareAction(
         params,
         preview,
         summary: `Close #${workItem.id} ${title(workItem)} (all linked PRs merged)`,
+        baseRev: workItem.rev,
+      };
+    }
+
+    case "WORK_ITEM_EDIT_TEXT": {
+      assertNoPlaceholders(action.params.text);
+      const workItem = await loadWorkItemForAction(client, action.target.projectId, action.target.workItemId);
+      const { field, text } = action.params;
+      const reference = TEXT_FIELD_REFERENCE[field];
+      const raw = asString(workItem.fields[reference]);
+      const before = isHtmlField(field) ? htmlToText(raw) : (raw ?? "");
+
+      if (before.trim() === text.trim()) {
+        throw invalid("NO_CHANGES", `${TEXT_FIELD_LABEL[field]} already has this text`);
+      }
+
+      // The new text is plain: say so when the current field has formatting that will be lost.
+      const richContent = isHtmlField(field) && /<(img|table|a|ul|ol|pre|code|h[1-6])\b/i.test(raw ?? "");
+
+      return {
+        projectId: workItemProjectName(workItem),
+        target: workItemTarget(workItem),
+        // The stored raw value guards against someone else editing the field meanwhile.
+        params: { field, text, expected: { [reference]: raw } },
+        preview: [{ field: TEXT_FIELD_LABEL[field], before: before || null, after: text }],
+        summary:
+          `Replace ${TEXT_FIELD_LABEL[field].toLowerCase()} of #${workItem.id} ${title(workItem)}` +
+          (richContent ? " (as plain text: current links, lists, tables and images are not kept)" : ""),
+        baseRev: workItem.rev,
+      };
+    }
+
+    case "WORK_ITEM_SET_CATEGORY": {
+      const workItem = await loadWorkItemForAction(client, action.target.projectId, action.target.workItemId);
+      const projectName = workItemProjectName(workItem);
+      const profile = await getDefaultProjectProfile(projectName);
+      const reference = profile?.fields.category ?? null;
+
+      if (!profile || !reference) {
+        throw invalid("CATEGORY_NOT_CONFIGURED", `${projectName} has no category field in the SOP rulebook`);
+      }
+
+      const category = Object.keys(profile.categories).find((name) => name.toLowerCase() === action.params.category.toLowerCase());
+
+      if (!category) {
+        throw invalid("INVALID_CATEGORY", `"${action.params.category}" is not one of ${projectName}'s categories`);
+      }
+
+      if (!(await getWorkItemTypeFieldNames(client, projectName, workItemType(workItem))).has(reference)) {
+        throw invalid("FIELD_NOT_SUPPORTED", `${workItemType(workItem)} work items have no ${reference} field`);
+      }
+
+      const before = asString(workItem.fields[reference]);
+
+      if (before === category) {
+        throw invalid("NO_CHANGES", `The category is already ${category}`);
+      }
+
+      return {
+        projectId: projectName,
+        target: workItemTarget(workItem),
+        params: { field: reference, value: category, expected: { [reference]: before } },
+        preview: [{ field: "Category", before, after: category }],
+        summary: `Set category of #${workItem.id} ${title(workItem)} to ${category}`,
+        baseRev: workItem.rev,
+      };
+    }
+
+    case "WORK_ITEM_ADD_TAGS": {
+      const workItem = await loadWorkItemForAction(client, action.target.projectId, action.target.workItemId);
+      const raw = asString(workItem.fields[WORK_ITEM_FIELDS.tags]);
+      const current = splitTags(raw);
+      const known = new Set(current.map((tag) => tag.toLowerCase()));
+      const added = [...new Map(action.params.tags.map((tag) => [tag.toLowerCase(), tag])).values()].filter(
+        (tag) => !known.has(tag.toLowerCase())
+      );
+
+      if (added.length === 0) {
+        throw invalid("NO_CHANGES", "The work item already has these tags");
+      }
+
+      const next = [...current, ...added].join("; ");
+
+      return {
+        projectId: workItemProjectName(workItem),
+        target: workItemTarget(workItem),
+        params: { tags: next, expected: { [WORK_ITEM_FIELDS.tags]: raw } },
+        preview: [{ field: "Tags", before: current.join("; ") || null, after: next }],
+        summary: `Add tag(s) ${added.join(", ")} to #${workItem.id} ${title(workItem)}`,
         baseRev: workItem.rev,
       };
     }

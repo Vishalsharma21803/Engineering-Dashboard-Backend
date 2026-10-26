@@ -77,6 +77,7 @@ const FIELDS: Record<string, string[]> = {
     "Microsoft.VSTS.Scheduling.RemainingWork",
     "Microsoft.VSTS.Scheduling.CompletedWork",
     "Microsoft.VSTS.Common.Priority",
+    "Microsoft.VSTS.Common.Activity",
   ],
   Bug: [
     "Microsoft.VSTS.Scheduling.StoryPoints",

@@ -1,0 +1,201 @@
+import { AppError } from "../../lib/app-error.js";
+import { prisma } from "../../lib/prisma.js";
+import { findProjectProfile, mergeRulebooks, type EffectiveRulebook } from "./rulebook.merge.js";
+import { parseRulebook } from "./rulebook.parser.js";
+import type { ParsedRulebook, ProjectProfile, RulebookError } from "./rulebook.types.js";
+import { STARTER_RULEBOOK } from "./starter-rulebook.js";
+
+/** Version 0 is the built-in starter; saved versions start at 1. */
+export const STARTER_VERSION = 0;
+
+/** Thrown when a rulebook has errors; the controller returns them with line numbers. */
+export class RulebookValidationError extends AppError {
+  constructor(readonly problems: RulebookError[]) {
+    super(422, "RULEBOOK_INVALID", `The rulebook has ${problems.length} problem(s)`);
+    this.name = "RulebookValidationError";
+  }
+}
+
+export interface RulebookVersion {
+  version: number;
+  content: string;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+}
+
+async function authorNames(userIds: Array<string | null>): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds.filter((id): id is string => id !== null))];
+  const users = ids.length
+    ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+    : [];
+  return new Map(users.map((user) => [user.id, user.name]));
+}
+
+export async function getDefaultRulebook(): Promise<RulebookVersion> {
+  const latest = await prisma.rulebook.findFirst({ orderBy: { version: "desc" } });
+
+  if (!latest) {
+    return { version: STARTER_VERSION, content: STARTER_RULEBOOK, note: "Built-in WI-002 starter", createdBy: null, createdAt: null };
+  }
+
+  const names = await authorNames([latest.createdBy]);
+  return {
+    version: latest.version,
+    content: latest.content,
+    note: latest.note,
+    createdBy: latest.createdBy ? (names.get(latest.createdBy) ?? null) : null,
+    createdAt: latest.createdAt.toISOString(),
+  };
+}
+
+export async function listDefaultVersions() {
+  const rows = await prisma.rulebook.findMany({
+    orderBy: { version: "desc" },
+    select: { version: true, note: true, createdBy: true, createdAt: true },
+    take: 100,
+  });
+  const names = await authorNames(rows.map((row) => row.createdBy));
+
+  return [
+    ...rows.map((row) => ({
+      version: row.version,
+      note: row.note,
+      createdBy: row.createdBy ? (names.get(row.createdBy) ?? null) : null,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    { version: STARTER_VERSION, note: "Built-in WI-002 starter", createdBy: null, createdAt: null },
+  ];
+}
+
+export async function getDefaultVersion(version: number): Promise<RulebookVersion> {
+  if (version === STARTER_VERSION) {
+    return { version, content: STARTER_RULEBOOK, note: "Built-in WI-002 starter", createdBy: null, createdAt: null };
+  }
+
+  const row = await prisma.rulebook.findUnique({ where: { version } });
+
+  if (!row) {
+    throw new AppError(404, "RULEBOOK_VERSION_NOT_FOUND", "Rulebook version not found");
+  }
+
+  const names = await authorNames([row.createdBy]);
+  return {
+    version: row.version,
+    content: row.content,
+    note: row.note,
+    createdBy: row.createdBy ? (names.get(row.createdBy) ?? null) : null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function validateDefaultContent(content: string): ParsedRulebook {
+  return parseRulebook(content, "default");
+}
+
+/** Every save is a new version; nothing is edited in place. */
+export async function saveDefaultRulebook(content: string, userId: string, note: string | undefined) {
+  const parsed = validateDefaultContent(content);
+
+  if (parsed.errors.length > 0) {
+    throw new RulebookValidationError(parsed.errors);
+  }
+
+  const latest = await prisma.rulebook.findFirst({ orderBy: { version: "desc" }, select: { version: true } });
+
+  await prisma.rulebook.create({
+    data: { version: (latest?.version ?? STARTER_VERSION) + 1, content, note: note ?? null, createdBy: userId },
+  });
+
+  return getDefaultRulebook();
+}
+
+export async function getPersonalRulebook(userId: string) {
+  const latest = await prisma.userRulebook.findFirst({ where: { userId }, orderBy: { version: "desc" } });
+
+  return latest
+    ? { version: latest.version, content: latest.content, createdAt: latest.createdAt.toISOString() }
+    : { version: 0, content: "", createdAt: null };
+}
+
+export async function listPersonalVersions(userId: string) {
+  const rows = await prisma.userRulebook.findMany({
+    where: { userId },
+    orderBy: { version: "desc" },
+    select: { version: true, createdAt: true },
+    take: 100,
+  });
+
+  return rows.map((row) => ({ version: row.version, createdAt: row.createdAt.toISOString() }));
+}
+
+export async function getPersonalVersion(userId: string, version: number) {
+  const row = await prisma.userRulebook.findUnique({ where: { userId_version: { userId, version } } });
+
+  if (!row) {
+    throw new AppError(404, "RULEBOOK_VERSION_NOT_FOUND", "Rulebook version not found");
+  }
+
+  return { version: row.version, content: row.content, createdAt: row.createdAt.toISOString() };
+}
+
+/** Personal files are checked on their own and against the current default rules. */
+export async function validatePersonalContent(content: string): Promise<{ parsed: ParsedRulebook; problems: RulebookError[] }> {
+  const parsed = parseRulebook(content, "personal");
+  const defaults = validateDefaultContent((await getDefaultRulebook()).content);
+  const merged = mergeRulebooks(defaults, parsed);
+
+  return { parsed, problems: [...parsed.errors, ...merged.issues] };
+}
+
+export async function savePersonalRulebook(userId: string, content: string) {
+  const { problems } = await validatePersonalContent(content);
+
+  if (problems.length > 0) {
+    throw new RulebookValidationError(problems);
+  }
+
+  const latest = await prisma.userRulebook.findFirst({ where: { userId }, orderBy: { version: "desc" }, select: { version: true } });
+  await prisma.userRulebook.create({ data: { userId, version: (latest?.version ?? 0) + 1, content } });
+
+  return getPersonalRulebook(userId);
+}
+
+export interface EffectiveRulebookInfo extends EffectiveRulebook {
+  defaultVersion: number;
+  personalVersion: number;
+}
+
+/**
+ * The rules that judge this user's checks. `forTeamReports` ignores the
+ * personal file, as agreed: team reports always use the default rules.
+ */
+export async function getEffectiveRulebook(userId: string, options: { forTeamReports?: boolean } = {}): Promise<EffectiveRulebookInfo> {
+  const defaults = await getDefaultRulebook();
+  const parsedDefaults = validateDefaultContent(defaults.content);
+
+  if (options.forTeamReports) {
+    return { ...mergeRulebooks(parsedDefaults, null), defaultVersion: defaults.version, personalVersion: 0 };
+  }
+
+  const personal = await getPersonalRulebook(userId);
+  const parsedPersonal = personal.content ? parseRulebook(personal.content, "personal") : null;
+
+  return {
+    ...mergeRulebooks(parsedDefaults, parsedPersonal),
+    defaultVersion: defaults.version,
+    personalVersion: personal.version,
+  };
+}
+
+/** Project facts always come from the default rulebook. */
+export async function getDefaultProjectProfile(projectName: string): Promise<ProjectProfile | null> {
+  const parsed = validateDefaultContent((await getDefaultRulebook()).content);
+  return findProjectProfile(parsed.projects, projectName);
+}
+
+/** Projects with a Testing stage move merged work to Testing, so "close after merge" would skip it. */
+export async function isCloseAfterMergeAllowed(projectName: string): Promise<boolean> {
+  const profile = await getDefaultProjectProfile(projectName);
+  return !profile || profile.stages.testing.length === 0;
+}

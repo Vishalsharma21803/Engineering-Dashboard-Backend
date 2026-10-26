@@ -17,7 +17,7 @@ export function getApp(): Express {
 
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User" CASCADE'
+    'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook" CASCADE'
   );
 }
 

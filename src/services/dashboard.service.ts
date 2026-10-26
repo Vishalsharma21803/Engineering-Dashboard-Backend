@@ -8,7 +8,7 @@ import { listMyLatestBuilds } from "./azure/pipelines.service.js";
 import { getProject, listProjects } from "./azure/projects.service.js";
 import { listMyPullRequests } from "./azure/pull-requests.service.js";
 import { sectionData, toSection } from "./azure/section.js";
-import { listAssignedWorkItems } from "./azure/work-items.service.js";
+import { listAssignedWorkItemRecords } from "./azure/work-items.service.js";
 import { buildRecommendations } from "./recommendation.service.js";
 
 export const MAX_DASHBOARD_PROJECTS = 30;
@@ -45,6 +45,7 @@ function unavailable<T>(reason: string | null): Section<T> {
 
 export async function getDashboard(
   client: AzureClient,
+  userId: string,
   projectId: string | undefined,
   now = new Date()
 ): Promise<Dashboard> {
@@ -65,13 +66,14 @@ export async function getDashboard(
   const projectsAvailable = projectsSection.status === "ok";
 
   const workItemsSection = await toSection(() =>
-    listAssignedWorkItems(client, { projectName, scope: "compliance" })
+    listAssignedWorkItemRecords(client, { projectName, scope: "compliance" })
   );
-  const allWorkItems = sectionData(workItemsSection, []);
+  const records = sectionData(workItemsSection, []);
+  const allWorkItems = records.map((record) => record.summary);
 
   const [compliance, pullRequests, pipelines] = await Promise.all([
     workItemsSection.status === "ok"
-      ? toSection(() => checkCompliance(client, identity, allWorkItems, now))
+      ? toSection(() => checkCompliance(client, userId, records, now))
       : Promise.resolve({ ...workItemsSection, data: null }),
     projectsAvailable
       ? toSection(() => listMyPullRequests(client, identity, projectIds))
@@ -105,7 +107,7 @@ export async function getDashboard(
   const workItems: Dashboard["sections"]["workItems"] =
     workItemsSection.status === "ok"
       ? { ...workItemsSection, data: openWorkItems }
-      : workItemsSection;
+      : { ...workItemsSection, data: null };
 
   return {
     identity,

@@ -44,3 +44,39 @@ export type AuditLog = Prisma.AuditLogModel
  * never written to Azure DevOps.
  */
 export type TriageMark = Prisma.TriageMarkModel
+/**
+ * Model AiCredential
+ * A user's own AI provider key. One per provider per user; never returned to clients.
+ */
+export type AiCredential = Prisma.AiCredentialModel
+/**
+ * Model AiPreference
+ * Which provider/model/effort a user's AI checks run with, and their spend guard.
+ */
+export type AiPreference = Prisma.AiPreferenceModel
+/**
+ * Model AiUsage
+ * One row per AI call, for the daily spend guard and usage display.
+ */
+export type AiUsage = Prisma.AiUsageModel
+/**
+ * Model AppSetting
+ * Organization-wide settings edited by SOP owners (SOP_ADMIN_EMAILS).
+ */
+export type AppSetting = Prisma.AppSettingModel
+/**
+ * Model Rulebook
+ * Versions of the organization's default SOP rulebook. The latest version is active;
+ * restoring an old version saves it again as a new version.
+ */
+export type Rulebook = Prisma.RulebookModel
+/**
+ * Model UserRulebook
+ * Versions of one user's personal rule file (overrides + MY- rules). Latest is active.
+ */
+export type UserRulebook = Prisma.UserRulebookModel
+/**
+ * Model SopAiCheck
+ * The latest AI check of one ticket for one user. Private to that user; re-run only when its input changes.
+ */
+export type SopAiCheck = Prisma.SopAiCheckModel

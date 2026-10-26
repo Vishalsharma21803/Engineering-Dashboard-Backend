@@ -3,6 +3,9 @@ import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma.js";
 import type { LoginInput, RegisterInput } from "../types/auth.types.js";
 
+/** A bcrypt hash (cost 12) of a random value; compared against when the email is unknown. */
+const DUMMY_HASH = bcrypt.hashSync(Math.random().toString(36), 12);
+
 export async function registerUser(input: RegisterInput) {
   const existingUser = await prisma.user.findUnique({
     where: { email: input.email },
@@ -35,6 +38,8 @@ export async function loginUser(input: LoginInput) {
   });
 
   if (!user) {
+    // Same work as a real check, so response time does not reveal which emails have accounts.
+    await bcrypt.compare(input.password, DUMMY_HASH);
     return null;
   }
 

@@ -24,6 +24,9 @@ enum ActionKind {
   WORK_ITEM_TRANSITION_STATE
   WORK_ITEM_LINK_PR
   WORK_ITEM_CLOSE_AFTER_MERGE
+  WORK_ITEM_EDIT_TEXT
+  WORK_ITEM_SET_CATEGORY
+  WORK_ITEM_ADD_TAGS
   PIPELINE_QUEUE_RUN
   BUILD_RETRY_STAGE
   BUILD_CANCEL
@@ -42,6 +45,16 @@ enum ActionStatus {
 enum ActionSource {
   RECOMMENDATION
   USER
+  /// A fix suggested by the user's AI SOP check.
+  AI_SUGGESTION
+}
+
+enum SopAiStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  SKIPPED
 }
 
 enum TriageStatus {
@@ -61,16 +74,21 @@ enum AuditEvent {
 }
 
 model User {
-  id          String           @id @default(uuid())
-  name        String
-  email       String           @unique
-  password    String
-  credentials Credential[]
-  actions     ProposedAction[]
-  auditLogs   AuditLog[]
-  triageMarks TriageMark[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id            String           @id @default(uuid())
+  name          String
+  email         String           @unique
+  password      String
+  credentials   Credential[]
+  actions       ProposedAction[]
+  auditLogs     AuditLog[]
+  triageMarks   TriageMark[]
+  aiCredentials AiCredential[]
+  aiPreference  AiPreference?
+  aiUsage       AiUsage[]
+  userRulebooks UserRulebook[]
+  sopAiChecks   SopAiCheck[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 }
 
 model Credential {
@@ -85,6 +103,7 @@ model Credential {
   user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   actions              ProposedAction[]
   triageMarks          TriageMark[]
+  sopAiChecks          SopAiCheck[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -161,4 +180,128 @@ model TriageMark {
 
   @@unique([credentialId, itemKey])
   @@index([userId, credentialId])
+}
+
+enum AiProvider {
+  CLAUDE
+  OPENROUTER
+  /// OpenCode pay-as-you-go gateway (opencode.ai).
+  OPENCODE
+}
+
+enum AiEffort {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// A user's own AI provider key. One per provider per user; never returned to clients.
+model AiCredential {
+  id                   String            @id @default(uuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             AiProvider
+  label                String?
+  encryptedApiKey      String
+  /// Last 4 characters, shown so users can recognise the key.
+  keyHint              String
+  lastValidatedAt      DateTime?
+  lastValidationStatus ValidationStatus?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@unique([userId, provider])
+}
+
+/// Which provider/model/effort a user's AI checks run with, and their spend guard.
+model AiPreference {
+  userId                   String      @id
+  user                     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                 AiProvider?
+  model                    String?
+  effort                   AiEffort    @default(MEDIUM)
+  dailyLimitUsd            Float       @default(2)
+  /// Required before a model whose providers may store or train on prompts is used.
+  dataCollectionAcceptedAt DateTime?
+  updatedAt                DateTime    @updatedAt
+}
+
+/// One row per AI call, for the daily spend guard and usage display.
+model AiUsage {
+  id               String     @id @default(uuid())
+  userId           String
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         AiProvider
+  model            String
+  purpose          String
+  inputTokens      Int        @default(0)
+  outputTokens     Int        @default(0)
+  cacheReadTokens  Int        @default(0)
+  cacheWriteTokens Int        @default(0)
+  costUsd          Float      @default(0)
+  createdAt        DateTime   @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Organization-wide settings edited by SOP owners (SOP_ADMIN_EMAILS).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+/// Versions of the organization's default SOP rulebook. The latest version is active;
+/// restoring an old version saves it again as a new version.
+model Rulebook {
+  version   Int      @id
+  content   String
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+}
+
+/// Versions of one user's personal rule file (overrides + MY- rules). Latest is active.
+model UserRulebook {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version   Int
+  content   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, version])
+}
+
+/// The latest AI check of one ticket for one user. Private to that user; re-run only when its input changes.
+model SopAiCheck {
+  id           String      @id @default(uuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String
+  credential   Credential  @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  workItemId   Int
+  projectName  String
+  /// Ticket revision, rules versions and model settings; unchanged = no new AI call.
+  inputHash    String
+  status       SopAiStatus @default(QUEUED)
+  /// Verified verdicts: [{ ruleId, ruleTitle, verdict, reason, quotes, fix }].
+  results      Json?
+  /// Why the check failed or was skipped (AI_KEY_INVALID, DAILY_LIMIT_REACHED, ...).
+  errorReason  String?
+  /// What the AI provider itself said about the failure or limit (shown to the user).
+  errorDetail  String?
+  provider     AiProvider?
+  model        String?
+  costUsd      Float?
+  /// Rate-limited checks wait until this time.
+  notBefore    DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([userId, credentialId, workItemId])
+  @@index([status, notBefore])
 }

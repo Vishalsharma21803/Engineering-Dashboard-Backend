@@ -3,16 +3,19 @@ import { ApprovalTicket, isTicketConsumed } from "../../lib/azure/approval-ticke
 import { pullRequestArtifactUri } from "../../lib/azure/artifact-links.js";
 import type { AzureClient } from "../../lib/azure/client.js";
 import type { RawBuild } from "../../lib/azure/azure-api.types.js";
-import { textToHtml } from "../../lib/html-to-text.js";
-import type { UpdatableWorkField } from "../../schemas/action.schema.js";
+import { htmlToText, textToHtml } from "../../lib/html-to-text.js";
+import type { EditableTextField, UpdatableWorkField } from "../../schemas/action.schema.js";
 import { asNumber, asString } from "../azure/mappers.js";
 import { getBuild } from "../azure/pipelines.service.js";
 import { WORK_ITEM_FIELDS, extractLinks, getWorkItem } from "../azure/work-items.service.js";
 import {
+  TEXT_FIELD_REFERENCE,
   WORK_FIELD_REFERENCE,
+  isHtmlField,
   loadRetryableStage,
   loadRunningBuild,
   loadWorkItemForAction,
+  splitTags,
 } from "./prepare.js";
 
 /**
@@ -152,6 +155,48 @@ async function verifyFields(
   return { verified: checks.every((check) => check.passed), checks };
 }
 
+type FieldComparison = "exact" | "html" | "tags";
+
+/** The single field an edit/category/tags action writes, as Azure expects it. */
+function singleFieldWrite(action: ApprovedAction): { reference: string; value: string; compare: FieldComparison } {
+  const params = action.params;
+
+  switch (action.kind) {
+    case "WORK_ITEM_EDIT_TEXT": {
+      const field = stringParam(params, "field") as EditableTextField;
+      const reference = TEXT_FIELD_REFERENCE[field];
+
+      if (!reference) {
+        throw new Error("INVALID_STORED_PARAM:field");
+      }
+
+      const text = stringParam(params, "text");
+      return isHtmlField(field)
+        ? { reference, value: textToHtml(text), compare: "html" }
+        : { reference, value: text, compare: "exact" };
+    }
+    case "WORK_ITEM_SET_CATEGORY":
+      return { reference: stringParam(params, "field"), value: stringParam(params, "value"), compare: "exact" };
+    case "WORK_ITEM_ADD_TAGS":
+      return { reference: WORK_ITEM_FIELDS.tags, value: stringParam(params, "tags"), compare: "tags" };
+    default:
+      throw new Error(`UNSUPPORTED_ACTION_KIND:${action.kind}`);
+  }
+}
+
+function sameValue(compare: FieldComparison, stored: unknown, wanted: string): boolean {
+  if (compare === "html") {
+    return htmlToText(asString(stored)).trim() === htmlToText(wanted).trim();
+  }
+
+  if (compare === "tags") {
+    const normalize = (value: unknown) => splitTags(value).map((tag) => tag.toLowerCase()).sort().join(";");
+    return normalize(stored) === normalize(wanted);
+  }
+
+  return stored === wanted;
+}
+
 /** Wraps any execution error with whether the Azure write was already sent. */
 export class ExecutionFailure extends Error {
   constructor(
@@ -270,6 +315,31 @@ async function runAction(
           previousRemainingWork: asNumber(workItem.fields[WORK_ITEM_FIELDS.remainingWork]),
         },
         verification: await safeVerify(() => verifyFields(client, workItem.id, expected)),
+      };
+    }
+
+    case "WORK_ITEM_EDIT_TEXT":
+    case "WORK_ITEM_SET_CATEGORY":
+    case "WORK_ITEM_ADD_TAGS": {
+      const workItem = await assertFreshWorkItem(client, action);
+      const write = singleFieldWrite(action);
+      const updated = await patchWorkItem(client, ticket, workItem.id, workItem.rev, [
+        { op: "add", path: `/fields/${write.reference}`, value: write.value },
+      ]);
+
+      return {
+        // The previous value is kept in the audit trail so the change can be undone by hand.
+        result: {
+          workItemId: workItem.id,
+          rev: updated?.rev ?? null,
+          field: write.reference,
+          previousValue: normalizeFieldValue(workItem.fields[write.reference]),
+        },
+        verification: await safeVerify(async () => {
+          const fresh = await getWorkItem(client, workItem.id, { cacheTtlMs: 0 });
+          const passed = sameValue(write.compare, fresh.fields[write.reference], write.value);
+          return { verified: passed, checks: [{ check: write.reference, passed }] };
+        }),
       };
     }
 

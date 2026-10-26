@@ -49,7 +49,8 @@ describe.skipIf(!orgUrl || !pat)("live Azure DevOps (read-only)", () => {
   });
 
   it("builds the dashboard", async () => {
-    const dashboard = await getDashboard(client(), undefined);
+    // No personal rules exist for this id, so the default rulebook applies.
+    const dashboard = await getDashboard(client(), "live-test-user", undefined);
     console.info(
       "Live dashboard sections:",
       Object.fromEntries(Object.entries(dashboard.sections).map(([key, section]) => [key, section.status]))

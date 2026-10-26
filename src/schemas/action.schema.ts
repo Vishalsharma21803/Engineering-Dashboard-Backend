@@ -36,6 +36,17 @@ export const UPDATABLE_WORK_FIELDS = [
 
 export type UpdatableWorkField = (typeof UPDATABLE_WORK_FIELDS)[number];
 
+/** Text fields an AI fix (or a person) may replace in full. */
+export const EDITABLE_TEXT_FIELDS = ["title", "description", "acceptanceCriteria"] as const;
+export type EditableTextField = (typeof EDITABLE_TEXT_FIELDS)[number];
+
+const tag = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((value) => !value.includes(";"), "Tags cannot contain ;");
+
 const actionVariants = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("WORK_ITEM_COMMENT"),
@@ -89,6 +100,30 @@ const actionVariants = z.discriminatedUnion("kind", [
     params: z.object({}).strict(),
   }),
   z.object({
+    kind: z.literal("WORK_ITEM_EDIT_TEXT"),
+    target: workItemTarget,
+    params: z
+      .object({
+        field: z.enum(EDITABLE_TEXT_FIELDS),
+        text: z.string().trim().min(1, "Text is required").max(30_000),
+      })
+      .strict()
+      .refine((params) => params.field !== "title" || (params.text.length <= 255 && !/[\r\n]/.test(params.text)), {
+        message: "A title is one line of at most 255 characters",
+        path: ["text"],
+      }),
+  }),
+  z.object({
+    kind: z.literal("WORK_ITEM_SET_CATEGORY"),
+    target: workItemTarget,
+    params: z.object({ category: z.string().trim().min(1).max(100) }).strict(),
+  }),
+  z.object({
+    kind: z.literal("WORK_ITEM_ADD_TAGS"),
+    target: workItemTarget,
+    params: z.object({ tags: z.array(tag).min(1).max(10) }).strict(),
+  }),
+  z.object({
     kind: z.literal("PIPELINE_QUEUE_RUN"),
     target: definitionTarget,
     params: z
@@ -126,7 +161,7 @@ const actionVariants = z.discriminatedUnion("kind", [
 export const proposeActionSchema = z
   .object({
     credentialId: z.string().uuid("Invalid credential id"),
-    source: z.enum(["RECOMMENDATION", "USER"]).default("USER"),
+    source: z.enum(["RECOMMENDATION", "USER", "AI_SUGGESTION"]).default("USER"),
   })
   .and(actionVariants);
 
