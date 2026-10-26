@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { mergeRulebooks, type EffectiveRulebook } from "./rulebook.merge.js";
 import { ensureProjectsMoved, getProjectProfiles, getSharedProjectProfile } from "./sop-projects.service.js";
 import { parseRulebook } from "./rulebook.parser.js";
+import { ensureRuleLevelsUpdated } from "./rule-levels.js";
 import type { ParsedRulebook, ProjectProfile, RulebookError } from "./rulebook.types.js";
 import { STARTER_RULEBOOK } from "./starter-rulebook.js";
 
@@ -36,6 +37,8 @@ async function authorNames(userIds: Array<string | null>): Promise<Map<string, s
 export async function getDefaultRulebook(): Promise<RulebookVersion> {
   // Old rulebooks carried project blocks; they move to the Projects screen the first time.
   await ensureProjectsMoved();
+  // Then the agreed rule levels (notices, removed rules), once.
+  await ensureRuleLevelsUpdated();
   const latest = await prisma.rulebook.findFirst({ orderBy: { version: "desc" } });
 
   if (!latest) {

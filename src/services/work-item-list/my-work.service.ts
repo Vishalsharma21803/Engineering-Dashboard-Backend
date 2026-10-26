@@ -88,7 +88,7 @@ async function loadSnapshot(client: AzureClient, userId: string, projectName: st
   return snapshots.get(key)?.snapshot ?? { items: [], compliance: new Map(), signals: new Map() };
 }
 
-/** The user's own AI "fail" verdicts become violations, like on the dashboard. */
+/** The user's own AI "fail" verdicts become violations (notice rules: notices), like on the dashboard. */
 async function withAiViolations(userId: string, credentialId: string, compliance: Map<number, ComplianceResult>, ids: number[]) {
   const checks = await prisma.sopAiCheck.findMany({
     where: { userId, credentialId, workItemId: { in: ids } },
@@ -99,7 +99,7 @@ async function withAiViolations(userId: string, credentialId: string, compliance
   for (const check of checks) {
     const base = merged.get(check.workItemId);
     const results = Array.isArray(check.results) ? (check.results as unknown as AiRuleResult[]) : [];
-    const violations: ComplianceViolation[] = results
+    const found: ComplianceViolation[] = results
       .filter((result) => result.verdict === "fail")
       .map((result) => ({
         ruleId: result.ruleId,
@@ -111,8 +111,12 @@ async function withAiViolations(userId: string, credentialId: string, compliance
         suggestedAction: null,
       }));
 
-    if (base && violations.length > 0) {
-      merged.set(check.workItemId, { ...base, violations: [...base.violations, ...violations] });
+    if (base && found.length > 0) {
+      merged.set(check.workItemId, {
+        ...base,
+        violations: [...base.violations, ...found.filter((finding) => finding.severity !== "low")],
+        notices: [...base.notices, ...found.filter((finding) => finding.severity === "low")],
+      });
     }
   }
 

@@ -7,20 +7,9 @@ export const STARTER_RULEBOOK = `# Engineer Cockpit SOP rulebook (WI-002 v1.3 st
 
 Each block between --- lines is one rule card. Projects (their states, fields and categories)
 are set up on the SOP rules → Projects tab. Rule cards: checker "code" = a fixed built-in check; checker "ai" = judged by the user's AI model
-from the plain-English sections below the header. Every rule starts as "warn" until a baseline
-is measured. A line containing only --- always starts or ends a header, so do not use one inside text.
-
----
-id: STR-01
-title: Title is a short phrase
-checker: code
-uses: title-length
-params: { min: 5, max: 80 }
-applies_to: all
-when: before-active
-severity: warn
----
-**Rule:** The title is 5-80 characters and does not end with a period.
+from the plain-English sections below the header. Severity: "fail" and "warn" are SOP gaps; "notice" is
+shown on the ticket but never counted as a gap; "off" is not checked.
+A line containing only --- always starts or ends a header, so do not use one inside text.
 
 ---
 id: STR-03
@@ -42,7 +31,7 @@ uses: field-present
 params: { field: due-date }
 applies_to: [story, task, bug]
 when: at-estimation
-severity: warn
+severity: notice
 ---
 **Rule:** Due Date is set once the ticket is estimated (Estimations, or Active where there is no Estimations state).
 
@@ -59,43 +48,27 @@ severity: warn
 
 ---
 id: STR-06
-title: Story description is in user-story form
-checker: ai
+title: Story has a description
+checker: code
+uses: field-present
+params: { field: description }
 applies_to: [story]
 when: before-active
 severity: warn
 ---
-**Rule:** The description states who wants what and why, in the form "As a <role> I want <capability> so that <benefit>".
-
-**Passes when:** The description names a role, a capability and a benefit, even if worded slightly differently (for example "As an admin, I need to export reports, so I can share them").
-
-**Fails when:** The description is empty, only lists tasks, or is missing the role, the capability or the benefit.
-
-**Pass example:** "As a project manager I want a weekly summary email so that I can track progress without logging in."
-
-**Fail example:** "Make the export button work."
-
-**Suggested fix:** Rewrite the description as "As a <role> I want <capability> so that <benefit>" using the information already in the ticket.
+**Rule:** The story's Description is filled in before work starts (ideally "As a <role> I want <capability> so that <benefit>").
 
 ---
 id: STR-07
-title: Acceptance criteria are numbered and testable
-checker: ai
+title: Story has acceptance criteria
+checker: code
+uses: field-present
+params: { field: acceptance-criteria }
 applies_to: [story]
 when: before-active
 severity: warn
 ---
-**Rule:** Acceptance criteria are a numbered list; each item is one or two sentences and can be tested.
-
-**Passes when:** The Acceptance Criteria field (or a section of the description called acceptance criteria) has at least one numbered item and each item describes a checkable outcome.
-
-**Fails when:** There are no acceptance criteria, they are not numbered, or items are vague ("works properly", "looks good").
-
-**Pass example:** "1. Exported CSV contains one row per invoice. 2. Export finishes within 10 seconds for 5,000 rows."
-
-**Fail example:** "Export should work fine."
-
-**Suggested fix:** Draft 3-6 numbered, testable acceptance criteria from the description.
+**Rule:** The story's Acceptance Criteria field is filled in before work starts (ideally a numbered list of testable outcomes).
 
 ---
 id: STR-08
@@ -123,7 +96,7 @@ title: TL approved the approach
 checker: ai
 applies_to: [task, bug]
 when: before-active
-severity: warn
+severity: notice
 ---
 **Rule:** A team lead approves the technical approach in a comment before work starts. The approver must be listed as a TL in the project's set-up (SOP rules → Projects) and must not be the ticket's developer.
 
@@ -143,7 +116,7 @@ uses: field-present
 params: { field: category }
 applies_to: [task, bug]
 when: before-active
-severity: warn
+severity: notice
 ---
 **Rule:** The Activity field is set to the kind of work (Development, Deployment, Design, Documentation, Requirements or Testing).
 
@@ -154,7 +127,7 @@ checker: code
 uses: tags-present
 applies_to: all
 when: before-active
-severity: warn
+severity: notice
 ---
 **Rule:** At least one meaningful tag (module, technology, environment or release) is set.
 
@@ -165,7 +138,7 @@ checker: code
 uses: parent-link
 applies_to: [story, task, bug, feature]
 when: before-active
-severity: warn
+severity: notice
 ---
 **Rule:** Tasks and bugs have a story or feature parent; stories have a feature parent; features have an epic parent.
 
@@ -176,7 +149,7 @@ checker: code
 uses: reference-links
 applies_to: [story, feature]
 when: before-active
-severity: warn
+severity: notice
 ---
 **Rule:** Stories and features link to the relevant standards, designs, HLD/LLD or API contracts.
 
@@ -189,7 +162,7 @@ applies_to: [task, bug]
 when: at-estimation
 severity: warn
 ---
-**Rule:** Once the ticket is estimated, original estimate, remaining work and completed work (and the target completion date where configured) are filled in.
+**Rule:** Once the ticket is estimated, original estimate, remaining work and completed work are filled in (the due date is STR-04).
 
 ---
 id: STR-15
@@ -215,7 +188,7 @@ uses: branch-linked
 params: { within_hours: 24 }
 applies_to: [task, bug]
 when: while-active
-severity: warn
+severity: notice
 ---
 **Rule:** A git branch is linked to the ticket within 24 hours of moving to Active.
 
@@ -238,27 +211,15 @@ applies_to: [task, bug]
 when: while-active
 severity: warn
 ---
-**Rule:** When work starts, the developer comments with the branch name, that it was branched from develop, that AC/DoD were reviewed, who approved the approach, and an ETA.
+**Rule:** When work starts, the developer comments with the branch name, that it was branched from develop, that AC/DoD were reviewed, who approved the approach, and an ETA. When the ticket has no linked branch, the branch name and "from develop" are not required.
 
-**Passes when:** A comment by the developer, around the move to Active, mentions the branch, develop, AC or DoD, the approving TL and an ETA date. Wording may vary.
+**Passes when:** A comment by the developer, around the move to Active, mentions AC or DoD, the approving TL and an ETA date, plus the branch and develop if a branch is linked. Wording may vary.
 
-**Fails when:** There is no such comment, or it is missing any of: branch, develop, AC/DoD reviewed, approver, ETA.
+**Fails when:** There is no such comment, or it is missing any of: AC/DoD reviewed, approver, ETA, or (only when a branch is linked) the branch or develop.
 
 **Pass example:** "Starting work; branch feature/2187-otp-login from develop; AC/DoD reviewed; approach approved by Ravi; ETA 28 Oct."
 
 **Suggested fix:** Draft the starting-work comment from the ticket's linked branch, approver comment and due date.
-
----
-id: DEV-01
-title: Time is updated every working day
-checker: code
-uses: daily-time-update
-params: { stages: [active, testing] }
-applies_to: [task, bug]
-when: while-active
-severity: warn
----
-**Rule:** On every working day the ticket is in Active or Testing, completed or remaining work is updated.
 
 ---
 id: DEV-02
@@ -278,9 +239,9 @@ checker: code
 uses: pr-linked
 applies_to: [task, bug]
 when: at-review
-severity: warn
+severity: notice
 ---
-**Rule:** At least one pull request is linked to the ticket when it moves to Review.
+**Rule:** At least one pull request is linked to the ticket when it moves to Review. Only a notice: some work needs no code change.
 
 ---
 id: PR-03
@@ -301,26 +262,15 @@ applies_to: [task, bug]
 when: at-review
 severity: warn
 ---
-**Rule:** When moving to Review, the developer comments with the PR number, that unit tests are green, and who reviews it.
+**Rule:** When moving to Review, the developer comments with the PR number, that unit tests are green, and who reviews it. When the ticket has no linked pull request, the PR number and reviewer are not required.
 
-**Passes when:** A comment around the move to Review mentions a linked PR number, passing tests and the reviewer.
+**Passes when:** A comment around the move to Review mentions passing tests, plus a linked PR number and the reviewer if a pull request is linked.
 
-**Fails when:** There is no such comment, or it is missing the PR number, the test status or the reviewer.
+**Fails when:** There is no such comment, or it is missing the test status or (only when a pull request is linked) the PR number or the reviewer.
 
 **Pass example:** "PR #551 opened; unit tests green; assigned to @Ravi; moving to Review."
 
 **Suggested fix:** Draft the comment from the linked pull request and its reviewers.
-
----
-id: PR-07
-title: Pull request targets the right branch
-checker: code
-uses: pr-target-branch
-applies_to: [task, bug]
-when: at-review
-severity: warn
----
-**Rule:** Linked pull requests target the project's configured branch (develop).
 
 ---
 id: MRG-01
@@ -331,7 +281,7 @@ applies_to: [task, bug]
 when: at-testing
 severity: warn
 ---
-**Rule:** Completed pull requests had at least one approval and no open comment threads when they were merged.
+**Rule:** A pull request with a reviewer is merged only after a reviewer approved it and with no open comment threads. A pull request without any reviewer is not counted.
 
 ---
 id: TST-01
@@ -341,7 +291,7 @@ uses: merged-before-stage
 params: { stage: testing }
 applies_to: [task, bug]
 when: at-testing
-severity: warn
+severity: notice
 ---
 **Rule:** The ticket moves to Testing only after all linked pull requests are merged.
 
@@ -351,7 +301,7 @@ title: Moving-to-testing comment
 checker: ai
 applies_to: [task, bug]
 when: at-testing
-severity: warn
+severity: notice
 ---
 **Rule:** When moving to Testing, the developer comments that the work was merged (and into which branch) and gives the dev build or deployment number.
 
@@ -384,7 +334,7 @@ applies_to: [task, bug]
 when: at-done
 severity: warn
 ---
-**Rule:** When the ticket is closed, every linked pull request is completed.
+**Rule:** When the ticket is closed, every linked pull request is completed. A ticket with no pull request at all only gets a notice (some work needs no code change).
 
 ---
 id: DONE-05
@@ -407,47 +357,6 @@ when: at-done
 severity: warn
 ---
 **Rule:** When the ticket is closed, completed work is above 0 and remaining work is 0.
-
----
-id: DONE-09
-title: Final "DoD met" comment
-checker: ai
-applies_to: all
-when: at-done
-severity: warn
----
-**Rule:** When the ticket is closed, a final comment confirms it is complete and the Definition of Done is met.
-
-**Passes when:** A comment around closing says the work is completed and the DoD (or definition of done) is met.
-
-**Fails when:** There is no closing comment or it does not confirm the DoD.
-
-**Pass example:** "Completed; DoD met; release notes updated."
-
-**Suggested fix:** Draft the closing comment.
-
----
-id: ALW-01
-title: Every state change has a comment
-checker: code
-uses: transition-comment
-params: { hours_after: 24, minutes_before: 60 }
-applies_to: all
-when: always
-severity: warn
----
-**Rule:** Every state change has a comment by the person who changed it, from 60 minutes before to 24 hours after the change.
-
----
-id: ALW-02
-title: Due date changes are explained
-checker: code
-uses: due-date-change-comment
-applies_to: all
-when: always
-severity: warn
----
-**Rule:** When the due date changes, a comment the same day mentions both the old and the new date.
 
 ---
 id: FLG-01

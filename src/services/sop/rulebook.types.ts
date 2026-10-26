@@ -22,8 +22,14 @@ export const RULE_WHEN = [
 ] as const;
 export type RuleWhen = (typeof RULE_WHEN)[number];
 
-export const SEVERITIES = ["fail", "warn", "off"] as const;
+/** "fail" and "warn" are SOP gaps; a "notice" is shown on the ticket but never counted as a gap. */
+export const SEVERITIES = ["fail", "warn", "notice", "off"] as const;
 export type Severity = (typeof SEVERITIES)[number];
+
+/** How a rule's problem is shown: "fail" high, "warn" medium, "notice" low. */
+export function findingSeverity(severity: Severity): "high" | "medium" | "low" {
+  return severity === "fail" ? "high" : severity === "notice" ? "low" : "medium";
+}
 
 export interface ProjectProfile {
   project: string;

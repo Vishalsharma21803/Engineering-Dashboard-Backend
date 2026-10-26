@@ -41,7 +41,7 @@ export const BUILTIN_CHECKS = {
     params: z.object({}).strict(),
   },
   "time-fields-present": {
-    description: "Original estimate, remaining and completed work (and target completion if configured) are filled in.",
+    description: "Original estimate, remaining and completed work are filled in.",
     params: z.object({}).strict(),
   },
   "branch-linked": {
@@ -74,7 +74,7 @@ export const BUILTIN_CHECKS = {
     params: z.object({}).strict(),
   },
   "pr-approved-before-merge": {
-    description: "Completed pull requests had an approval and no open comment threads.",
+    description: "Completed pull requests that had a reviewer were approved and had no open comment threads. Pull requests without a reviewer are not checked.",
     params: z.object({}).strict(),
   },
   "daily-time-update": {
@@ -94,7 +94,7 @@ export const BUILTIN_CHECKS = {
     params: z.object({ stage: stage.default("testing") }).strict(),
   },
   "linked-prs-completed": {
-    description: "All linked pull requests are completed (at least one not abandoned).",
+    description: "All linked pull requests are completed. No pull request at all is only a notice.",
     params: z.object({}).strict(),
   },
   "time-logged-at-done": {

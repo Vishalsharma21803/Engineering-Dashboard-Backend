@@ -39,7 +39,7 @@ describe("starter rulebook", () => {
     const parsed = parseRulebook(STARTER_RULEBOOK, "default");
     expect(parsed.errors).toEqual([]);
     expect(parsed.projects).toEqual([]);
-    expect(parsed.cards.length).toBeGreaterThan(30);
+    expect(parsed.cards.length).toBe(28);
     expect(new Set(parsed.cards.map((card) => card.id)).size).toBe(parsed.cards.length);
   });
 

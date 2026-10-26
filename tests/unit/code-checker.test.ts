@@ -130,6 +130,12 @@ describe("simple field checks", () => {
     expect(run("field-present", dossier({ description: "short" }), { field: "description", min_length: 20 }).status).toBe("fail");
   });
 
+  it("time-fields-present asks for the time fields only, not the due date", () => {
+    const withDueDate = { ...PROFILE, fields: { ...PROFILE.fields, targetCompletion: WORK_ITEM_FIELDS.dueDate } };
+    expect(run("time-fields-present", dossier({ profile: withDueDate })).status).toBe("pass");
+    expect(run("time-fields-present", dossier({ workItem: workItem({ completedWork: null }) }))).toMatchObject({ status: "fail", message: "Missing: Completed Work." });
+  });
+
   it("time-logged-at-done proposes zeroing remaining work only when completed work exists", () => {
     const outcome = run("time-logged-at-done", dossier());
     expect(outcome).toMatchObject({ status: "fail", action: { kind: "WORK_ITEM_UPDATE_FIELDS", params: { remainingWork: 0 }, requiresInput: false } });
@@ -250,6 +256,9 @@ describe("links and pull requests", () => {
     expect(run("pr-approved-before-merge", dossier({ pullRequests: [merged] })).status).toBe("fail");
     expect(run("pr-approved-before-merge", dossier({ pullRequests: [{ ...merged, reviewers: [{ id: "other", displayName: "Other", vote: 10 }] }] })).status).toBe("pass");
     expect(run("pr-approved-before-merge", dossier({ pullRequests: [{ ...merged, unresolvedThreads: 2, reviewers: [{ id: "other", displayName: "Other", vote: 10 }] }] })).status).toBe("fail");
+    // Nobody was asked to review (or only the author): nothing to wait for, so it is not a gap.
+    expect(run("pr-approved-before-merge", dossier({ pullRequests: [{ ...merged, reviewers: [] }] }))).toMatchObject({ status: "skip" });
+    expect(run("pr-approved-before-merge", dossier({ pullRequests: [{ ...merged, reviewers: [{ id: "me", displayName: "Me", vote: 0 }] }] })).status).toBe("skip");
   });
 
   it("merged-before-stage compares merge time with the stage entry", () => {
@@ -350,5 +359,50 @@ when: always
     expect(result.passedRules).toEqual([]);
     expect(result.skippedRules).toEqual([{ ruleId: "A-03", ruleTitle: "Evidence before UAT", reason: "Alpha has no uat stage" }]);
     expect(result.rulebook).toEqual({ defaultVersion: 3, personalVersion: 1 });
+  });
+
+  it("does not list a notice rule that is not due yet", () => {
+    const rules = parseRulebook(
+      "---\nid: N-02\ntitle: Branch linked\nchecker: code\nuses: branch-linked\nparams: { within_hours: 24 }\napplies_to: [task]\nwhen: while-active\nseverity: notice\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const justStarted = dossier({ stageHistory: [{ value: "Active", stage: "active", at: new Date("2025-10-15T06:00:00Z"), by: ME, initial: false }] });
+    const result = evaluateDossier(justStarted, { ...effective, cards: rules }, NOW);
+
+    expect(result.pendingRules).toEqual([]);
+    expect(result.notices).toEqual([]);
+    expect(evaluateDossier(justStarted, { ...effective, cards: rules.map((rule) => ({ ...rule, severity: "warn" as const })) }, NOW).pendingRules).toHaveLength(1);
+  });
+
+  it("lists notice rules as notices, never as gaps", () => {
+    const rules = parseRulebook(
+      "---\nid: N-01\ntitle: Tags are set\nchecker: code\nuses: tags-present\napplies_to: [task]\nwhen: before-active\nseverity: notice\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const result = evaluateDossier(dossier(), { ...effective, cards: rules }, NOW);
+
+    expect(result.violations).toEqual([]);
+    expect(result.notices).toEqual([expect.objectContaining({ ruleId: "N-01", severity: "low" })]);
+  });
+
+  it("treats a closed ticket without any pull request as a notice, but an unmerged one as a gap", () => {
+    const rules = parseRulebook(
+      "---\nid: D-01\ntitle: PRs merged\nchecker: code\nuses: linked-prs-completed\napplies_to: [task]\nwhen: at-done\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const closed = {
+      workItem: workItem({ state: "Closed", stateCategory: "Completed" }),
+      stage: "done" as const,
+      stageHistory: [{ value: "Closed", stage: "done" as const, at: new Date("2025-10-10T05:00:00Z"), by: ME, initial: false }],
+    };
+    const openPr = { pullRequestId: 7, title: "x", status: "active", createdBy: ME, closedDate: null, targetBranch: "develop", reviewers: [], unresolvedThreads: null };
+
+    const noPr = evaluateDossier(dossier(closed), { ...effective, cards: rules }, NOW);
+    expect(noPr.violations).toEqual([]);
+    expect(noPr.notices).toEqual([expect.objectContaining({ ruleId: "D-01", message: "No pull request is linked." })]);
+
+    const unmerged = evaluateDossier(dossier({ ...closed, pullRequests: [openPr] as TicketDossier["pullRequests"] }), { ...effective, cards: rules }, NOW);
+    expect(unmerged.notices).toEqual([]);
+    expect(unmerged.violations).toEqual([expect.objectContaining({ ruleId: "D-01", severity: "medium" })]);
   });
 });

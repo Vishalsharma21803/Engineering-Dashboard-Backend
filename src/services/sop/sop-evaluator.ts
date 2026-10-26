@@ -4,7 +4,7 @@ import type { ComplianceResult, WorkItemSummary } from "../../types/azure.types.
 import { checkNeeds, enteredAt, runCodeCheck } from "./code-checker.js";
 import { buildDossier, kindOf, type DossierNeed, type TicketDossier } from "./dossier.js";
 import { findProjectProfile, type EffectiveRulebook } from "./rulebook.merge.js";
-import type { ProjectProfile, RuleCard, RuleWhen, SopStage } from "./rulebook.types.js";
+import { findingSeverity, type ProjectProfile, type RuleCard, type RuleWhen, type SopStage } from "./rulebook.types.js";
 
 export interface RulebookForChecks extends EffectiveRulebook {
   defaultVersion: number;
@@ -89,6 +89,7 @@ function baseResult(
     sopProject,
     rulebook: { defaultVersion: rulebook.defaultVersion, personalVersion: rulebook.personalVersion },
     violations: [],
+    notices: [],
     passedRules: [],
     pendingRules: [],
     skippedRules: [],
@@ -123,21 +124,27 @@ export function evaluateDossier(dossier: TicketDossier, rulebook: RulebookForChe
         result.passedRules.push(ref);
         break;
       case "pending":
-        result.pendingRules.push({ ...ref, message: outcome.message });
+        // A notice that is not even due yet is noise; it shows only if it is still missing once due.
+        if (card.severity !== "notice") {
+          result.pendingRules.push({ ...ref, message: outcome.message });
+        }
         break;
       case "skip":
         result.skippedRules.push({ ...ref, reason: outcome.reason });
         break;
-      case "fail":
-        result.violations.push({
+      case "fail": {
+        // Notice rules, and outcomes a check marks as notice-only, are shown but never count as gaps.
+        const notice = card.severity === "notice" || outcome.notice === true;
+        (notice ? result.notices : result.violations).push({
           ...ref,
           checker: "code",
-          severity: card.severity === "fail" ? "high" : "medium",
+          severity: findingSeverity(notice ? "notice" : card.severity),
           message: outcome.message,
           evidence: outcome.evidence,
           suggestedAction: outcome.action,
         });
         break;
+      }
     }
   }
 

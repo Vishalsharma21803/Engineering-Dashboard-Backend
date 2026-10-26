@@ -38,7 +38,7 @@ export interface ReportContext {
   projectName: string;
   configured: boolean;
   defaultVersion: number;
-  /** Severity per rule id from the default rules ("fail" = high). */
+  /** Severity per rule id from the default rules ("fail" = high); notice rules are left out of the report. */
   severities: Map<string, "high" | "medium">;
   assignees: Map<number, IdentityRef | null>;
   now: Date;
@@ -53,6 +53,10 @@ export function summarizeReport(results: ComplianceResult[], context: ReportCont
 
   for (const result of checked) {
     for (const rule of result.passedRules) {
+      if (!severities.has(rule.ruleId)) {
+        continue;
+      }
+
       const entry = rules.get(rule.ruleId) ?? { ...rule, severity: severities.get(rule.ruleId) ?? "medium", failing: 0, checked: 0 };
       entry.checked += 1;
       rules.set(rule.ruleId, entry);
@@ -158,7 +162,11 @@ export async function getSopReport(client: AzureClient, userId: string, projectN
     projectName,
     configured: findProjectProfile(rulebook.projects, projectName) !== null,
     defaultVersion: rulebook.defaultVersion,
-    severities: new Map(rulebook.cards.map((card) => [card.id, card.severity === "fail" ? ("high" as const) : ("medium" as const)])),
+    severities: new Map(
+      rulebook.cards
+        .filter((card) => card.severity === "fail" || card.severity === "warn")
+        .map((card) => [card.id, card.severity === "fail" ? ("high" as const) : ("medium" as const)])
+    ),
     now,
   };
 

@@ -82,7 +82,7 @@ describe("personal rules", () => {
   it("starts empty, saves overrides and MY- rules as versions", async () => {
     expect((await developer.get("/api/sop/my-rules").expect(200)).body.rulebook).toEqual({ version: 0, content: "", createdAt: null });
 
-    const content = `---\nid: DEV-01\nseverity: off\n---\n${MY_RULE}`;
+    const content = `---\nid: DEV-02\nseverity: off\n---\n${MY_RULE}`;
     const saved = await developer.put("/api/sop/my-rules").send({ content }).expect(200);
     expect(saved.body.rulebook).toMatchObject({ version: 1, content });
 
@@ -106,16 +106,16 @@ describe("personal rules", () => {
   });
 
   it("merges into the effective rules, while team reports ignore personal changes", async () => {
-    await developer.put("/api/sop/my-rules").send({ content: `---\nid: DEV-01\nseverity: off\n---\n${MY_RULE}` }).expect(200);
+    await developer.put("/api/sop/my-rules").send({ content: `---\nid: DEV-02\nseverity: off\n---\n${MY_RULE}` }).expect(200);
 
     const effective = (await developer.get("/api/sop/effective").expect(200)).body;
     expect(effective).toMatchObject({ defaultVersion: 0, personalVersion: 1, issues: [] });
-    expect(effective.cards.find((card: { id: string }) => card.id === "DEV-01")).toMatchObject({ severity: "off", origin: "personal" });
+    expect(effective.cards.find((card: { id: string }) => card.id === "DEV-02")).toMatchObject({ severity: "off", origin: "personal" });
     expect(effective.cards.find((card: { id: string }) => card.id === "MY-01")).toBeTruthy();
 
     const userId = (await developer.get("/api/auth/me").expect(200)).body.user.id;
     const team = await getEffectiveRulebook(userId, { forTeamReports: true });
-    expect(team.cards.find((card) => card.id === "DEV-01")?.severity).toBe("warn");
+    expect(team.cards.find((card) => card.id === "DEV-02")?.severity).toBe("warn");
     expect(team.cards.some((card) => card.id === "MY-01")).toBe(false);
   });
 });

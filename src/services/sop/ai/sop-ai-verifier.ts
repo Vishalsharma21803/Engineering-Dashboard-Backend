@@ -1,12 +1,11 @@
-import type { ProjectProfile } from "../rulebook.types.js";
-import type { AiRuleCard } from "../rulebook.types.js";
+import { findingSeverity, type AiRuleCard, type ProjectProfile } from "../rulebook.types.js";
 import type { FixTarget, Verdict, VerdictOutput } from "./sop-ai-prompt.js";
 
 export interface AiRuleResult {
   ruleId: string;
   ruleTitle: string;
-  /** "fail" rules are high, "warn" rules medium (same as code rules). */
-  severity: "high" | "medium";
+  /** "fail" rules are high, "warn" rules medium, "notice" rules low (same as code rules). */
+  severity: "high" | "medium" | "low";
   verdict: Verdict;
   reason: string;
   /** What to do, for the developer to read; never posted. */
@@ -83,7 +82,7 @@ export function verifyVerdicts(output: VerdictOutput, cards: AiRuleCard[], ticke
   const haystack = normalize(ticketText);
 
   return cards.map((card) => {
-    const base = { ruleId: card.id, ruleTitle: card.title, severity: card.severity === "fail" ? ("high" as const) : ("medium" as const) };
+    const base = { ruleId: card.id, ruleTitle: card.title, severity: findingSeverity(card.severity) };
     const answers = output.results.filter((result) => result.ruleId.trim().toUpperCase() === card.id.toUpperCase());
     const answer = answers[0];
 

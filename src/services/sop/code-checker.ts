@@ -8,7 +8,8 @@ import { SOP_STAGES } from "./rulebook.types.js";
 
 export type CheckOutcome =
   | { status: "pass" }
-  | { status: "fail"; message: string; evidence: string[]; action: SuggestedAction | null }
+  /** `notice`: this outcome is only a notice, whatever the rule's severity. */
+  | { status: "fail"; message: string; evidence: string[]; action: SuggestedAction | null; notice?: boolean }
   /** Not yet decidable (e.g. the time window is still open). */
   | { status: "pending"; message: string }
   /** The check does not apply or its data is unavailable. */
@@ -325,7 +326,6 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
         workItem.originalEstimate === null ? "Original Estimate" : null,
         workItem.remainingWork === null ? "Remaining Work" : null,
         workItem.completedWork === null ? "Completed Work" : null,
-        dossier.profile.fields.targetCompletion && !dossier.fields[dossier.profile.fields.targetCompletion] ? "Target completion" : null,
       ].filter((label): label is string => label !== null);
 
       return missing.length === 0 ? PASS : fail(`Missing: ${missing.join(", ")}.`, [], action(dossier, "WORK_ITEM_UPDATE_FIELDS"));
@@ -475,7 +475,14 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
         return skip("No completed pull request");
       }
 
-      const problems = merged.flatMap((pr) => [
+      // A pull request nobody was asked to review has no approval to wait for.
+      const reviewed = merged.filter((pr) => pr.reviewers.some((reviewer) => !sameActor(reviewer, pr.createdBy)));
+
+      if (reviewed.length === 0) {
+        return skip("No reviewer on the merged pull request(s)");
+      }
+
+      const problems = reviewed.flatMap((pr) => [
         ...(pr.reviewers.some((reviewer) => reviewer.vote >= 5 && !sameActor(reviewer, pr.createdBy)) ? [] : [`PR !${pr.pullRequestId} merged without an approval`]),
         ...(pr.unresolvedThreads ? [`PR !${pr.pullRequestId} merged with ${pr.unresolvedThreads} open comment thread(s)`] : []),
       ]);
@@ -623,8 +630,9 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
 
       const considered = activePrs(dossier);
 
+      // Some tickets need no code change, so a missing pull request is only a notice.
       if (considered.length === 0) {
-        return fail("No merged pull request linked.", [], action(dossier, "WORK_ITEM_LINK_PR"));
+        return { ...fail("No pull request is linked.", [], action(dossier, "WORK_ITEM_LINK_PR")), notice: true };
       }
 
       const open = considered.filter((pr) => pr.status !== "completed");

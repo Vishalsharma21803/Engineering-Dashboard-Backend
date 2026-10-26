@@ -165,9 +165,12 @@ export function buildUserPrompt(dossier: TicketDossier, cards: AiRuleCard[]): st
           .map((comment) => `- ${formatWhen(comment.createdDate)} ${inline(comment.createdBy.displayName)}:\n<<<\n${clip(comment.text, MAX_COMMENT_CHARS)}\n>>>`)
           .join("\n")}`
       : "Comments: none",
-    dossier.pullRequests?.length
-      ? `Linked pull requests:\n${dossier.pullRequests.map((pr) => `- !${pr.pullRequestId} ${inline(pr.title)} (${pr.status}, into ${inline(pr.targetBranch ?? "?")})`).join("\n")}`
-      : "Linked pull requests: none",
+    dossier.pullRequests === null
+      ? "Linked pull requests: could not be read"
+      : dossier.pullRequests.length
+        ? `Linked pull requests:\n${dossier.pullRequests.map((pr) => `- !${pr.pullRequestId} ${inline(pr.title)} (${pr.status}, into ${inline(pr.targetBranch ?? "?")})`).join("\n")}`
+        : "Linked pull requests: none",
+    dossier.branches.length ? `Linked branches: ${dossier.branches.map((branch) => inline(branch.refName)).join(", ")}` : "Linked branches: none",
   ];
 
   return lines.filter((line): line is string => line !== null).join("\n");
