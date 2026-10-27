@@ -61,3 +61,9 @@ export async function setupUser(email?: string): Promise<{ agent: Agent; credent
 export function azurePath(credentialId: string, path: string): string {
   return `/api/azure/${credentialId}${path}`;
 }
+
+/** Runs and saves the team SOP report, then reads the run (with optional filters and pages). */
+export async function runSopReport(agent: Agent, credentialId: string, project: string, query = "") {
+  const run = (await agent.post(`/api/sop/reports/${credentialId}/${project}`).send({}).expect(200)).body.run;
+  return (await agent.get(`/api/sop/reports/${credentialId}/${project}/${run.id}${query}`).expect(200)).body.report;
+}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
-import { azurePath, installFakeAzure, resetDatabase, setupUser, type Agent } from "../support/harness.js";
+import { azurePath, installFakeAzure, resetDatabase, runSopReport, setupUser, type Agent } from "../support/harness.js";
 import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
 
 let agent: Agent;
@@ -64,8 +64,8 @@ describe("notices", () => {
     expect(items.some((item) => item.notices.some((notice) => notice.ruleId === "T-01" && notice.severity === "low"))).toBe(true);
     expect(items.some((item) => item.violations.some((violation) => violation.ruleId === "T-01"))).toBe(false);
 
-    const report = (await agent.get(azurePath(credentialId, "/projects/Alpha/sop-report")).expect(200)).body.report;
-    expect(report.byRule.map((rule: { ruleId: string }) => rule.ruleId)).not.toContain("T-01");
+    const report = await runSopReport(agent, credentialId, "Alpha");
+    expect(report.byRule.items.map((rule: { ruleId: string }) => rule.ruleId)).not.toContain("T-01");
 
     const myWork = (await agent.get(azurePath(credentialId, "/my-work?sop=T-01")).expect(200)).body.myWork;
     expect(myWork.total).toBe(0);

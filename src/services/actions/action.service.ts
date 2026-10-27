@@ -9,7 +9,9 @@ import {
   type ActionKind,
 } from "../../generated/prisma/enums.js";
 import type { Prisma } from "../../generated/prisma/client.js";
-import type { ProposeActionInput } from "../../schemas/action.schema.js";
+import { pageWindow, type Page } from "../../lib/pagination.js";
+import type { ActionScopeFilter, ProposeActionInput } from "../../schemas/action.schema.js";
+import { actionScopeWhere } from "./action-scope.js";
 import type { ScopeStatus, WriteScopeArea } from "../../types/azure.types.js";
 import { recordAudit, type RequestContext } from "../audit.service.js";
 import {
@@ -476,23 +478,29 @@ export async function rejectAction(
   return action;
 }
 
+/** Newest first, 10 per page. */
 export async function listActions(
   userId: string,
-  filter: { status?: ActionStatus | undefined; credentialId?: string | undefined; limit: number },
+  filter: { status?: ActionStatus | undefined; history: boolean; page: number } & ActionScopeFilter,
   context: RequestContext
-): Promise<ActionDto[]> {
+): Promise<Page<ActionDto>> {
   await expireStaleActions(userId, context);
 
-  return prisma.proposedAction.findMany({
-    where: {
-      userId,
-      ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.credentialId ? { credentialId: filter.credentialId } : {}),
-    },
+  const where: Prisma.ProposedActionWhereInput = {
+    userId,
+    ...(filter.status ? { status: filter.status } : filter.history ? { status: { not: ActionStatus.PENDING } } : {}),
+    ...actionScopeWhere(filter),
+  };
+  const window = pageWindow(await prisma.proposedAction.count({ where }), filter.page);
+  const items = await prisma.proposedAction.findMany({
+    where,
     select: actionSelect,
     orderBy: { createdAt: "desc" },
-    take: filter.limit,
+    skip: window.skip,
+    take: window.take,
   });
+
+  return { items, page: window.page, pageSize: window.pageSize, total: window.total, totalPages: window.totalPages };
 }
 
 export async function getAction(

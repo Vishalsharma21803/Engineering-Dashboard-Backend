@@ -10,6 +10,7 @@ import { listMyPullRequests } from "./azure/pull-requests.service.js";
 import { sectionData, toSection } from "./azure/section.js";
 import { listAssignedWorkItemRecords } from "./azure/work-items.service.js";
 import { buildRecommendations } from "./recommendation.service.js";
+import { rememberDashboardLists } from "./work-item-list/dashboard-lists.service.js";
 import { rememberMyWork } from "./work-item-list/my-work.service.js";
 
 export const MAX_DASHBOARD_PROJECTS = 30;
@@ -126,6 +127,13 @@ export async function getDashboard(
       recommendations,
     });
   }
+
+  // The paged dashboard lists (actions, pull requests, pipeline runs) read these.
+  rememberDashboardLists(userId, client.credentialId, projectName, {
+    recommendations,
+    pullRequests: pullRequests.data,
+    builds: pipelines.data,
+  });
 
   return {
     identity,

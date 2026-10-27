@@ -18,9 +18,12 @@ import {
   listPullRequestsController,
   listRepositoriesController,
   listWorkItemsController,
-  getSopReportController,
   getMyWorkController,
   getTeamWorkController,
+  listDashboardPipelineRunsController,
+  listDashboardPullRequestsController,
+  listRecommendationsController,
+  listTeamsController,
 } from "../controllers/azure.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { loadAzureCredential } from "../middleware/azure-credential.middleware.js";
@@ -32,6 +35,9 @@ router.use(authenticate, loadAzureCredential);
 
 router.get("/capabilities", getCapabilitiesController);
 router.get("/dashboard", getDashboardController);
+router.get("/dashboard/recommendations", listRecommendationsController);
+router.get("/dashboard/pull-requests", listDashboardPullRequestsController);
+router.get("/dashboard/pipeline-runs", listDashboardPipelineRunsController);
 router.get("/projects", listProjectsController);
 router.get("/projects/:projectId", getProjectController);
 router.get("/work-items", listWorkItemsController);
@@ -39,7 +45,6 @@ router.get("/compliance", listComplianceController);
 router.get("/my-work", getMyWorkController);
 router.get("/pull-requests", listPullRequestsController);
 router.get("/projects/:projectId/work-items/:workItemId", getWorkItemController);
-router.get("/projects/:projectId/sop-report", getSopReportController);
 router.get("/projects/:projectId/team-work-items", getTeamWorkController);
 router.get(
   "/projects/:projectId/repos/:repositoryId/pull-requests/:pullRequestId",
@@ -51,6 +56,7 @@ router.get("/projects/:projectId/builds", listBuildsController);
 router.get("/projects/:projectId/builds/:buildId/timeline", getBuildTimelineController);
 router.get("/projects/:projectId/deployments", getDeploymentsController);
 router.get("/projects/:projectId/repos", listRepositoriesController);
+router.get("/projects/:projectId/teams", listTeamsController);
 router.get("/projects/:projectId/repos/:repositoryId/branches", listBranchesController);
 router.get("/projects/:projectId/repos/:repositoryId/commits", listCommitsController);
 

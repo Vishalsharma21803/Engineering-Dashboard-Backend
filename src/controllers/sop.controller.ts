@@ -17,6 +17,9 @@ import {
   versionParamSchema,
 } from "../schemas/sop.schema.js";
 import { testRulesOnTicket } from "../services/sop/sop-test.service.js";
+import { deleteSopReportRun, getSopReportRun, listSopReportRuns, runSopReport } from "../services/sop/sop-report.service.js";
+import { azureProjectIdSchema, reportRunIdSchema, sopProjectsPageQuerySchema, sopReportRunQuerySchema, sopReportRunsQuerySchema } from "../schemas/azure.schema.js";
+import { paginate } from "../lib/pagination.js";
 import { getProject, listProjects } from "../services/azure/projects.service.js";
 import {
   getProjectProfiles,
@@ -251,19 +254,30 @@ export const setProjectCheckedController = sopRoute("Saving your project choice 
   return { projectName, checked };
 });
 
-/** The organization's Azure projects, marked with their SOP set-up and this user's choice. Reads Azure only. */
-export const listAzureProjectsForSopController = azureSopRoute("Loading Azure projects failed", async (_req, azure, userId) => {
+/** The organization's projects with their SOP status (10 per page), plus set-ups for projects not in it (10 per page). */
+export const listAzureProjectsForSopController = azureSopRoute("Loading Azure projects failed", async (req, azure, userId) => {
+  const { page, elsewherePage } = parse(sopProjectsPageQuerySchema, req.query);
   const [{ projects }, setUps, mine] = await Promise.all([listProjects(azure.client), listProjectSetUps(), getProjectProfiles(userId)]);
   const setUpKeys = new Set(setUps.map((setUp) => nameKeyOf(setUp.projectName)));
   const off = new Set(mine.switchedOff.map(nameKeyOf));
+  const inOrganization = new Set(projects.map((project) => nameKeyOf(project.name)));
 
   return {
-    projects: projects.map((project) => ({
-      id: project.id,
-      name: project.name,
-      setUp: setUpKeys.has(nameKeyOf(project.name)),
-      checkedForMe: setUpKeys.has(nameKeyOf(project.name)) && !off.has(nameKeyOf(project.name)),
-    })),
+    projects: paginate(
+      projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        setUp: setUpKeys.has(nameKeyOf(project.name)),
+        checkedForMe: setUpKeys.has(nameKeyOf(project.name)) && !off.has(nameKeyOf(project.name)),
+      })),
+      page
+    ),
+    elsewhere: paginate(
+      setUps
+        .filter((setUp) => !inOrganization.has(nameKeyOf(setUp.projectName)))
+        .map((setUp) => ({ projectName: setUp.projectName, checkedForMe: !off.has(nameKeyOf(setUp.projectName)) })),
+      elsewherePage
+    ),
   };
 });
 
@@ -271,4 +285,33 @@ export const listAzureProjectsForSopController = azureSopRoute("Loading Azure pr
 export const suggestProjectSetUpController = azureSopRoute("Reading the project from Azure failed", async (req, azure) => {
   const project = await getProject(azure.client, parse(projectNameParamSchema, req.params.projectId));
   return { suggestion: { projectName: project.name, ...(await suggestProjectSetUp(azure.client, project.name, project.id)) } };
+});
+
+/* Team SOP report runs: read Azure, saved in Cockpit for the person who ran them. */
+
+/** Runs the team SOP report for one project (default rules, code rules only) and saves it for this user. Reads Azure only. */
+export const runSopReportController = azureSopRoute("Running the SOP report failed", async (req, azure, userId) => {
+  const project = await getProject(azure.client, parse(azureProjectIdSchema, req.params.projectId));
+  return { run: await runSopReport(azure.client, userId, project.name) };
+});
+
+/** This user's saved report runs for the project, newest first, 10 per page. */
+export const listSopReportRunsController = azureSopRoute("Listing SOP report runs failed", async (req, azure, userId) => {
+  const project = await getProject(azure.client, parse(azureProjectIdSchema, req.params.projectId));
+  const { page } = parse(sopReportRunsQuerySchema, req.query);
+  return { runs: await listSopReportRuns(userId, azure.credentialId, project.name, page) };
+});
+
+/** One saved run, filtered by person, role, rule, type or state, and paged on the server. */
+export const getSopReportRunController = azureSopRoute("Reading the SOP report failed", async (req, azure, userId) => {
+  const project = await getProject(azure.client, parse(azureProjectIdSchema, req.params.projectId));
+  const runId = parse(reportRunIdSchema, req.params.runId);
+  const { page, rulePage, personPage, ...filters } = parse(sopReportRunQuerySchema, req.query);
+  return { report: await getSopReportRun(userId, azure.credentialId, project.name, runId, { filters, page, rulePage, personPage }) };
+});
+
+export const deleteSopReportRunController = azureSopRoute("Deleting the SOP report failed", async (req, azure, userId) => {
+  const project = await getProject(azure.client, parse(azureProjectIdSchema, req.params.projectId));
+  await deleteSopReportRun(userId, azure.credentialId, project.name, parse(reportRunIdSchema, req.params.runId));
+  return { deleted: true };
 });

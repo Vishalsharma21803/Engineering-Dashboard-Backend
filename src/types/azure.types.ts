@@ -60,7 +60,6 @@ export interface ProjectOverview extends ProjectSummary {
   processTemplate: string | null;
   sourceControlType: string | null;
   defaultTeam: { id: string; name: string } | null;
-  teams: Section<Array<{ id: string; name: string }>>;
   currentIteration: Section<IterationSummary | null>;
   counts: {
     repositories: Section<number>;

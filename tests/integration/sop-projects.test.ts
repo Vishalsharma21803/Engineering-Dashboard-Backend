@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { writeRequests, type FakeAzure } from "../support/fake-azure.js";
-import { azurePath, installFakeAzure, resetDatabase, setupUser, type Agent } from "../support/harness.js";
+import { azurePath, installFakeAzure, resetDatabase, runSopReport, setupUser, type Agent } from "../support/harness.js";
 import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
 
 let fake: FakeAzure;
@@ -102,11 +102,15 @@ describe("rule timing", () => {
 
 describe("project set-ups", () => {
   it("lists the organization's projects, pre-fills a set-up from Azure, and records every change", async () => {
-    const azureProjects = (await agent.get(`/api/sop/azure-projects/${credentialId}`).expect(200)).body.projects;
-    expect(azureProjects.map((project: { name: string; setUp: boolean }) => [project.name, project.setUp])).toEqual([
+    const listed = (await agent.get(`/api/sop/azure-projects/${credentialId}?page=x&elsewherePage=9`).expect(200)).body;
+    expect(listed.projects).toMatchObject({ page: 1, pageSize: 10, total: 2 });
+    expect(listed.projects.items.map((project: { name: string; setUp: boolean }) => [project.name, project.setUp])).toEqual([
       ["Alpha", false],
       ["Beta", false],
     ]);
+    // Fresh installs start with the starter's set-ups, which are not in this organization.
+    expect(listed.elsewhere).toMatchObject({ page: 1, total: 2 });
+    expect(listed.elsewhere.items.map((setUp: { projectName: string }) => setUp.projectName)).toEqual(["automations", "DevOps"]);
 
     const suggestion = (await agent.get(`/api/sop/azure-projects/${credentialId}/Alpha/suggestion`).expect(200)).body.suggestion;
     expect(suggestion).toMatchObject({ projectName: "Alpha", setUp: false });
@@ -159,8 +163,8 @@ describe("project set-ups", () => {
     expect(mine.get(102)).toMatchObject({ configured: false, sopProject: "switched-off", violations: [] });
     // Someone else still gets Alpha checked, and so do team reports.
     expect((await compliance(other.agent, other.credentialId)).get(102)).toMatchObject({ configured: true, sopProject: "checked" });
-    const report = (await agent.get(azurePath(credentialId, "/projects/Alpha/sop-report")).expect(200)).body.report;
-    expect(report.configured).toBe(true);
+    const report = await runSopReport(agent, credentialId, "Alpha");
+    expect(report.itemsChecked).toBeGreaterThan(0);
 
     await agent.put("/api/sop/projects/Alpha/checked").send({ checked: true }).expect(200);
     expect((await compliance(agent, credentialId)).get(102)).toMatchObject({ sopProject: "checked" });

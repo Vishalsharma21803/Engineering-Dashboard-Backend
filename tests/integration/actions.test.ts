@@ -197,8 +197,8 @@ describe("approval enforcement", () => {
     await intruder.get(`/api/actions/${action.id}`).expect(404);
     await approve(action, intruder).expect(404);
     await intruder.post(`/api/actions/${action.id}/reject`).send({}).expect(404);
-    expect((await intruder.get("/api/actions").expect(200)).body.actions).toEqual([]);
-    expect((await intruder.get("/api/audit-logs").expect(200)).body.auditLogs).toEqual([]);
+    expect((await intruder.get("/api/actions").expect(200)).body.actions.items).toEqual([]);
+    expect((await intruder.get("/api/audit-logs").expect(200)).body.auditLogs.items).toEqual([]);
     expect(writeRequests(fake)).toEqual([]);
   });
 
@@ -489,13 +489,36 @@ describe("execution failures", () => {
     await approve(first).expect(200);
 
     const pending = await agent.get("/api/actions?status=PENDING").expect(200);
-    expect(pending.body.actions).toHaveLength(1);
+    expect(pending.body.actions).toMatchObject({ total: 1, page: 1, pageSize: 10 });
+
+    const history = await agent.get("/api/actions?history=true").expect(200);
+    expect(history.body.actions.items.map((action: { id: string }) => action.id)).toEqual([first.id]);
 
     const logs = await agent.get(`/api/audit-logs?actionId=${first.id}`).expect(200);
-    expect(logs.body.auditLogs.map((log: { event: string }) => log.event)).toEqual(
+    expect(logs.body.auditLogs.items[0].actionSummary).toBeTruthy();
+    expect(logs.body.auditLogs.items.map((log: { event: string }) => log.event)).toEqual(
       expect.arrayContaining(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_SUCCEEDED"])
     );
     expect(JSON.stringify(logs.body)).not.toContain("fake-pat");
+  });
+
+  it("pages actions and audit entries 10 at a time, scoped to an organization and project", async () => {
+    for (let index = 0; index < 12; index += 1) {
+      await propose(comment(`note ${index}`));
+    }
+
+    const first = (await agent.get(`/api/actions?status=PENDING&credentialId=${credentialId}&projectId=alpha`).expect(200)).body.actions;
+    expect(first).toMatchObject({ page: 1, pageSize: 10, total: 12, totalPages: 2 });
+    expect(first.items).toHaveLength(10);
+    // Tampered or too-large pages are made safe, never rejected.
+    expect((await agent.get("/api/actions?page=999").expect(200)).body.actions).toMatchObject({ page: 2 });
+    expect((await agent.get("/api/actions?page=-3").expect(200)).body.actions.page).toBe(1);
+    expect((await agent.get("/api/actions?limit=500").expect(200)).body.actions.items).toHaveLength(10);
+    expect((await agent.get("/api/actions?projectId=Beta").expect(200)).body.actions.total).toBe(0);
+
+    const audit = (await agent.get(`/api/audit-logs?credentialId=${credentialId}&projectName=Alpha&page=2`).expect(200)).body.auditLogs;
+    expect(audit).toMatchObject({ page: 2, total: 12, totalPages: 2 });
+    expect(audit.items).toHaveLength(2);
   });
 });
 

@@ -121,3 +121,8 @@ export type UserRulebook = Prisma.UserRulebookModel
  * The latest AI check of one ticket for one user. Private to that user; re-run only when its input changes.
  */
 export type SopAiCheck = Prisma.SopAiCheckModel
+/**
+ * Model SopReportRun
+ * A saved run of the team SOP report for one project. Private to the person who ran it; kept until they delete it.
+ */
+export type SopReportRun = Prisma.SopReportRunModel

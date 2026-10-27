@@ -41,7 +41,7 @@ const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
 const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
 const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
 const { clearMyWorkSnapshots } = await import("../../src/services/work-item-list/my-work.service.js");
-const { clearSopReportCache } = await import("../../src/services/sop/sop-report.service.js");
+const { clearDashboardLists } = await import("../../src/services/work-item-list/dashboard-lists.service.js");
 const { useAlphaRulebook } = await import("../support/test-rulebook.js");
 
 const blockExternal = http.all(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, ({ request }) => {
@@ -79,7 +79,7 @@ async function reset(): Promise<void> {
   clearOpenRouterModelsCache();
   clearOpenCodeModelsCache();
   clearMyWorkSnapshots();
-  clearSopReportCache();
+  clearDashboardLists();
   server.resetHandlers(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
 }
 

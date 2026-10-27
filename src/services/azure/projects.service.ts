@@ -83,6 +83,13 @@ export async function getCurrentIteration(
   return current ? toIteration(current) : null;
 }
 
+/** The project's teams by name (Azure returns at most 100 here). */
+export async function listTeams(client: AzureClient, projectId: string): Promise<Array<{ id: string; name: string }>> {
+  const project = await getProject(client, projectId);
+  const data = await client.get<RawList<RawTeam>>(["_apis", "projects", project.id, "teams"], { query: { $top: 100 } });
+  return (data.value ?? []).map((team) => ({ id: team.id, name: team.name }));
+}
+
 export async function getProjectOverview(
   client: AzureClient,
   projectId: string
@@ -90,15 +97,8 @@ export async function getProjectOverview(
   const raw = await getProject(client, projectId);
   const defaultTeam = raw.defaultTeam ?? null;
 
-  const [teams, currentIteration, repositories, myOpenWorkItems, activePullRequests, failingPipelines] =
+  const [currentIteration, repositories, myOpenWorkItems, activePullRequests, failingPipelines] =
     await Promise.all([
-      toSection(async () => {
-        const data = await client.get<RawList<RawTeam>>(
-          ["_apis", "projects", raw.id, "teams"],
-          { query: { $top: 100 } }
-        );
-        return (data.value ?? []).map((team) => ({ id: team.id, name: team.name }));
-      }),
       toSection(async () =>
         defaultTeam ? getCurrentIteration(client, raw.id, defaultTeam.id) : null
       ),
@@ -142,7 +142,6 @@ export async function getProjectOverview(
     sourceControlType:
       raw.capabilities?.versioncontrol?.sourceControlType ?? null,
     defaultTeam,
-    teams,
     currentIteration,
     counts: {
       repositories,

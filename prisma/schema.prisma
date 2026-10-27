@@ -88,6 +88,7 @@ model User {
   userRulebooks        UserRulebook[]
   sopAiChecks          SopAiCheck[]
   sopProjectExclusions SopProjectExclusion[]
+  sopReportRuns        SopReportRun[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 }
@@ -105,6 +106,7 @@ model Credential {
   actions              ProposedAction[]
   triageMarks          TriageMark[]
   sopAiChecks          SopAiCheck[]
+  sopReportRuns        SopReportRun[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -355,4 +357,26 @@ model SopAiCheck {
 
   @@unique([userId, credentialId, workItemId])
   @@index([status, notBefore])
+}
+
+/// A saved run of the team SOP report for one project. Private to the person who ran it; kept until they delete it.
+model SopReportRun {
+  id             String     @id @default(uuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId   String
+  credential     Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  projectName    String
+  defaultVersion Int
+  itemsChecked   Int
+  itemsWithGaps  Int
+  /// Rules counted as gaps at run time: [{ ruleId, ruleTitle, severity }].
+  rules          Json
+  /// The project's roles at run time: { tl: [], qa: [], po: [] }.
+  roles          Json
+  /// Every checked ticket: [{ workItemId, title, type, state, assignee, violations, passed }].
+  tickets        Json
+  createdAt      DateTime   @default(now())
+
+  @@index([userId, credentialId, projectName, createdAt])
 }

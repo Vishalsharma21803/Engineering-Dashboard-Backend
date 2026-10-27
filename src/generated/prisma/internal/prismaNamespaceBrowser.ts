@@ -65,7 +65,8 @@ export const ModelName = {
   SopProjectChange: 'SopProjectChange',
   SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
-  SopAiCheck: 'SopAiCheck'
+  SopAiCheck: 'SopAiCheck',
+  SopReportRun: 'SopReportRun'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -305,6 +306,23 @@ export const SopAiCheckScalarFieldEnum = {
 } as const
 
 export type SopAiCheckScalarFieldEnum = (typeof SopAiCheckScalarFieldEnum)[keyof typeof SopAiCheckScalarFieldEnum]
+
+
+export const SopReportRunScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  projectName: 'projectName',
+  defaultVersion: 'defaultVersion',
+  itemsChecked: 'itemsChecked',
+  itemsWithGaps: 'itemsWithGaps',
+  rules: 'rules',
+  roles: 'roles',
+  tickets: 'tickets',
+  createdAt: 'createdAt'
+} as const
+
+export type SopReportRunScalarFieldEnum = (typeof SopReportRunScalarFieldEnum)[keyof typeof SopReportRunScalarFieldEnum]
 
 
 export const SortOrder = {

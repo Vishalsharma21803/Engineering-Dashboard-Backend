@@ -1,181 +1,307 @@
+import { AppError } from "../../lib/app-error.js";
 import type { AzureClient } from "../../lib/azure/client.js";
-import { paginate, type Page } from "../../lib/pagination.js";
+import { paginate, pageWindow, type Page } from "../../lib/pagination.js";
+import { prisma } from "../../lib/prisma.js";
 import type { ComplianceResult, IdentityRef } from "../../types/azure.types.js";
-import { checkCompliance } from "../compliance/compliance.service.js";
 import { listAssignedWorkItemRecords } from "../azure/work-items.service.js";
+import { checkCompliance } from "../compliance/compliance.service.js";
 import { findProjectProfile } from "./rulebook.merge.js";
 import { getEffectiveRulebook } from "./rulebook.service.js";
 
-const MAX_LISTED_ITEMS = 200;
+/* ------------------------------------------------------------------ shapes */
 
-export interface SopReport {
+export interface ReportRule {
+  ruleId: string;
+  ruleTitle: string;
+  severity: "high" | "medium";
+}
+
+/** One checked ticket as saved with a run. */
+export interface ReportTicket {
+  workItemId: number;
+  title: string;
+  type: string;
+  state: string;
+  assignee: IdentityRef | null;
+  violations: Array<{ ruleId: string; ruleTitle: string; severity: "high" | "medium" | "low"; message: string }>;
+  /** Gap rules this ticket passed. */
+  passed: string[];
+}
+
+export interface ReportRoles {
+  tl: string[];
+  qa: string[];
+  po: string[];
+}
+
+export const REPORT_ROLES = ["tl", "qa", "po", "developer"] as const;
+export type ReportRole = (typeof REPORT_ROLES)[number];
+
+const ROLE_LABELS: Record<ReportRole, string> = { tl: "Team lead", qa: "QA", po: "Product owner", developer: "Developer" };
+
+export interface ReportFilters {
+  /** Person key (Azure id or unique name), or "unassigned". */
+  person: string;
+  role: ReportRole | "";
+  rule: string;
+  type: string;
+  state: string;
+}
+
+export interface FacetOption {
+  value: string;
+  label: string;
+  count: number;
+}
+
+export interface ReportRunSummary {
+  id: string;
   projectName: string;
-  /** False when the project is not set up for SOP checks. */
-  configured: boolean;
   defaultVersion: number;
-  generatedAt: string;
   itemsChecked: number;
   itemsWithGaps: number;
-  /** Share of checked tickets with no gaps (0-1); null when nothing was checked. */
-  compliantShare: number | null;
-  byRule: Array<{ ruleId: string; ruleTitle: string; severity: "high" | "medium"; failing: number; checked: number }>;
-  byPerson: Array<{ assignee: IdentityRef | null; items: number; itemsWithGaps: number; gaps: number }>;
-  items: Array<{
-    workItemId: number;
-    title: string;
-    type: string;
-    state: string;
-    assignee: IdentityRef | null;
-    violations: Array<{ ruleId: string; ruleTitle: string; severity: "high" | "medium" | "low"; message: string }>;
-  }>;
+  createdAt: string;
 }
+
+export interface ReportRunView {
+  run: ReportRunSummary;
+  /** All numbers below are for the tickets matching the filters. */
+  itemsChecked: number;
+  itemsWithGaps: number;
+  /** Share of matching tickets with no gaps (0-1); null when none match. */
+  compliantShare: number | null;
+  byRule: Page<ReportRule & { failing: number; checked: number }>;
+  byPerson: Page<{ personKey: string; assignee: IdentityRef | null; roles: ReportRole[]; items: number; itemsWithGaps: number; gaps: number }>;
+  items: Page<ReportTicket>;
+  facets: { people: FacetOption[]; roles: FacetOption[]; rules: FacetOption[]; types: FacetOption[]; states: FacetOption[] };
+}
+
+/* --------------------------------------------------------------- summaries */
 
 function personKey(assignee: IdentityRef | null): string {
   return assignee?.id ?? assignee?.uniqueName ?? "unassigned";
 }
 
-export interface ReportContext {
-  projectName: string;
-  configured: boolean;
-  defaultVersion: number;
-  /** Severity per rule id from the default rules ("fail" = high); notice rules are left out of the report. */
-  severities: Map<string, "high" | "medium">;
-  assignees: Map<number, IdentityRef | null>;
-  now: Date;
+/** Roles from the project set-up, matched by display name or sign-in name; anyone not listed is a developer. */
+function rolesOf(assignee: IdentityRef | null, roles: ReportRoles): ReportRole[] {
+  if (!assignee) {
+    return ["developer"];
+  }
+
+  const names = [assignee.displayName, assignee.uniqueName].filter((name): name is string => Boolean(name)).map((name) => name.trim().toLowerCase());
+  const listed = (["tl", "qa", "po"] as const).filter((role) => roles[role].some((entry) => names.includes(entry.trim().toLowerCase())));
+
+  return listed.length > 0 ? listed : ["developer"];
 }
 
-export function summarizeReport(results: ComplianceResult[], context: ReportContext): SopReport {
-  const { assignees, severities } = context;
-  const checked = results.filter((result) => result.configured);
-  const withGaps = checked.filter((result) => result.violations.length > 0);
-  const rules = new Map<string, SopReport["byRule"][number]>();
-  const people = new Map<string, SopReport["byPerson"][number]>();
+function matches(ticket: ReportTicket, filters: ReportFilters, roles: ReportRoles): boolean {
+  if (filters.person && personKey(ticket.assignee) !== filters.person) return false;
+  if (filters.role && !rolesOf(ticket.assignee, roles).includes(filters.role)) return false;
+  if (filters.rule && !ticket.violations.some((violation) => violation.ruleId === filters.rule)) return false;
+  if (filters.type && ticket.type !== filters.type) return false;
+  if (filters.state && ticket.state !== filters.state) return false;
+  return true;
+}
 
-  for (const result of checked) {
-    for (const rule of result.passedRules) {
-      if (!severities.has(rule.ruleId)) {
-        continue;
-      }
+function countOptions(values: Array<{ value: string; label: string }>): FacetOption[] {
+  const counts = new Map<string, FacetOption>();
 
-      const entry = rules.get(rule.ruleId) ?? { ...rule, severity: severities.get(rule.ruleId) ?? "medium", failing: 0, checked: 0 };
-      entry.checked += 1;
-      rules.set(rule.ruleId, entry);
-    }
+  for (const { value, label } of values) {
+    const entry = counts.get(value) ?? { value, label, count: 0 };
+    entry.count += 1;
+    counts.set(value, entry);
+  }
 
-    for (const violation of result.violations) {
-      const entry = rules.get(violation.ruleId) ?? {
-        ruleId: violation.ruleId,
-        ruleTitle: violation.ruleTitle,
-        severity: severities.get(violation.ruleId) ?? "medium",
-        failing: 0,
-        checked: 0,
-      };
-      entry.checked += 1;
-      entry.failing += 1;
-      rules.set(violation.ruleId, entry);
-    }
+  return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
 
-    const assignee = assignees.get(result.workItemId) ?? null;
-    const person = people.get(personKey(assignee)) ?? { assignee, items: 0, itemsWithGaps: 0, gaps: 0 };
+function facetsOf(tickets: ReportTicket[], rules: ReportRule[], roles: ReportRoles): ReportRunView["facets"] {
+  const titles = new Map(rules.map((rule) => [rule.ruleId, rule.ruleTitle]));
+
+  return {
+    people: countOptions(tickets.map((ticket) => ({ value: personKey(ticket.assignee), label: ticket.assignee?.displayName ?? "Unassigned" }))),
+    roles: REPORT_ROLES.map((role) => ({
+      value: role,
+      label: ROLE_LABELS[role],
+      count: tickets.filter((ticket) => rolesOf(ticket.assignee, roles).includes(role)).length,
+    })).filter((option) => option.count > 0),
+    // Rules: how many tickets fail each one.
+    rules: countOptions(
+      tickets.flatMap((ticket) =>
+        ticket.violations.map((violation) => ({ value: violation.ruleId, label: `${violation.ruleId} ${titles.get(violation.ruleId) ?? violation.ruleTitle}` }))
+      )
+    ).sort((a, b) => a.value.localeCompare(b.value)),
+    types: countOptions(tickets.map((ticket) => ({ value: ticket.type, label: ticket.type }))),
+    states: countOptions(tickets.map((ticket) => ({ value: ticket.state, label: ticket.state }))),
+  };
+}
+
+function summarizeTickets(
+  tickets: ReportTicket[],
+  rules: ReportRule[],
+  roles: ReportRoles,
+  pages: { page: number; rulePage: number; personPage: number }
+): Omit<ReportRunView, "run" | "facets"> {
+  const withGaps = tickets.filter((ticket) => ticket.violations.length > 0);
+  const byRule = rules
+    .map((rule) => {
+      const failing = tickets.filter((ticket) => ticket.violations.some((violation) => violation.ruleId === rule.ruleId)).length;
+      return { ...rule, failing, checked: failing + tickets.filter((ticket) => ticket.passed.includes(rule.ruleId)).length };
+    })
+    .filter((rule) => rule.checked > 0)
+    .sort((a, b) => b.failing - a.failing || a.ruleId.localeCompare(b.ruleId));
+  const people = new Map<string, ReportRunView["byPerson"]["items"][number]>();
+
+  for (const ticket of tickets) {
+    const key = personKey(ticket.assignee);
+    const person = people.get(key) ?? { personKey: key, assignee: ticket.assignee, roles: rolesOf(ticket.assignee, roles), items: 0, itemsWithGaps: 0, gaps: 0 };
     person.items += 1;
-    person.gaps += result.violations.length;
-    person.itemsWithGaps += result.violations.length > 0 ? 1 : 0;
-    people.set(personKey(assignee), person);
+    person.gaps += ticket.violations.length;
+    person.itemsWithGaps += ticket.violations.length > 0 ? 1 : 0;
+    people.set(key, person);
   }
 
   return {
-    projectName: context.projectName,
-    configured: context.configured,
-    defaultVersion: context.defaultVersion,
-    generatedAt: context.now.toISOString(),
-    itemsChecked: checked.length,
+    itemsChecked: tickets.length,
     itemsWithGaps: withGaps.length,
-    compliantShare: checked.length ? (checked.length - withGaps.length) / checked.length : null,
-    byRule: [...rules.values()].sort((a, b) => b.failing - a.failing || a.ruleId.localeCompare(b.ruleId)),
-    byPerson: [...people.values()].sort((a, b) => b.gaps - a.gaps || b.items - a.items),
-    items: withGaps.slice(0, MAX_LISTED_ITEMS).map((result) => ({
-      workItemId: result.workItemId,
-      title: result.title,
-      type: result.type,
-      state: result.state,
-      assignee: assignees.get(result.workItemId) ?? null,
-      violations: result.violations.map((violation) => ({
-        ruleId: violation.ruleId,
-        ruleTitle: violation.ruleTitle,
-        severity: violation.severity,
-        message: violation.message,
-      })),
-    })),
+    compliantShare: tickets.length ? (tickets.length - withGaps.length) / tickets.length : null,
+    byRule: paginate(byRule, pages.rulePage),
+    byPerson: paginate(
+      [...people.values()].sort((a, b) => b.gaps - a.gaps || b.items - a.items),
+      pages.personPage
+    ),
+    items: paginate(withGaps, pages.page),
   };
 }
 
-/** A built report is reused for page changes for this long; "Rebuild" bypasses it. */
-const REPORT_TTL_MS = 10 * 60_000;
-const MAX_CACHED_REPORTS = 200;
-const reports = new Map<string, { expiresAt: number; report: SopReport }>();
-
-/** Exposed for tests. */
-export function clearSopReportCache(): void {
-  reports.clear();
+/** A code-rule result reduced to what a saved run keeps (gap rules only; notices are never counted). */
+function toReportTicket(result: ComplianceResult, assignee: IdentityRef | null, gapRules: Set<string>): ReportTicket {
+  return {
+    workItemId: result.workItemId,
+    title: result.title,
+    type: result.type,
+    state: result.state,
+    assignee,
+    violations: result.violations
+      .filter((violation) => gapRules.has(violation.ruleId))
+      .map((violation) => ({ ruleId: violation.ruleId, ruleTitle: violation.ruleTitle, severity: violation.severity, message: violation.message })),
+    passed: result.passedRules.filter((rule) => gapRules.has(rule.ruleId)).map((rule) => rule.ruleId),
+  };
 }
 
-export type PagedSopReport = Omit<SopReport, "items"> & { items: Page<SopReport["items"][number]> };
+/* -------------------------------------------------------------------- runs */
 
-/** The report with its tickets-with-gaps list paged (10 per page); the totals cover every ticket. */
-export async function getPagedSopReport(
-  client: AzureClient,
-  userId: string,
-  projectName: string,
-  input: { page: number; refresh: boolean }
-): Promise<PagedSopReport> {
-  // Team reports use the default rules only, so one built report serves everyone with this connection.
-  const key = `${client.credentialId}|${projectName.toLowerCase()}`;
-  const cached = reports.get(key);
-  let report = cached && cached.expiresAt > Date.now() && !input.refresh ? cached.report : null;
+type RunRow = { id: string; projectName: string; defaultVersion: number; itemsChecked: number; itemsWithGaps: number; createdAt: Date };
 
-  if (!report) {
-    report = await getSopReport(client, userId, projectName);
+const runSummary = (row: RunRow): ReportRunSummary => ({
+  id: row.id,
+  projectName: row.projectName,
+  defaultVersion: row.defaultVersion,
+  itemsChecked: row.itemsChecked,
+  itemsWithGaps: row.itemsWithGaps,
+  createdAt: row.createdAt.toISOString(),
+});
 
-    if (reports.size >= MAX_CACHED_REPORTS) {
-      const oldest = reports.keys().next().value;
-
-      if (oldest !== undefined) {
-        reports.delete(oldest);
-      }
-    }
-
-    reports.delete(key);
-    reports.set(key, { expiresAt: Date.now() + REPORT_TTL_MS, report });
-  }
-
-  return { ...report, items: paginate(report.items, input.page) };
-}
+const RUN_SUMMARY_FIELDS = { id: true, projectName: true, defaultVersion: true, itemsChecked: true, itemsWithGaps: true, createdAt: true } as const;
 
 /**
- * The whole team's SOP picture for one project: open tickets and those
- * closed recently, judged by the default rules only (never anyone's
- * personal rules) and by code rules only (AI results are private).
+ * Checks every open and recently closed ticket in the project with the
+ * default rules only (never anyone's personal rules) and code rules only
+ * (AI results are private), then saves the result as a run for this user.
  */
-export async function getSopReport(client: AzureClient, userId: string, projectName: string, now = new Date()): Promise<SopReport> {
+export async function runSopReport(client: AzureClient, userId: string, projectName: string, now = new Date()): Promise<ReportRunSummary> {
   const rulebook = await getEffectiveRulebook(userId, { forTeamReports: true });
-  const context = {
-    projectName,
-    configured: findProjectProfile(rulebook.projects, projectName) !== null,
-    defaultVersion: rulebook.defaultVersion,
-    severities: new Map(
-      rulebook.cards
-        .filter((card) => card.severity === "fail" || card.severity === "warn")
-        .map((card) => [card.id, card.severity === "fail" ? ("high" as const) : ("medium" as const)])
-    ),
-    now,
-  };
+  const profile = findProjectProfile(rulebook.projects, projectName);
 
-  if (!context.configured) {
-    return summarizeReport([], { ...context, assignees: new Map() });
+  if (!profile) {
+    throw new AppError(409, "SOP_PROJECT_NOT_SET_UP", `${projectName} is not set up for SOP checks yet (SOP rules → Projects).`);
   }
 
-  const records = await listAssignedWorkItemRecords(client, { projectName, scope: "compliance", assignee: "any" });
+  const rules: ReportRule[] = rulebook.cards
+    .filter((card) => card.checker === "code" && (card.severity === "fail" || card.severity === "warn"))
+    .map((card) => ({ ruleId: card.id, ruleTitle: card.title, severity: card.severity === "fail" ? "high" : "medium" }));
+  const gapRules = new Set(rules.map((rule) => rule.ruleId));
+  const records = await listAssignedWorkItemRecords(client, { projectName: profile.project, scope: "compliance", assignee: "any" });
   const results = await checkCompliance(client, userId, records, now, { forTeamReports: true });
+  const assignees = new Map(records.map((record) => [record.summary.id, record.summary.assignedTo]));
+  const tickets = results.filter((result) => result.configured).map((result) => toReportTicket(result, assignees.get(result.workItemId) ?? null, gapRules));
 
-  return summarizeReport(results, { ...context, assignees: new Map(records.map((record) => [record.summary.id, record.summary.assignedTo])) });
+  const row = await prisma.sopReportRun.create({
+    data: {
+      userId,
+      credentialId: client.credentialId,
+      projectName,
+      defaultVersion: rulebook.defaultVersion,
+      itemsChecked: tickets.length,
+      itemsWithGaps: tickets.filter((ticket) => ticket.violations.length > 0).length,
+      rules: rules as object[],
+      roles: profile.roles as object,
+      tickets: tickets as object[],
+      createdAt: now,
+    },
+    select: RUN_SUMMARY_FIELDS,
+  });
+
+  return runSummary(row);
+}
+
+/** This user's saved runs for one project, newest first, 10 per page. */
+export async function listSopReportRuns(
+  userId: string,
+  credentialId: string,
+  projectName: string,
+  page: number
+): Promise<Page<ReportRunSummary> & { latestId: string | null }> {
+  const where = { userId, credentialId, projectName };
+  const window = pageWindow(await prisma.sopReportRun.count({ where }), page);
+  const [rows, latest] = await Promise.all([
+    prisma.sopReportRun.findMany({ where, orderBy: { createdAt: "desc" }, skip: window.skip, take: window.take, select: RUN_SUMMARY_FIELDS }),
+    prisma.sopReportRun.findFirst({ where, orderBy: { createdAt: "desc" }, select: { id: true } }),
+  ]);
+
+  return {
+    items: rows.map(runSummary),
+    page: window.page,
+    pageSize: window.pageSize,
+    total: window.total,
+    totalPages: window.totalPages,
+    // The newest run, shown by default whichever page of the list is open.
+    latestId: latest?.id ?? null,
+  };
+}
+
+async function ownRun(userId: string, credentialId: string, projectName: string, runId: string) {
+  const row = await prisma.sopReportRun.findFirst({ where: { id: runId, userId, credentialId, projectName } });
+
+  if (!row) {
+    throw new AppError(404, "SOP_REPORT_NOT_FOUND", "Report not found");
+  }
+
+  return row;
+}
+
+/** One saved run, filtered and paged on the server. */
+export async function getSopReportRun(
+  userId: string,
+  credentialId: string,
+  projectName: string,
+  runId: string,
+  input: { filters: ReportFilters; page: number; rulePage: number; personPage: number }
+): Promise<ReportRunView> {
+  const row = await ownRun(userId, credentialId, projectName, runId);
+  const tickets = row.tickets as unknown as ReportTicket[];
+  const rules = row.rules as unknown as ReportRule[];
+  const roles = row.roles as unknown as ReportRoles;
+  const matching = tickets.filter((ticket) => matches(ticket, input.filters, roles));
+
+  return {
+    run: runSummary(row),
+    ...summarizeTickets(matching, rules, roles, input),
+    facets: facetsOf(tickets, rules, roles),
+  };
+}
+
+export async function deleteSopReportRun(userId: string, credentialId: string, projectName: string, runId: string): Promise<void> {
+  const row = await ownRun(userId, credentialId, projectName, runId);
+  await prisma.sopReportRun.delete({ where: { id: row.id } });
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { azureProjectIdSchema } from "./azure.schema.js";
+import { azureProjectIdSchema, booleanFlag, pageQuery } from "./azure.schema.js";
 
 const workItemTarget = z
   .object({
@@ -194,15 +194,27 @@ export const ACTION_STATUSES = [
   "EXPIRED",
 ] as const;
 
+/** Narrows lists to one organization and, optionally, one project (matched by id or name). */
+const scopeQuery = {
+  credentialId: z.string().uuid().optional(),
+  projectId: z.string().trim().min(1).max(256).optional(),
+  projectName: z.string().trim().min(1).max(256).optional(),
+};
+
 export const listActionsQuerySchema = z.object({
   status: z.enum(ACTION_STATUSES).optional(),
-  credentialId: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  /** Decided actions only (everything except PENDING). */
+  history: booleanFlag,
+  ...scopeQuery,
+  page: pageQuery,
 });
 
 export const listAuditLogsQuerySchema = z.object({
   actionId: z.string().uuid().optional(),
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
+  ...scopeQuery,
+  page: pageQuery,
 });
+
+export type ActionScopeFilter = { credentialId?: string | undefined; projectId?: string | undefined; projectName?: string | undefined };

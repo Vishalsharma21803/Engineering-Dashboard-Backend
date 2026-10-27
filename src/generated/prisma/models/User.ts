@@ -200,6 +200,7 @@ export type UserWhereInput = {
   userRulebooks?: Prisma.UserRulebookListRelationFilter
   sopAiChecks?: Prisma.SopAiCheckListRelationFilter
   sopProjectExclusions?: Prisma.SopProjectExclusionListRelationFilter
+  sopReportRuns?: Prisma.SopReportRunListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -219,6 +220,7 @@ export type UserOrderByWithRelationInput = {
   userRulebooks?: Prisma.UserRulebookOrderByRelationAggregateInput
   sopAiChecks?: Prisma.SopAiCheckOrderByRelationAggregateInput
   sopProjectExclusions?: Prisma.SopProjectExclusionOrderByRelationAggregateInput
+  sopReportRuns?: Prisma.SopReportRunOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -241,6 +243,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   userRulebooks?: Prisma.UserRulebookListRelationFilter
   sopAiChecks?: Prisma.SopAiCheckListRelationFilter
   sopProjectExclusions?: Prisma.SopProjectExclusionListRelationFilter
+  sopReportRuns?: Prisma.SopReportRunListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -284,6 +287,7 @@ export type UserCreateInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -303,6 +307,7 @@ export type UserUncheckedCreateInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -322,6 +327,7 @@ export type UserUpdateInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -341,6 +347,7 @@ export type UserUncheckedUpdateInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -550,6 +557,20 @@ export type UserUpdateOneRequiredWithoutSopAiChecksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSopAiChecksInput, Prisma.UserUpdateWithoutSopAiChecksInput>, Prisma.UserUncheckedUpdateWithoutSopAiChecksInput>
 }
 
+export type UserCreateNestedOneWithoutSopReportRunsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSopReportRunsInput, Prisma.UserUncheckedCreateWithoutSopReportRunsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSopReportRunsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutSopReportRunsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutSopReportRunsInput, Prisma.UserUncheckedCreateWithoutSopReportRunsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutSopReportRunsInput
+  upsert?: Prisma.UserUpsertWithoutSopReportRunsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSopReportRunsInput, Prisma.UserUpdateWithoutSopReportRunsInput>, Prisma.UserUncheckedUpdateWithoutSopReportRunsInput>
+}
+
 export type UserCreateWithoutCredentialsInput = {
   id?: string
   name: string
@@ -566,6 +587,7 @@ export type UserCreateWithoutCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutCredentialsInput = {
@@ -584,6 +606,7 @@ export type UserUncheckedCreateWithoutCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutCredentialsInput = {
@@ -618,6 +641,7 @@ export type UserUpdateWithoutCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutCredentialsInput = {
@@ -636,6 +660,7 @@ export type UserUncheckedUpdateWithoutCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutActionsInput = {
@@ -654,6 +679,7 @@ export type UserCreateWithoutActionsInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutActionsInput = {
@@ -672,6 +698,7 @@ export type UserUncheckedCreateWithoutActionsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutActionsInput = {
@@ -706,6 +733,7 @@ export type UserUpdateWithoutActionsInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutActionsInput = {
@@ -724,6 +752,7 @@ export type UserUncheckedUpdateWithoutActionsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAuditLogsInput = {
@@ -742,6 +771,7 @@ export type UserCreateWithoutAuditLogsInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAuditLogsInput = {
@@ -760,6 +790,7 @@ export type UserUncheckedCreateWithoutAuditLogsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAuditLogsInput = {
@@ -794,6 +825,7 @@ export type UserUpdateWithoutAuditLogsInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAuditLogsInput = {
@@ -812,6 +844,7 @@ export type UserUncheckedUpdateWithoutAuditLogsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutTriageMarksInput = {
@@ -830,6 +863,7 @@ export type UserCreateWithoutTriageMarksInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutTriageMarksInput = {
@@ -848,6 +882,7 @@ export type UserUncheckedCreateWithoutTriageMarksInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutTriageMarksInput = {
@@ -882,6 +917,7 @@ export type UserUpdateWithoutTriageMarksInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutTriageMarksInput = {
@@ -900,6 +936,7 @@ export type UserUncheckedUpdateWithoutTriageMarksInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAiCredentialsInput = {
@@ -918,6 +955,7 @@ export type UserCreateWithoutAiCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAiCredentialsInput = {
@@ -936,6 +974,7 @@ export type UserUncheckedCreateWithoutAiCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAiCredentialsInput = {
@@ -970,6 +1009,7 @@ export type UserUpdateWithoutAiCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAiCredentialsInput = {
@@ -988,6 +1028,7 @@ export type UserUncheckedUpdateWithoutAiCredentialsInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAiPreferenceInput = {
@@ -1006,6 +1047,7 @@ export type UserCreateWithoutAiPreferenceInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAiPreferenceInput = {
@@ -1024,6 +1066,7 @@ export type UserUncheckedCreateWithoutAiPreferenceInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAiPreferenceInput = {
@@ -1058,6 +1101,7 @@ export type UserUpdateWithoutAiPreferenceInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAiPreferenceInput = {
@@ -1076,6 +1120,7 @@ export type UserUncheckedUpdateWithoutAiPreferenceInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAiUsageInput = {
@@ -1094,6 +1139,7 @@ export type UserCreateWithoutAiUsageInput = {
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAiUsageInput = {
@@ -1112,6 +1158,7 @@ export type UserUncheckedCreateWithoutAiUsageInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAiUsageInput = {
@@ -1146,6 +1193,7 @@ export type UserUpdateWithoutAiUsageInput = {
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAiUsageInput = {
@@ -1164,6 +1212,7 @@ export type UserUncheckedUpdateWithoutAiUsageInput = {
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSopProjectExclusionsInput = {
@@ -1182,6 +1231,7 @@ export type UserCreateWithoutSopProjectExclusionsInput = {
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSopProjectExclusionsInput = {
@@ -1200,6 +1250,7 @@ export type UserUncheckedCreateWithoutSopProjectExclusionsInput = {
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSopProjectExclusionsInput = {
@@ -1234,6 +1285,7 @@ export type UserUpdateWithoutSopProjectExclusionsInput = {
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSopProjectExclusionsInput = {
@@ -1252,6 +1304,7 @@ export type UserUncheckedUpdateWithoutSopProjectExclusionsInput = {
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutUserRulebooksInput = {
@@ -1270,6 +1323,7 @@ export type UserCreateWithoutUserRulebooksInput = {
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUserRulebooksInput = {
@@ -1288,6 +1342,7 @@ export type UserUncheckedCreateWithoutUserRulebooksInput = {
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUserRulebooksInput = {
@@ -1322,6 +1377,7 @@ export type UserUpdateWithoutUserRulebooksInput = {
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUserRulebooksInput = {
@@ -1340,6 +1396,7 @@ export type UserUncheckedUpdateWithoutUserRulebooksInput = {
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
   sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSopAiChecksInput = {
@@ -1358,6 +1415,7 @@ export type UserCreateWithoutSopAiChecksInput = {
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSopAiChecksInput = {
@@ -1376,6 +1434,7 @@ export type UserUncheckedCreateWithoutSopAiChecksInput = {
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSopAiChecksInput = {
@@ -1410,6 +1469,7 @@ export type UserUpdateWithoutSopAiChecksInput = {
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSopAiChecksInput = {
@@ -1428,6 +1488,99 @@ export type UserUncheckedUpdateWithoutSopAiChecksInput = {
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
   sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutSopReportRunsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutSopReportRunsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutSopReportRunsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutSopReportRunsInput, Prisma.UserUncheckedCreateWithoutSopReportRunsInput>
+}
+
+export type UserUpsertWithoutSopReportRunsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutSopReportRunsInput, Prisma.UserUncheckedUpdateWithoutSopReportRunsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutSopReportRunsInput, Prisma.UserUncheckedCreateWithoutSopReportRunsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutSopReportRunsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutSopReportRunsInput, Prisma.UserUncheckedUpdateWithoutSopReportRunsInput>
+}
+
+export type UserUpdateWithoutSopReportRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutSopReportRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -1445,6 +1598,7 @@ export type UserCountOutputType = {
   userRulebooks: number
   sopAiChecks: number
   sopProjectExclusions: number
+  sopReportRuns: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1457,6 +1611,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   userRulebooks?: boolean | UserCountOutputTypeCountUserRulebooksArgs
   sopAiChecks?: boolean | UserCountOutputTypeCountSopAiChecksArgs
   sopProjectExclusions?: boolean | UserCountOutputTypeCountSopProjectExclusionsArgs
+  sopReportRuns?: boolean | UserCountOutputTypeCountSopReportRunsArgs
 }
 
 /**
@@ -1532,6 +1687,13 @@ export type UserCountOutputTypeCountSopProjectExclusionsArgs<ExtArgs extends run
   where?: Prisma.SopProjectExclusionWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountSopReportRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.SopReportRunWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -1550,6 +1712,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   userRulebooks?: boolean | Prisma.User$userRulebooksArgs<ExtArgs>
   sopAiChecks?: boolean | Prisma.User$sopAiChecksArgs<ExtArgs>
   sopProjectExclusions?: boolean | Prisma.User$sopProjectExclusionsArgs<ExtArgs>
+  sopReportRuns?: boolean | Prisma.User$sopReportRunsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -1592,6 +1755,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   userRulebooks?: boolean | Prisma.User$userRulebooksArgs<ExtArgs>
   sopAiChecks?: boolean | Prisma.User$sopAiChecksArgs<ExtArgs>
   sopProjectExclusions?: boolean | Prisma.User$sopProjectExclusionsArgs<ExtArgs>
+  sopReportRuns?: boolean | Prisma.User$sopReportRunsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -1610,6 +1774,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     userRulebooks: Prisma.$UserRulebookPayload<ExtArgs>[]
     sopAiChecks: Prisma.$SopAiCheckPayload<ExtArgs>[]
     sopProjectExclusions: Prisma.$SopProjectExclusionPayload<ExtArgs>[]
+    sopReportRuns: Prisma.$SopReportRunPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -2022,6 +2187,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   userRulebooks<T extends Prisma.User$userRulebooksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$userRulebooksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRulebookPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   sopAiChecks<T extends Prisma.User$sopAiChecksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sopAiChecksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SopAiCheckPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   sopProjectExclusions<T extends Prisma.User$sopProjectExclusionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sopProjectExclusionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SopProjectExclusionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  sopReportRuns<T extends Prisma.User$sopReportRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sopReportRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SopReportRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2682,6 +2848,30 @@ export type User$sopProjectExclusionsArgs<ExtArgs extends runtime.Types.Extensio
   take?: number
   skip?: number
   distinct?: Prisma.SopProjectExclusionScalarFieldEnum | Prisma.SopProjectExclusionScalarFieldEnum[]
+}
+
+/**
+ * User.sopReportRuns
+ */
+export type User$sopReportRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the SopReportRun
+   */
+  select?: Prisma.SopReportRunSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the SopReportRun
+   */
+  omit?: Prisma.SopReportRunOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.SopReportRunInclude<ExtArgs> | null
+  where?: Prisma.SopReportRunWhereInput
+  orderBy?: Prisma.SopReportRunOrderByWithRelationInput | Prisma.SopReportRunOrderByWithRelationInput[]
+  cursor?: Prisma.SopReportRunWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.SopReportRunScalarFieldEnum | Prisma.SopReportRunScalarFieldEnum[]
 }
 
 /**

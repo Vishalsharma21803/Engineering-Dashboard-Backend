@@ -411,7 +411,8 @@ export const ModelName = {
   SopProjectChange: 'SopProjectChange',
   SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
-  SopAiCheck: 'SopAiCheck'
+  SopAiCheck: 'SopAiCheck',
+  SopReportRun: 'SopReportRun'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -427,7 +428,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck"
+    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck" | "sopReportRun"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1541,6 +1542,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    SopReportRun: {
+      payload: Prisma.$SopReportRunPayload<ExtArgs>
+      fields: Prisma.SopReportRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SopReportRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SopReportRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        findFirst: {
+          args: Prisma.SopReportRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SopReportRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        findMany: {
+          args: Prisma.SopReportRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>[]
+        }
+        create: {
+          args: Prisma.SopReportRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        createMany: {
+          args: Prisma.SopReportRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SopReportRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>[]
+        }
+        delete: {
+          args: Prisma.SopReportRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        update: {
+          args: Prisma.SopReportRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.SopReportRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SopReportRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SopReportRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.SopReportRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SopReportRunPayload>
+        }
+        aggregate: {
+          args: Prisma.SopReportRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSopReportRun>
+        }
+        groupBy: {
+          args: Prisma.SopReportRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopReportRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SopReportRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SopReportRunCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1801,6 +1876,23 @@ export const SopAiCheckScalarFieldEnum = {
 } as const
 
 export type SopAiCheckScalarFieldEnum = (typeof SopAiCheckScalarFieldEnum)[keyof typeof SopAiCheckScalarFieldEnum]
+
+
+export const SopReportRunScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  projectName: 'projectName',
+  defaultVersion: 'defaultVersion',
+  itemsChecked: 'itemsChecked',
+  itemsWithGaps: 'itemsWithGaps',
+  rules: 'rules',
+  roles: 'roles',
+  tickets: 'tickets',
+  createdAt: 'createdAt'
+} as const
+
+export type SopReportRunScalarFieldEnum = (typeof SopReportRunScalarFieldEnum)[keyof typeof SopReportRunScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2246,6 +2338,7 @@ export type GlobalOmitConfig = {
   sopProjectExclusion?: Prisma.SopProjectExclusionOmit
   userRulebook?: Prisma.UserRulebookOmit
   sopAiCheck?: Prisma.SopAiCheckOmit
+  sopReportRun?: Prisma.SopReportRunOmit
 }
 
 /* Types for Logging */

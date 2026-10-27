@@ -34,3 +34,11 @@ export function paginate<T>(items: T[], requestedPage: number, pageSize = PAGE_S
 
   return { items: items.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total, totalPages };
 }
+
+/** The rows to fetch for one page of a database list of `total` rows; a page past the end becomes the last page. */
+export function pageWindow(total: number, requestedPage: number, pageSize = PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), totalPages);
+
+  return { page, pageSize, total, totalPages, skip: (page - 1) * pageSize, take: pageSize };
+}

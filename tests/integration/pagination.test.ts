@@ -132,20 +132,23 @@ describe("Team work items pagination", () => {
 });
 
 describe("SOP report pagination", () => {
-  it("pages the tickets with gaps while totals cover all, reusing the built report", async () => {
-    const report = (query: string) => agent.get(azurePath(credentialId, `/projects/Alpha/sop-report${query}`)).expect(200);
+  it("pages the tickets with gaps while totals cover all, reading the saved run", async () => {
+    const run = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    const report = async (query: string) => (await agent.get(`/api/sop/reports/${credentialId}/Alpha/${run.id}${query}`).expect(200)).body.report;
 
     // 102, 103, 105 and the 23 active tasks (106 is New and not flagged).
-    const first = (await report("")).body.report;
+    const first = await report("");
     expect(first.itemsWithGaps).toBe(26);
     expect(first.items).toMatchObject({ page: 1, pageSize: 10, total: 26, totalPages: 3 });
     expect(first.items.items).toHaveLength(10);
 
     const before = fake.requests.length;
-    const last = (await report("?page=50")).body.report;
+    const last = await report("?page=50&rulePage=abc&personPage=-1");
     expect(last.items).toMatchObject({ page: 3 });
     expect(last.items.items).toHaveLength(6);
-    // At most the project lookup; the report itself is reused, not rebuilt.
+    expect(last.byRule.page).toBe(1);
+    expect(last.byPerson.page).toBe(1);
+    // At most the project lookup: a saved run is never rebuilt.
     expect(fake.requests.length).toBeLessThanOrEqual(before + 1);
   });
 });

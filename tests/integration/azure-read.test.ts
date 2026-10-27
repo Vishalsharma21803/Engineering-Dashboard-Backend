@@ -144,12 +144,18 @@ describe("Azure read API — data", () => {
     });
 
     const response = await get("/pull-requests?projectId=Alpha&role=everyone").expect(200);
-    const prs = response.body.pullRequests as Array<{ pullRequestId: number; myRole: string }>;
+    const prs = response.body.pullRequests.items as Array<{ pullRequestId: number; myRole: string }>;
+    expect(response.body.pullRequests).toMatchObject({ page: 1, pageSize: 10, total: 3, poolTotal: 3 });
 
     expect(prs.map((pr) => pr.pullRequestId).sort()).toEqual([1, 3, 4]);
     expect(prs.find((pr) => pr.pullRequestId === 4)?.myRole).toBe("other");
 
-    const mine = (await get("/pull-requests?projectId=Alpha").expect(200)).body.pullRequests;
+    const mine = (await get("/pull-requests?projectId=Alpha").expect(200)).body.pullRequests.items;
+
+    // Filters run on the server: by author, and a search that matches nothing.
+    const byAuthor = (await get("/pull-requests?projectId=Alpha&role=everyone&person=Reviewer%20Two").expect(200)).body.pullRequests;
+    expect(byAuthor).toMatchObject({ total: 2, poolTotal: 3 });
+    expect((await get("/pull-requests?projectId=Alpha&role=everyone&search=zzz-none&page=5").expect(200)).body.pullRequests).toMatchObject({ total: 0, page: 1 });
     expect(mine.map((pr: { pullRequestId: number }) => pr.pullRequestId).sort()).toEqual([1, 3]);
   });
 
@@ -208,7 +214,7 @@ describe("Azure read API — data", () => {
 
   it("lists my pull requests with review state and unresolved threads", async () => {
     const response = await get("/pull-requests").expect(200);
-    const prs = response.body.pullRequests;
+    const prs = response.body.pullRequests.items;
 
     expect(prs.map((pr: { pullRequestId: number }) => pr.pullRequestId).sort()).toEqual([1, 3]);
     expect(prs.find((pr: { pullRequestId: number }) => pr.pullRequestId === 1)).toMatchObject({
@@ -234,7 +240,7 @@ describe("Azure read API — data", () => {
   });
 
   it("returns pipeline health, runs, running builds and failed stages", async () => {
-    const pipelines = (await get("/projects/Alpha/pipelines").expect(200)).body.pipelines;
+    const pipelines = (await get("/projects/Alpha/pipelines").expect(200)).body.pipelines.items;
     expect(pipelines.map((pipeline: { name: string; health: string }) => [pipeline.name, pipeline.health])).toEqual([
       ["alpha-ci", "running"],
       ["alpha-deploy", "succeeded"],
@@ -370,6 +376,10 @@ describe("Azure read API — safety", () => {
       "/projects/Alpha/repos",
       `/projects/Alpha/repos/${ALPHA_REPO.id}/branches`,
       `/projects/Alpha/repos/${ALPHA_REPO.id}/commits`,
+      "/projects/Alpha/teams",
+      "/dashboard/recommendations",
+      "/dashboard/pull-requests",
+      "/dashboard/pipeline-runs",
     ];
 
     for (const path of paths) {

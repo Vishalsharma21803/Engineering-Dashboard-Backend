@@ -6,9 +6,13 @@ import {
   azureProjectIdSchema,
   buildsQuerySchema,
   commitsQuerySchema,
+  dashboardPullRequestsQuerySchema,
   dashboardQuerySchema,
   myWorkQuerySchema,
-  sopReportQuerySchema,
+  pageOnlyQuerySchema,
+  pipelineRunsQuerySchema,
+  pipelinesQuerySchema,
+  recommendationsQuerySchema,
   teamWorkQuerySchema,
   positiveIntParam,
   pullRequestsQuerySchema,
@@ -29,6 +33,7 @@ import {
   getProject,
   getProjectOverview,
   listProjects,
+  listTeams,
 } from "../services/azure/projects.service.js";
 import {
   getPullRequestDetail,
@@ -42,8 +47,14 @@ import {
 import { getWorkItemDetail } from "../services/azure/work-item-detail.service.js";
 import { listAssignedWorkItems } from "../services/azure/work-items.service.js";
 import { listCompliance } from "../services/compliance/compliance.service.js";
-import { getPagedSopReport } from "../services/sop/sop-report.service.js";
 import { getMyWorkPage, getTeamWorkPage } from "../services/work-item-list/my-work.service.js";
+import {
+  getDashboardPipelineRunPage,
+  getDashboardPullRequestPage,
+  getRecommendationPage,
+  pagePullRequests,
+} from "../services/work-item-list/dashboard-lists.service.js";
+import { PAGE_SIZE, paginate } from "../lib/pagination.js";
 import { MAX_DASHBOARD_PROJECTS, getDashboard } from "../services/dashboard.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -163,12 +174,14 @@ export const listComplianceController = azureRead(
 export const listPullRequestsController = azureRead(
   "Listing pull requests failed",
   async (req, client) => {
-    const query = parse(pullRequestsQuerySchema, req.query);
+    const { projectId, role, page, ...filters } = parse(pullRequestsQuerySchema, req.query);
     const identity = await getIdentity(client);
-    const projectIds = await projectIdsFor(client, query.projectId);
+    const projectIds = await projectIdsFor(client, projectId);
+    const pullRequests = await listMyPullRequests(client, identity, projectIds, role);
 
+    // Filtered and paged here, 10 per page; "everyone" lists the whole team's pull requests.
     return {
-      pullRequests: await listMyPullRequests(client, identity, projectIds, query.role),
+      pullRequests: pagePullRequests(pullRequests, filters, role === "everyone", page),
     };
   }
 );
@@ -193,10 +206,16 @@ export const getPullRequestController = azureRead(
   }
 );
 
-export const listPipelinesController = azureRead(
-  "Listing pipelines failed",
-  async (req, client) => ({ pipelines: await listPipelines(client, projectParam(req)) })
-);
+/** 10 per page. Without a page, `build` opens the page holding that run's pipeline. */
+export const listPipelinesController = azureRead("Listing pipelines failed", async (req, client) => {
+  const { page, build } = parse(pipelinesQuerySchema, req.query);
+  const pipelines = await listPipelines(client, projectParam(req));
+  const focused = req.query.page === undefined && build !== undefined
+    ? pipelines.findIndex((pipeline) => pipeline.latestBuild?.id === build || pipeline.latestCompletedBuild?.id === build)
+    : -1;
+
+  return { pipelines: paginate(pipelines, focused >= 0 ? Math.floor(focused / PAGE_SIZE) + 1 : page) };
+});
 
 export const listPipelineRunsController = azureRead(
   "Listing pipeline runs failed",
@@ -239,10 +258,49 @@ export const getDeploymentsController = azureRead(
   async (req, client) => ({ deployments: await getDeployments(client, projectParam(req)) })
 );
 
-export const listRepositoriesController = azureRead(
-  "Listing repositories failed",
-  async (req, client) => ({ repositories: await listRepositories(client, projectParam(req)) })
-);
+/** Every repository (for pickers), or with `page` one page of 10 as `repositoryPage` (for lists). */
+export const listRepositoriesController = azureRead("Listing repositories failed", async (req, client) => {
+  const repositories = await listRepositories(client, projectParam(req));
+
+  return req.query.page === undefined
+    ? { repositories }
+    : { repositoryPage: paginate(repositories, parse(pageOnlyQuerySchema, req.query).page) };
+});
+
+/** The project's teams, 10 per page. */
+export const listTeamsController = azureRead("Listing teams failed", async (req, client) => {
+  const { page } = parse(pageOnlyQuerySchema, req.query);
+  return { teams: paginate(await listTeams(client, projectParam(req)), page) };
+});
+
+async function dashboardProject(client: AzureClient, projectId: string | undefined) {
+  if (projectId === undefined) {
+    return undefined;
+  }
+
+  const project = await getProject(client, projectId);
+  return { id: project.id, name: project.name };
+}
+
+/** Prioritized actions, filtered and paged on the server (10 per page). */
+export const listRecommendationsController = azureRead("Listing prioritized actions failed", async (req, client, userId) => {
+  const { projectId, ...query } = parse(recommendationsQuerySchema, req.query);
+  return { recommendations: await getRecommendationPage(client, userId, { ...query, project: await dashboardProject(client, projectId) }) };
+});
+
+/** My pull requests and reviews, filtered and paged on the server (10 per page). */
+export const listDashboardPullRequestsController = azureRead("Listing your pull requests failed", async (req, client, userId) => {
+  const { projectId, page, hidden, ...filters } = parse(dashboardPullRequestsQuerySchema, req.query);
+  return {
+    pullRequests: await getDashboardPullRequestPage(client, userId, { project: await dashboardProject(client, projectId), filters, hidden, page }),
+  };
+});
+
+/** My recent pipeline runs, filtered and paged on the server (10 per page). */
+export const listDashboardPipelineRunsController = azureRead("Listing your pipeline runs failed", async (req, client, userId) => {
+  const { projectId, ...query } = parse(pipelineRunsQuerySchema, req.query);
+  return { runs: await getDashboardPipelineRunPage(client, userId, { ...query, project: await dashboardProject(client, projectId) }) };
+});
 
 export const listBranchesController = azureRead(
   "Listing branches failed",
@@ -279,19 +337,6 @@ export const getDashboardController = azureRead(
     return { dashboard: await getDashboard(client, userId, projectId) };
   }
 );
-
-/** Team SOP report for one project: default rules only, code rules only. */
-export const getSopReportController = azureRead("Building the SOP report failed", async (req, client, userId) => {
-  const project = await getProject(client, projectParam(req));
-  const { page } = parse(sopReportQuerySchema, req.query);
-
-  return {
-    report: await getPagedSopReport(client, userId, project.name, {
-      page,
-      refresh: req.query.refresh === "1" || req.query.refresh === "true",
-    }),
-  };
-});
 
 /** My work tickets, filtered and paged on the server (10 per page). */
 export const getMyWorkController = azureRead("Listing your work items failed", async (req, client, userId) => {

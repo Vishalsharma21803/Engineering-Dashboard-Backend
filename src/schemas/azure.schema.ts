@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { pageParam } from "../lib/pagination.js";
+import { REPORT_ROLES } from "../services/sop/sop-report.service.js";
+import { pullRequestFiltersSchema } from "../services/work-item-list/pull-request-filters.js";
 import { workItemFiltersSchema } from "../services/work-item-list/work-item-filters.js";
 
 /** Azure project name or GUID. Encoded per path segment by AzureClient. */
@@ -20,7 +22,10 @@ export const positiveIntParam = (field: string) =>
     .int(`Invalid ${field}`)
     .positive(`Invalid ${field}`);
 
-const booleanFlag = z
+/** Any page value is accepted and made safe (see pageParam); it never fails validation. */
+export const pageQuery = z.unknown().optional().transform(pageParam);
+
+export const booleanFlag = z
   .enum(["1", "0", "true", "false"])
   .optional()
   .transform((value) => value === "1" || value === "true");
@@ -46,7 +51,9 @@ export const pullRequestsQuerySchema = z
   .object({
     projectId: azureProjectIdSchema.optional(),
     role: z.enum(["author", "reviewer", "all", "everyone"]).default("all"),
+    page: pageQuery,
   })
+  .extend(pullRequestFiltersSchema.shape)
   .refine((query) => query.role !== "everyone" || query.projectId !== undefined, {
     message: "projectId is required when role is everyone",
     path: ["projectId"],
@@ -70,8 +77,6 @@ export const commitsQuerySchema = z.object({
   top: z.coerce.number().int().min(1).max(100).default(30),
 });
 
-/** Any page value is accepted and made safe (see pageParam); it never fails validation. */
-const pageQuery = z.unknown().optional().transform(pageParam);
 
 export const myWorkQuerySchema = workItemFiltersSchema.extend({
   projectId: azureProjectIdSchema.optional(),
@@ -85,4 +90,47 @@ export const teamWorkQuerySchema = workItemFiltersSchema.extend({
   page: pageQuery,
 });
 
-export const sopReportQuerySchema = z.object({ page: pageQuery });
+/** Filters are optional and never fail validation: anything unexpected means "no filter". */
+const reportFilter = z.string().trim().max(200).catch("").default("");
+
+export const sopReportRunQuerySchema = z.object({
+  page: pageQuery,
+  rulePage: pageQuery,
+  personPage: pageQuery,
+  person: reportFilter,
+  role: z.enum(REPORT_ROLES).or(z.literal("")).catch("").default(""),
+  rule: reportFilter,
+  type: reportFilter,
+  state: reportFilter,
+});
+
+export const sopReportRunsQuerySchema = z.object({ page: pageQuery });
+
+export const sopProjectsPageQuerySchema = z.object({ page: pageQuery, elsewherePage: pageQuery });
+
+/** Any list paged on the server with only a page number. */
+export const pageOnlyQuerySchema = z.object({ page: pageQuery });
+
+/** Pipelines: without a page, `build` opens the page holding the pipeline of that run. */
+export const pipelinesQuerySchema = z.object({
+  page: pageQuery,
+  build: z.coerce.number().int().positive().optional().catch(undefined),
+});
+
+const dashboardListQuery = {
+  projectId: azureProjectIdSchema.optional(),
+  page: pageQuery,
+  /** Show snoozed and abandoned items instead of the active ones. */
+  hidden: booleanFlag.catch(false),
+};
+
+export const recommendationsQuerySchema = z.object({
+  ...dashboardListQuery,
+  category: z.enum(["BLOCKER", "FAILED_PIPELINE", "REVIEW", "SOP", "STALE"]).or(z.literal("")).catch("").default(""),
+});
+
+export const dashboardPullRequestsQuerySchema = z.object({ ...dashboardListQuery, ...pullRequestFiltersSchema.shape });
+
+export const pipelineRunsQuerySchema = z.object({ ...dashboardListQuery, result: z.string().trim().max(100).catch("").default("") });
+
+export const reportRunIdSchema = z.string().uuid("Invalid report id");

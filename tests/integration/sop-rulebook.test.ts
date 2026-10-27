@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getEffectiveRulebook } from "../../src/services/sop/rulebook.service.js";
 import { STARTER_RULEBOOK } from "../../src/services/sop/starter-rulebook.js";
 import { writeRequests } from "../support/fake-azure.js";
-import { installFakeAzure, resetDatabase, setupUser, signIn, type Agent } from "../support/harness.js";
-import { useAlphaRulebook } from "../support/test-rulebook.js";
+import { installFakeAzure, resetDatabase, runSopReport, setupUser, signIn, type Agent } from "../support/harness.js";
+import { ALPHA_SETTINGS, useAlphaRulebook } from "../support/test-rulebook.js";
 
 let owner: Agent;
 let developer: Agent;
@@ -156,23 +156,74 @@ describe("team SOP report", () => {
     // A personal override must not change the team report.
     await agent.put("/api/sop/my-rules").send({ content: "---\nid: T-01\nseverity: off\n---\n" }).expect(200);
 
-    const report = (await agent.get(`/api/azure/${credentialId}/projects/Alpha/sop-report`).expect(200)).body.report;
+    const report = await runSopReport(agent, credentialId, "Alpha");
 
     // #106 is still New: "before work starts" rules are only checked once work starts.
-    expect(report).toMatchObject({ projectName: "Alpha", configured: true, defaultVersion: 1, itemsChecked: 5, itemsWithGaps: 3, compliantShare: 0.4 });
-    expect(report.byRule).toEqual([
+    expect(report).toMatchObject({ run: { projectName: "Alpha", defaultVersion: 1, itemsChecked: 5, itemsWithGaps: 3 }, itemsChecked: 5, itemsWithGaps: 3, compliantShare: 0.4 });
+    expect(report.byRule.items).toEqual([
       { ruleId: "T-01", ruleTitle: "Estimate exists", severity: "high", failing: 3, checked: 4 },
       { ruleId: "T-03", ruleTitle: "Priority is set", severity: "medium", failing: 1, checked: 4 },
       { ruleId: "T-02", ruleTitle: "Pull request linked at review", severity: "medium", failing: 0, checked: 1 },
     ]);
-    expect(report.byPerson.map((person: { assignee: { displayName: string }; items: number; gaps: number }) => [person.assignee.displayName, person.items, person.gaps])).toEqual([
+    expect(report.byPerson.items.map((person: { assignee: { displayName: string }; items: number; gaps: number }) => [person.assignee.displayName, person.items, person.gaps])).toEqual([
       ["Dev Example", 4, 2],
       ["Reviewer Two", 1, 2],
     ]);
     expect(report.items).toMatchObject({ page: 1, pageSize: 10, total: 3, totalPages: 1 });
     expect(report.items.items.map((item: { workItemId: number }) => item.workItemId).sort()).toEqual([102, 103, 105]);
 
-    const beta = (await agent.get(`/api/azure/${credentialId}/projects/Beta/sop-report`).expect(200)).body.report;
-    expect(beta).toMatchObject({ configured: false, itemsChecked: 0, byRule: [] });
+    const beta = await agent.post(`/api/sop/reports/${credentialId}/Beta`).send({}).expect(409);
+    expect(beta.body.reason).toBe("SOP_PROJECT_NOT_SET_UP");
+  });
+
+  it("filters a run by person, role, rule, type and state", async () => {
+    installFakeAzure();
+    const { agent, credentialId } = await setupUser();
+    await useAlphaRulebook(undefined, { ...ALPHA_SETTINGS, roles: { tl: ["Reviewer Two"], qa: [], po: [] } });
+    const run = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    const view = async (query: string) => (await agent.get(`/api/sop/reports/${credentialId}/Alpha/${run.id}${query}`).expect(200)).body.report;
+    const ids = (report: { items: { items: Array<{ workItemId: number }> } }) => report.items.items.map((item) => item.workItemId).sort();
+
+    const all = await view("");
+    expect(all.facets.roles).toEqual([
+      { value: "tl", label: "Team lead", count: 1 },
+      { value: "developer", label: "Developer", count: 4 },
+    ]);
+    const reviewer = all.facets.people.find((person: { label: string }) => person.label === "Reviewer Two");
+
+    expect(ids(await view(`?person=${encodeURIComponent(reviewer.value)}`))).toEqual([105]);
+    expect(await view("?role=tl")).toMatchObject({ itemsChecked: 1, itemsWithGaps: 1 });
+    expect(ids(await view("?role=developer"))).toEqual([102, 103]);
+    // Only #105 (no priority) fails T-03.
+    expect(ids(await view("?rule=T-03"))).toEqual([105]);
+    expect(ids(await view("?type=Bug"))).toEqual([103]);
+    expect((await view("?state=New")).itemsWithGaps).toBe(0);
+    // Unknown or tampered filters mean "no filter" or match nothing; they never fail.
+    expect((await view("?role=boss")).itemsChecked).toBe(5);
+    expect((await view("?rule=NOPE")).itemsChecked).toBe(0);
+  });
+
+  it("keeps runs private, lists them newest first and deletes them", async () => {
+    installFakeAzure();
+    const { agent, credentialId } = await setupUser();
+    const other = await setupUser("other@example.com");
+    await useAlphaRulebook();
+
+    const first = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    const second = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    const list = (await agent.get(`/api/sop/reports/${credentialId}/Alpha`).expect(200)).body.runs;
+    expect(list).toMatchObject({ page: 1, total: 2, totalPages: 1 });
+    expect(list.items.map((item: { id: string }) => item.id)).toEqual([second.id, first.id]);
+    expect(list.latestId).toBe(second.id);
+
+    // Someone else cannot see, read or delete my runs (not even through their own connection).
+    expect((await other.agent.get(`/api/sop/reports/${other.credentialId}/Alpha`).expect(200)).body.runs.total).toBe(0);
+    await other.agent.get(`/api/sop/reports/${other.credentialId}/Alpha/${first.id}`).expect(404);
+    await other.agent.delete(`/api/sop/reports/${other.credentialId}/Alpha/${first.id}`).expect(404);
+    await agent.get(`/api/sop/reports/${credentialId}/Alpha/not-a-uuid`).expect(400);
+
+    await agent.delete(`/api/sop/reports/${credentialId}/Alpha/${first.id}`).expect(200);
+    await agent.get(`/api/sop/reports/${credentialId}/Alpha/${first.id}`).expect(404);
+    expect((await agent.get(`/api/sop/reports/${credentialId}/Alpha?page=9`).expect(200)).body.runs).toMatchObject({ page: 1, total: 1 });
   });
 });

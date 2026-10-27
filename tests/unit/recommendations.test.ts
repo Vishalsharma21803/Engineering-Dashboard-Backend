@@ -141,6 +141,7 @@ describe("buildRecommendations", () => {
           pendingRules: [],
           skippedRules: [],
           aiRules: [],
+          notices: [],
           violations: [
             { ruleId: "ALW-01", ruleTitle: "Comment on every state change", checker: "code", severity: "medium", message: "No comment", evidence: [], suggestedAction: { kind: "WORK_ITEM_COMMENT", target: {}, params: {}, requiresInput: true } },
             { ruleId: "DONE-07", ruleTitle: "Time logged at Done", checker: "code", severity: "high", message: "Remaining work", evidence: [], suggestedAction: { kind: "WORK_ITEM_UPDATE_FIELDS", target: {}, params: { remainingWork: 0 }, requiresInput: false } },
