@@ -412,7 +412,8 @@ export const ModelName = {
   SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
   SopAiCheck: 'SopAiCheck',
-  SopReportRun: 'SopReportRun'
+  SopReportRun: 'SopReportRun',
+  SolidtimeConnection: 'SolidtimeConnection'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -428,7 +429,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck" | "sopReportRun"
+    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck" | "sopReportRun" | "solidtimeConnection"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1616,6 +1617,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    SolidtimeConnection: {
+      payload: Prisma.$SolidtimeConnectionPayload<ExtArgs>
+      fields: Prisma.SolidtimeConnectionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SolidtimeConnectionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SolidtimeConnectionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        findFirst: {
+          args: Prisma.SolidtimeConnectionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SolidtimeConnectionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        findMany: {
+          args: Prisma.SolidtimeConnectionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>[]
+        }
+        create: {
+          args: Prisma.SolidtimeConnectionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        createMany: {
+          args: Prisma.SolidtimeConnectionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SolidtimeConnectionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>[]
+        }
+        delete: {
+          args: Prisma.SolidtimeConnectionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        update: {
+          args: Prisma.SolidtimeConnectionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        deleteMany: {
+          args: Prisma.SolidtimeConnectionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SolidtimeConnectionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SolidtimeConnectionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>[]
+        }
+        upsert: {
+          args: Prisma.SolidtimeConnectionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SolidtimeConnectionPayload>
+        }
+        aggregate: {
+          args: Prisma.SolidtimeConnectionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSolidtimeConnection>
+        }
+        groupBy: {
+          args: Prisma.SolidtimeConnectionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SolidtimeConnectionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SolidtimeConnectionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SolidtimeConnectionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1861,6 +1936,7 @@ export const SopAiCheckScalarFieldEnum = {
   workItemId: 'workItemId',
   projectName: 'projectName',
   inputHash: 'inputHash',
+  trackedHours: 'trackedHours',
   status: 'status',
   results: 'results',
   errorReason: 'errorReason',
@@ -1889,10 +1965,29 @@ export const SopReportRunScalarFieldEnum = {
   rules: 'rules',
   roles: 'roles',
   tickets: 'tickets',
+  timeScope: 'timeScope',
   createdAt: 'createdAt'
 } as const
 
 export type SopReportRunScalarFieldEnum = (typeof SopReportRunScalarFieldEnum)[keyof typeof SopReportRunScalarFieldEnum]
+
+
+export const SolidtimeConnectionScalarFieldEnum = {
+  credentialId: 'credentialId',
+  organizationId: 'organizationId',
+  organizationName: 'organizationName',
+  memberId: 'memberId',
+  solidtimeUserId: 'solidtimeUserId',
+  role: 'role',
+  azureCredentialId: 'azureCredentialId',
+  projectMap: 'projectMap',
+  dailyTargetHours: 'dailyTargetHours',
+  timerAlertHours: 'timerAlertHours',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SolidtimeConnectionScalarFieldEnum = (typeof SolidtimeConnectionScalarFieldEnum)[keyof typeof SolidtimeConnectionScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2339,6 +2434,7 @@ export type GlobalOmitConfig = {
   userRulebook?: Prisma.UserRulebookOmit
   sopAiCheck?: Prisma.SopAiCheckOmit
   sopReportRun?: Prisma.SopReportRunOmit
+  solidtimeConnection?: Prisma.SolidtimeConnectionOmit
 }
 
 /* Types for Logging */

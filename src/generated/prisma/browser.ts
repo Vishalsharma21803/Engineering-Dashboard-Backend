@@ -102,3 +102,8 @@ export type SopAiCheck = Prisma.SopAiCheckModel
  * A saved run of the team SOP report for one project. Private to the person who ran it; kept until they delete it.
  */
 export type SopReportRun = Prisma.SopReportRunModel
+/**
+ * Model SolidtimeConnection
+ * A Solidtime credential's chosen organization and the user's options for it.
+ */
+export type SolidtimeConnection = Prisma.SolidtimeConnectionModel

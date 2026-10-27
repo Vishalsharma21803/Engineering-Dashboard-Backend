@@ -126,7 +126,7 @@ const dashboardListQuery = {
 
 export const recommendationsQuerySchema = z.object({
   ...dashboardListQuery,
-  category: z.enum(["BLOCKER", "FAILED_PIPELINE", "REVIEW", "SOP", "STALE"]).or(z.literal("")).catch("").default(""),
+  category: z.enum(["BLOCKER", "FAILED_PIPELINE", "REVIEW", "SOP", "TIME", "STALE"]).or(z.literal("")).catch("").default(""),
 });
 
 export const dashboardPullRequestsQuerySchema = z.object({ ...dashboardListQuery, ...pullRequestFiltersSchema.shape });

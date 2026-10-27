@@ -131,6 +131,26 @@ export async function listAssignedWorkItemIds(
   return (result.workItems ?? []).map((item) => item.id);
 }
 
+/**
+ * Tickets I may have worked on since a day (YYYY-MM-DD): assigned to me or
+ * ever changed by me, and changed since then. Callers check each revision.
+ */
+export async function listTouchedWorkItemIds(client: AzureClient, sinceDay: string): Promise<number[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sinceDay)) {
+    throw new Error("INVALID_DAY");
+  }
+
+  const result = await client.readPost<RawWiqlResult>(
+    ["_apis", "wit", "wiql"],
+    {
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.ChangedDate] >= '${sinceDay}' AND ([System.AssignedTo] = @Me OR [System.ChangedBy] EVER @Me) ORDER BY [System.ChangedDate] DESC`,
+    },
+    { query: { $top: WIQL_TOP } }
+  );
+
+  return (result.workItems ?? []).map((item) => item.id);
+}
+
 export async function getWorkItemsByIds(
   client: AzureClient,
   ids: number[]

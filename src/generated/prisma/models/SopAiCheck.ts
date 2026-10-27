@@ -28,11 +28,13 @@ export type AggregateSopAiCheck = {
 
 export type SopAiCheckAvgAggregateOutputType = {
   workItemId: number | null
+  trackedHours: number | null
   costUsd: number | null
 }
 
 export type SopAiCheckSumAggregateOutputType = {
   workItemId: number | null
+  trackedHours: number | null
   costUsd: number | null
 }
 
@@ -43,6 +45,7 @@ export type SopAiCheckMinAggregateOutputType = {
   workItemId: number | null
   projectName: string | null
   inputHash: string | null
+  trackedHours: number | null
   status: $Enums.SopAiStatus | null
   errorReason: string | null
   errorDetail: string | null
@@ -63,6 +66,7 @@ export type SopAiCheckMaxAggregateOutputType = {
   workItemId: number | null
   projectName: string | null
   inputHash: string | null
+  trackedHours: number | null
   status: $Enums.SopAiStatus | null
   errorReason: string | null
   errorDetail: string | null
@@ -83,6 +87,7 @@ export type SopAiCheckCountAggregateOutputType = {
   workItemId: number
   projectName: number
   inputHash: number
+  trackedHours: number
   status: number
   results: number
   errorReason: number
@@ -101,11 +106,13 @@ export type SopAiCheckCountAggregateOutputType = {
 
 export type SopAiCheckAvgAggregateInputType = {
   workItemId?: true
+  trackedHours?: true
   costUsd?: true
 }
 
 export type SopAiCheckSumAggregateInputType = {
   workItemId?: true
+  trackedHours?: true
   costUsd?: true
 }
 
@@ -116,6 +123,7 @@ export type SopAiCheckMinAggregateInputType = {
   workItemId?: true
   projectName?: true
   inputHash?: true
+  trackedHours?: true
   status?: true
   errorReason?: true
   errorDetail?: true
@@ -136,6 +144,7 @@ export type SopAiCheckMaxAggregateInputType = {
   workItemId?: true
   projectName?: true
   inputHash?: true
+  trackedHours?: true
   status?: true
   errorReason?: true
   errorDetail?: true
@@ -156,6 +165,7 @@ export type SopAiCheckCountAggregateInputType = {
   workItemId?: true
   projectName?: true
   inputHash?: true
+  trackedHours?: true
   status?: true
   results?: true
   errorReason?: true
@@ -264,6 +274,7 @@ export type SopAiCheckGroupByOutputType = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours: number | null
   status: $Enums.SopAiStatus
   results: runtime.JsonValue | null
   errorReason: string | null
@@ -308,6 +319,7 @@ export type SopAiCheckWhereInput = {
   workItemId?: Prisma.IntFilter<"SopAiCheck"> | number
   projectName?: Prisma.StringFilter<"SopAiCheck"> | string
   inputHash?: Prisma.StringFilter<"SopAiCheck"> | string
+  trackedHours?: Prisma.FloatNullableFilter<"SopAiCheck"> | number | null
   status?: Prisma.EnumSopAiStatusFilter<"SopAiCheck"> | $Enums.SopAiStatus
   results?: Prisma.JsonNullableFilter<"SopAiCheck">
   errorReason?: Prisma.StringNullableFilter<"SopAiCheck"> | string | null
@@ -331,6 +343,7 @@ export type SopAiCheckOrderByWithRelationInput = {
   workItemId?: Prisma.SortOrder
   projectName?: Prisma.SortOrder
   inputHash?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   results?: Prisma.SortOrderInput | Prisma.SortOrder
   errorReason?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -358,6 +371,7 @@ export type SopAiCheckWhereUniqueInput = Prisma.AtLeast<{
   workItemId?: Prisma.IntFilter<"SopAiCheck"> | number
   projectName?: Prisma.StringFilter<"SopAiCheck"> | string
   inputHash?: Prisma.StringFilter<"SopAiCheck"> | string
+  trackedHours?: Prisma.FloatNullableFilter<"SopAiCheck"> | number | null
   status?: Prisma.EnumSopAiStatusFilter<"SopAiCheck"> | $Enums.SopAiStatus
   results?: Prisma.JsonNullableFilter<"SopAiCheck">
   errorReason?: Prisma.StringNullableFilter<"SopAiCheck"> | string | null
@@ -381,6 +395,7 @@ export type SopAiCheckOrderByWithAggregationInput = {
   workItemId?: Prisma.SortOrder
   projectName?: Prisma.SortOrder
   inputHash?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   results?: Prisma.SortOrderInput | Prisma.SortOrder
   errorReason?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -410,6 +425,7 @@ export type SopAiCheckScalarWhereWithAggregatesInput = {
   workItemId?: Prisma.IntWithAggregatesFilter<"SopAiCheck"> | number
   projectName?: Prisma.StringWithAggregatesFilter<"SopAiCheck"> | string
   inputHash?: Prisma.StringWithAggregatesFilter<"SopAiCheck"> | string
+  trackedHours?: Prisma.FloatNullableWithAggregatesFilter<"SopAiCheck"> | number | null
   status?: Prisma.EnumSopAiStatusWithAggregatesFilter<"SopAiCheck"> | $Enums.SopAiStatus
   results?: Prisma.JsonNullableWithAggregatesFilter<"SopAiCheck">
   errorReason?: Prisma.StringNullableWithAggregatesFilter<"SopAiCheck"> | string | null
@@ -429,6 +445,7 @@ export type SopAiCheckCreateInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -452,6 +469,7 @@ export type SopAiCheckUncheckedCreateInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -471,6 +489,7 @@ export type SopAiCheckUpdateInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -494,6 +513,7 @@ export type SopAiCheckUncheckedUpdateInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -515,6 +535,7 @@ export type SopAiCheckCreateManyInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -534,6 +555,7 @@ export type SopAiCheckUpdateManyMutationInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -555,6 +577,7 @@ export type SopAiCheckUncheckedUpdateManyInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -592,6 +615,7 @@ export type SopAiCheckCountOrderByAggregateInput = {
   workItemId?: Prisma.SortOrder
   projectName?: Prisma.SortOrder
   inputHash?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrder
   status?: Prisma.SortOrder
   results?: Prisma.SortOrder
   errorReason?: Prisma.SortOrder
@@ -608,6 +632,7 @@ export type SopAiCheckCountOrderByAggregateInput = {
 
 export type SopAiCheckAvgOrderByAggregateInput = {
   workItemId?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrder
   costUsd?: Prisma.SortOrder
 }
 
@@ -618,6 +643,7 @@ export type SopAiCheckMaxOrderByAggregateInput = {
   workItemId?: Prisma.SortOrder
   projectName?: Prisma.SortOrder
   inputHash?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrder
   status?: Prisma.SortOrder
   errorReason?: Prisma.SortOrder
   errorDetail?: Prisma.SortOrder
@@ -638,6 +664,7 @@ export type SopAiCheckMinOrderByAggregateInput = {
   workItemId?: Prisma.SortOrder
   projectName?: Prisma.SortOrder
   inputHash?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrder
   status?: Prisma.SortOrder
   errorReason?: Prisma.SortOrder
   errorDetail?: Prisma.SortOrder
@@ -653,6 +680,7 @@ export type SopAiCheckMinOrderByAggregateInput = {
 
 export type SopAiCheckSumOrderByAggregateInput = {
   workItemId?: Prisma.SortOrder
+  trackedHours?: Prisma.SortOrder
   costUsd?: Prisma.SortOrder
 }
 
@@ -740,10 +768,6 @@ export type SopAiCheckUncheckedUpdateManyWithoutCredentialNestedInput = {
   deleteMany?: Prisma.SopAiCheckScalarWhereInput | Prisma.SopAiCheckScalarWhereInput[]
 }
 
-export type EnumSopAiStatusFieldUpdateOperationsInput = {
-  set?: $Enums.SopAiStatus
-}
-
 export type NullableFloatFieldUpdateOperationsInput = {
   set?: number | null
   increment?: number
@@ -752,11 +776,16 @@ export type NullableFloatFieldUpdateOperationsInput = {
   divide?: number
 }
 
+export type EnumSopAiStatusFieldUpdateOperationsInput = {
+  set?: $Enums.SopAiStatus
+}
+
 export type SopAiCheckCreateWithoutUserInput = {
   id?: string
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -778,6 +807,7 @@ export type SopAiCheckUncheckedCreateWithoutUserInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -828,6 +858,7 @@ export type SopAiCheckScalarWhereInput = {
   workItemId?: Prisma.IntFilter<"SopAiCheck"> | number
   projectName?: Prisma.StringFilter<"SopAiCheck"> | string
   inputHash?: Prisma.StringFilter<"SopAiCheck"> | string
+  trackedHours?: Prisma.FloatNullableFilter<"SopAiCheck"> | number | null
   status?: Prisma.EnumSopAiStatusFilter<"SopAiCheck"> | $Enums.SopAiStatus
   results?: Prisma.JsonNullableFilter<"SopAiCheck">
   errorReason?: Prisma.StringNullableFilter<"SopAiCheck"> | string | null
@@ -847,6 +878,7 @@ export type SopAiCheckCreateWithoutCredentialInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -868,6 +900,7 @@ export type SopAiCheckUncheckedCreateWithoutCredentialInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -914,6 +947,7 @@ export type SopAiCheckCreateManyUserInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -933,6 +967,7 @@ export type SopAiCheckUpdateWithoutUserInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -954,6 +989,7 @@ export type SopAiCheckUncheckedUpdateWithoutUserInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -974,6 +1010,7 @@ export type SopAiCheckUncheckedUpdateManyWithoutUserInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -994,6 +1031,7 @@ export type SopAiCheckCreateManyCredentialInput = {
   workItemId: number
   projectName: string
   inputHash: string
+  trackedHours?: number | null
   status?: $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: string | null
@@ -1013,6 +1051,7 @@ export type SopAiCheckUpdateWithoutCredentialInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1034,6 +1073,7 @@ export type SopAiCheckUncheckedUpdateWithoutCredentialInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1054,6 +1094,7 @@ export type SopAiCheckUncheckedUpdateManyWithoutCredentialInput = {
   workItemId?: Prisma.IntFieldUpdateOperationsInput | number
   projectName?: Prisma.StringFieldUpdateOperationsInput | string
   inputHash?: Prisma.StringFieldUpdateOperationsInput | string
+  trackedHours?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.EnumSopAiStatusFieldUpdateOperationsInput | $Enums.SopAiStatus
   results?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   errorReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1077,6 +1118,7 @@ export type SopAiCheckSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   workItemId?: boolean
   projectName?: boolean
   inputHash?: boolean
+  trackedHours?: boolean
   status?: boolean
   results?: boolean
   errorReason?: boolean
@@ -1100,6 +1142,7 @@ export type SopAiCheckSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   workItemId?: boolean
   projectName?: boolean
   inputHash?: boolean
+  trackedHours?: boolean
   status?: boolean
   results?: boolean
   errorReason?: boolean
@@ -1123,6 +1166,7 @@ export type SopAiCheckSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   workItemId?: boolean
   projectName?: boolean
   inputHash?: boolean
+  trackedHours?: boolean
   status?: boolean
   results?: boolean
   errorReason?: boolean
@@ -1146,6 +1190,7 @@ export type SopAiCheckSelectScalar = {
   workItemId?: boolean
   projectName?: boolean
   inputHash?: boolean
+  trackedHours?: boolean
   status?: boolean
   results?: boolean
   errorReason?: boolean
@@ -1160,7 +1205,7 @@ export type SopAiCheckSelectScalar = {
   updatedAt?: boolean
 }
 
-export type SopAiCheckOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "credentialId" | "workItemId" | "projectName" | "inputHash" | "status" | "results" | "errorReason" | "errorDetail" | "provider" | "model" | "costUsd" | "notBefore" | "startedAt" | "finishedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sopAiCheck"]>
+export type SopAiCheckOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "credentialId" | "workItemId" | "projectName" | "inputHash" | "trackedHours" | "status" | "results" | "errorReason" | "errorDetail" | "provider" | "model" | "costUsd" | "notBefore" | "startedAt" | "finishedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["sopAiCheck"]>
 export type SopAiCheckInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   credential?: boolean | Prisma.CredentialDefaultArgs<ExtArgs>
@@ -1190,6 +1235,10 @@ export type $SopAiCheckPayload<ExtArgs extends runtime.Types.Extensions.Internal
      * Ticket revision, rules versions and model settings; unchanged = no new AI call.
      */
     inputHash: string
+    /**
+     * Solidtime hours the check was made with (null: none linked); reused when Solidtime cannot be read.
+     */
+    trackedHours: number | null
     status: $Enums.SopAiStatus
     /**
      * Verified verdicts: [{ ruleId, ruleTitle, verdict, reason, quotes, fix }].
@@ -1645,6 +1694,7 @@ export interface SopAiCheckFieldRefs {
   readonly workItemId: Prisma.FieldRef<"SopAiCheck", 'Int'>
   readonly projectName: Prisma.FieldRef<"SopAiCheck", 'String'>
   readonly inputHash: Prisma.FieldRef<"SopAiCheck", 'String'>
+  readonly trackedHours: Prisma.FieldRef<"SopAiCheck", 'Float'>
   readonly status: Prisma.FieldRef<"SopAiCheck", 'SopAiStatus'>
   readonly results: Prisma.FieldRef<"SopAiCheck", 'Json'>
   readonly errorReason: Prisma.FieldRef<"SopAiCheck", 'String'>

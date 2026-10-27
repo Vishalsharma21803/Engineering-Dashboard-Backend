@@ -5,6 +5,7 @@ import { createApp } from "../../src/app.js";
 import { prisma } from "../../src/lib/prisma.js";
 import { server } from "../setup.js";
 import { FAKE_ORG_URL, FAKE_PAT, createFakeAzure, fakeAzureHandlers, type FakeAzure } from "./fake-azure.js";
+import { EMPLOYEE_TOKEN, SOLIDTIME_URL, createFakeSolidtime, fakeSolidtimeHandlers, type FakeSolidtime } from "./fake-solidtime.js";
 
 export type Agent = ReturnType<typeof request.agent>;
 
@@ -19,6 +20,18 @@ export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook", "SopProject", "SopProjectChange" CASCADE'
   );
+}
+
+export function installFakeSolidtime(): FakeSolidtime {
+  const fake = createFakeSolidtime();
+  server.use(...fakeSolidtimeHandlers(fake));
+  return fake;
+}
+
+/** Connects Solidtime for this user (one organization, so it is chosen at once), linked to their first Azure organization. */
+export async function connectSolidtime(agent: Agent, token = EMPLOYEE_TOKEN): Promise<string> {
+  const response = await agent.post("/api/solidtime/connections").send({ baseUrl: SOLIDTIME_URL, token }).expect(201);
+  return response.body.connection.credentialId as string;
 }
 
 export function installFakeAzure(): FakeAzure {

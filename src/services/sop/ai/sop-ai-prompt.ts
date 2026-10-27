@@ -137,7 +137,8 @@ function formatWhen(value: string): string {
 }
 
 /** The ticket and which rules to judge for it. */
-export function buildUserPrompt(dossier: TicketDossier, cards: AiRuleCard[]): string {
+/** `trackedHours`: Solidtime time on the ticket (team when the user's role allows), when a connection is linked. */
+export function buildUserPrompt(dossier: TicketDossier, cards: AiRuleCard[], extra: { trackedHours?: number | null } = {}): string {
   const { workItem, profile } = dossier;
   const category = profile.fields.category ? dossier.fields[profile.fields.category] : undefined;
   const parent = dossier.relatedItems?.find((item) => item.relation === "parent");
@@ -156,6 +157,7 @@ export function buildUserPrompt(dossier: TicketDossier, cards: AiRuleCard[]): st
       : null,
     `Estimates: original ${workItem.originalEstimate ?? "-"}h, remaining ${workItem.remainingWork ?? "-"}h, completed ${workItem.completedWork ?? "-"}h, story points ${workItem.storyPoints ?? "-"}`,
     `Due date: ${workItem.dueDate ? workItem.dueDate.slice(0, 10) : "not set"}`,
+    typeof extra.trackedHours === "number" ? `Time tracked in Solidtime: ${extra.trackedHours}h` : null,
     parent ? `Parent: #${parent.id} (${inline(parent.type)})` : "Parent: none",
     block("Description", dossier.description),
     block("Acceptance criteria", dossier.acceptanceCriteria),

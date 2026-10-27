@@ -505,13 +505,6 @@ export type EnumSopProjectChangeKindWithAggregatesFilter<$PrismaModel = never> =
   _max?: Prisma.NestedEnumSopProjectChangeKindFilter<$PrismaModel>
 }
 
-export type EnumSopAiStatusFilter<$PrismaModel = never> = {
-  equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
-  in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
-  notIn?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel> | $Enums.SopAiStatus
-}
-
 export type FloatNullableFilter<$PrismaModel = never> = {
   equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
   in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
@@ -523,14 +516,11 @@ export type FloatNullableFilter<$PrismaModel = never> = {
   not?: Prisma.NestedFloatNullableFilter<$PrismaModel> | number | null
 }
 
-export type EnumSopAiStatusWithAggregatesFilter<$PrismaModel = never> = {
+export type EnumSopAiStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
   in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
   notIn?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel> | $Enums.SopAiStatus
-  _count?: Prisma.NestedIntFilter<$PrismaModel>
-  _min?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
-  _max?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
+  not?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel> | $Enums.SopAiStatus
 }
 
 export type FloatNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -547,6 +537,16 @@ export type FloatNullableWithAggregatesFilter<$PrismaModel = never> = {
   _sum?: Prisma.NestedFloatNullableFilter<$PrismaModel>
   _min?: Prisma.NestedFloatNullableFilter<$PrismaModel>
   _max?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+}
+
+export type EnumSopAiStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel> | $Enums.SopAiStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
 }
 
 export type NestedStringFilter<$PrismaModel = never> = {
@@ -995,16 +995,6 @@ export type NestedEnumSopAiStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel> | $Enums.SopAiStatus
 }
 
-export type NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel = never> = {
-  equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
-  in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
-  notIn?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
-  not?: Prisma.NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel> | $Enums.SopAiStatus
-  _count?: Prisma.NestedIntFilter<$PrismaModel>
-  _min?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
-  _max?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
-}
-
 export type NestedFloatNullableWithAggregatesFilter<$PrismaModel = never> = {
   equals?: number | Prisma.FloatFieldRefInput<$PrismaModel> | null
   in?: number[] | Prisma.ListFloatFieldRefInput<$PrismaModel> | null
@@ -1019,6 +1009,16 @@ export type NestedFloatNullableWithAggregatesFilter<$PrismaModel = never> = {
   _sum?: Prisma.NestedFloatNullableFilter<$PrismaModel>
   _min?: Prisma.NestedFloatNullableFilter<$PrismaModel>
   _max?: Prisma.NestedFloatNullableFilter<$PrismaModel>
+}
+
+export type NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SopAiStatus | Prisma.EnumSopAiStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SopAiStatus[] | Prisma.ListEnumSopAiStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSopAiStatusWithAggregatesFilter<$PrismaModel> | $Enums.SopAiStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSopAiStatusFilter<$PrismaModel>
 }
 
 

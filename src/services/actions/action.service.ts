@@ -10,7 +10,10 @@ import {
 } from "../../generated/prisma/enums.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { pageWindow, type Page } from "../../lib/pagination.js";
-import type { ActionScopeFilter, ProposeActionInput } from "../../schemas/action.schema.js";
+import { isSolidtimeAction, type ActionScopeFilter, type ProposeActionInput } from "../../schemas/action.schema.js";
+import { SolidtimeApiError } from "../../lib/solidtime/errors.js";
+import { getSolidtimeConnection, markSolidtimeInvalid, solidtimeClientFor } from "../solidtime/connection.service.js";
+import { SolidtimeExecutionFailure, executeSolidtimeAction, prepareSolidtimeAction } from "./solidtime-actions.js";
 import { actionScopeWhere } from "./action-scope.js";
 import type { ScopeStatus, WriteScopeArea } from "../../types/azure.types.js";
 import { recordAudit, type RequestContext } from "../audit.service.js";
@@ -19,7 +22,7 @@ import {
   markCredentialInvalid,
 } from "../azure/azure-context.service.js";
 import { ExecutionFailure, executeAction, type ExecutionResult } from "./executor.js";
-import { prepareAction } from "./prepare.js";
+import { prepareAction, type PreparedAction } from "./prepare.js";
 
 export const ACTION_TTL_MS = 15 * 60_000;
 
@@ -141,6 +144,13 @@ export async function proposeAction(
   input: ProposeActionInput,
   context: RequestContext
 ): Promise<ActionDto> {
+  if (isSolidtimeAction(input)) {
+    const { client, connection } = await solidtimeFor(userId, input.credentialId);
+    // Read-only: reads Solidtime to check the change and build the preview.
+    const prepared = await prepareSolidtimeAction(client, connection, input);
+    return saveProposal(userId, input, client.baseUrl, prepared, context);
+  }
+
   const client = await createAzureClientForCredential(userId, input.credentialId, {
     refresh: true,
   });
@@ -151,9 +161,36 @@ export async function proposeAction(
 
   // Read-only: fetches current Azure state to build the preview.
   const prepared = await prepareAction(client, input);
+  return saveProposal(userId, input, client.organizationUrl, prepared, context);
+}
+
+/** A Solidtime connection with its chosen organization, for proposing or running a change. */
+async function solidtimeFor(userId: string, credentialId: string) {
+  const client = await solidtimeClientFor(userId, credentialId, { refresh: true });
+
+  if (!client) {
+    throw new AppError(404, "CREDENTIAL_NOT_FOUND", "Credential not found");
+  }
+
+  const connection = await getSolidtimeConnection(userId, credentialId);
+
+  if (!connection.organizationId || !connection.memberId) {
+    throw new AppError(409, "SOLIDTIME_ORGANIZATION_NOT_CHOSEN", "Choose a Solidtime organization for this connection first");
+  }
+
+  return { client, connection: { ...connection, organizationId: connection.organizationId, memberId: connection.memberId } };
+}
+
+async function saveProposal(
+  userId: string,
+  input: ProposeActionInput,
+  organizationUrl: string,
+  prepared: PreparedAction,
+  context: RequestContext
+): Promise<ActionDto> {
   const payloadHash = computePayloadHash({
     credentialId: input.credentialId,
-    organizationUrl: client.organizationUrl,
+    organizationUrl,
     kind: input.kind,
     target: prepared.target,
     params: prepared.params,
@@ -165,7 +202,7 @@ export async function proposeAction(
       data: {
         userId,
         credentialId: input.credentialId,
-        organizationUrl: client.organizationUrl,
+        organizationUrl,
         projectId: prepared.projectId,
         kind: input.kind,
         source: input.source,
@@ -278,6 +315,109 @@ function classifyFailure(failure: ExecutionFailure): ClassifiedFailure {
   };
 }
 
+function classifySolidtimeFailure(failure: SolidtimeExecutionFailure): ClassifiedFailure {
+  const error = failure.error;
+
+  if (failure.writeSent && (!(error instanceof SolidtimeApiError) || error.solidtimeReason === "SOLIDTIME_UPSTREAM_ERROR")) {
+    return {
+      status: 502,
+      code: "OUTCOME_UNKNOWN",
+      message: "Solidtime did not confirm the change. Check Solidtime before proposing it again.",
+      patInvalid: false,
+    };
+  }
+
+  if (error instanceof AppError) {
+    return {
+      status: error.status,
+      code: error.reason,
+      message: failure.writeSent ? `${error.message} Part of the change may already be saved; check Solidtime.` : error.message,
+      patInvalid: error instanceof SolidtimeApiError && error.solidtimeReason === "SOLIDTIME_TOKEN_INVALID",
+    };
+  }
+
+  console.error("Solidtime action failed:", failure.message);
+  return { status: 500, code: "EXECUTION_ERROR", message: failure.writeSent ? "The change may have been applied. Check Solidtime." : "Internal server error", patInvalid: false };
+}
+
+/** How one approved action is run on its platform. */
+interface Runner {
+  run: () => Promise<ExecutionResult>;
+  classify: (error: unknown) => { classified: ClassifiedFailure; writeSent: boolean; partial?: Record<string, unknown> | null };
+  markInvalid: () => Promise<void>;
+}
+
+async function runnerFor(userId: string, action: ActionDto): Promise<Runner> {
+  const credentialId = action.credentialId;
+
+  if (!credentialId) {
+    throw new AppError(409, "CREDENTIAL_REMOVED", "The credential for this action was removed");
+  }
+
+  const changed = () =>
+    new AppError(409, "CREDENTIAL_CHANGED", "The connection now points somewhere else. Propose the action again.");
+
+  if (action.kind.startsWith("SOLIDTIME_")) {
+    const client = await solidtimeClientFor(userId, credentialId, { refresh: true });
+
+    if (!client) {
+      throw new AppError(409, "CREDENTIAL_REMOVED", "The credential for this action was removed");
+    }
+
+    const connection = await getSolidtimeConnection(userId, credentialId);
+
+    // The server, organization or member must be the ones the preview was built for.
+    if (client.baseUrl !== action.organizationUrl || connection.organizationId !== action.projectId || !connection.memberId) {
+      throw changed();
+    }
+
+    const ready = { ...connection, organizationId: action.projectId, memberId: connection.memberId };
+
+    return {
+      run: () => executeSolidtimeAction(client, ready, { kind: action.kind, target: asRecord(action.target), params: asRecord(action.params) }),
+      classify: (error) => {
+        const failure = error instanceof SolidtimeExecutionFailure ? error : new SolidtimeExecutionFailure(error, false);
+        const classified = classifySolidtimeFailure(failure);
+        const saved = failure.partial && typeof failure.partial.savedCount === "number" ? ` ${failure.partial.savedCount} of ${String(failure.partial.totalCount)} entries were saved.` : "";
+        return { classified: { ...classified, message: `${classified.message}${saved}` }, writeSent: failure.writeSent, partial: failure.partial };
+      },
+      markInvalid: () => markSolidtimeInvalid(credentialId),
+    };
+  }
+
+  const client = await createAzureClientForCredential(userId, credentialId, { refresh: true });
+
+  if (!client) {
+    throw new AppError(409, "CREDENTIAL_REMOVED", "The credential for this action was removed");
+  }
+
+  // The credential may have been pointed at another organization since the preview.
+  if (client.organizationUrl !== action.organizationUrl) {
+    throw new AppError(
+      409,
+      "CREDENTIAL_CHANGED",
+      "The credential now points to a different organization. Propose the action again."
+    );
+  }
+
+  return {
+    run: () =>
+      executeAction(client, {
+        id: action.id,
+        kind: action.kind,
+        projectId: action.projectId,
+        target: asRecord(action.target),
+        params: asRecord(action.params),
+        baseRev: action.baseRev,
+      }),
+    classify: (error) => {
+      const failure = error instanceof ExecutionFailure ? error : new ExecutionFailure(error, false);
+      return { classified: classifyFailure(failure), writeSent: failure.writeSent };
+    },
+    markInvalid: () => markCredentialInvalid(userId, credentialId),
+  };
+}
+
 export async function approveAction(
   userId: string,
   actionId: string,
@@ -300,23 +440,7 @@ export async function approveAction(
     );
   }
 
-  const credentialId = action.credentialId;
-  const client = credentialId
-    ? await createAzureClientForCredential(userId, credentialId, { refresh: true })
-    : null;
-
-  if (!credentialId || !client) {
-    throw new AppError(409, "CREDENTIAL_REMOVED", "The credential for this action was removed");
-  }
-
-  // The credential may have been pointed at another organization since the preview.
-  if (client.organizationUrl !== action.organizationUrl) {
-    throw new AppError(
-      409,
-      "CREDENTIAL_CHANGED",
-      "The credential now points to a different organization. Propose the action again."
-    );
-  }
+  const runner = await runnerFor(userId, action);
 
   // Single-use claim: concurrent approvals race on this conditional update.
   const claimed = await prisma.$transaction(async (tx) => {
@@ -367,21 +491,13 @@ export async function approveAction(
   let execution: ExecutionResult;
 
   try {
-    execution = await executeAction(client, {
-      id: action.id,
-      kind: action.kind,
-      projectId: action.projectId,
-      target: asRecord(action.target),
-      params: asRecord(action.params),
-      baseRev: action.baseRev,
-    });
+    execution = await runner.run();
   } catch (error) {
-    const failure =
-      error instanceof ExecutionFailure ? error : new ExecutionFailure(error, false);
-    const classified = classifyFailure(failure);
+    const { classified, writeSent, partial } = runner.classify(error);
+    const failure = { writeSent, ...(partial ?? {}) };
 
     if (classified.patInvalid) {
-      await markCredentialInvalid(userId, credentialId);
+      await runner.markInvalid();
     }
 
     const failed = await prisma.$transaction(async (tx) => {
@@ -392,7 +508,7 @@ export async function approveAction(
           executedAt: new Date(),
           errorCode: classified.code,
           errorMessage: classified.message,
-          result: { writeSent: failure.writeSent },
+          result: failure as Prisma.InputJsonValue,
         },
         select: actionSelect,
       });
@@ -401,7 +517,7 @@ export async function approveAction(
         userId,
         actionId,
         event: AuditEvent.EXECUTION_FAILED,
-        metadata: { errorCode: classified.code, writeSent: failure.writeSent },
+        metadata: { errorCode: classified.code, ...failure },
         context,
       });
 

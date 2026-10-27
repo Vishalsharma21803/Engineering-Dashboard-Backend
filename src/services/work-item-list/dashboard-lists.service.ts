@@ -137,7 +137,7 @@ export interface RecommendationPage extends Page<{ recommendation: Recommendatio
   facets: { categories: FilterOption[] };
 }
 
-const CATEGORY_ORDER: RecommendationCategory[] = ["BLOCKER", "FAILED_PIPELINE", "REVIEW", "SOP", "STALE"];
+const CATEGORY_ORDER: RecommendationCategory[] = ["BLOCKER", "FAILED_PIPELINE", "REVIEW", "SOP", "TIME", "STALE"];
 
 /** Highest priority first; acknowledged items after the active ones, unnumbered. */
 export async function getRecommendationPage(

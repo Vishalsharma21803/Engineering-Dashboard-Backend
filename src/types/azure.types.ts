@@ -403,7 +403,9 @@ export type RecommendationCategory =
   | "FAILED_PIPELINE"
   | "REVIEW"
   | "SOP"
-  | "STALE";
+  | "STALE"
+  /** Time-tracking nudges from the linked Solidtime connection. */
+  | "TIME";
 
 export interface Recommendation {
   id: string;
@@ -414,10 +416,13 @@ export interface Recommendation {
   /** Stable reason codes (unlike display text); a new code resurfaces a triaged item. */
   signals: string[];
   target: {
-    type: "workItem" | "pullRequest" | "build";
+    type: "workItem" | "pullRequest" | "build" | "time";
     projectName: string;
     id: number;
     repositoryId?: string;
+    /** Time nudges: the triage key and the Solidtime connection to open. */
+    key?: string;
+    solidtimeCredentialId?: string;
     webUrl: string | null;
   };
   suggestedAction: SuggestedAction | null;

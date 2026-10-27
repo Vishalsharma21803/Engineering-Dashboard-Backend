@@ -122,6 +122,8 @@ describe("prompts", () => {
     expect(user.startsWith("Judge these rules for the ticket below: STR-15.")).toBe(true);
     expect(user).toContain("Description:\n<<<\nAs a manager");
     expect(user).toContain("- Development: Writing or changing application code");
+    expect(user).not.toContain("Time tracked in Solidtime");
+    expect(buildUserPrompt(dossier, [story], { trackedHours: 3.25 })).toContain("Time tracked in Solidtime: 3.25h");
     // So PR-05 and ACT-06 can skip the PR and branch parts when nothing is linked.
     expect(user).toContain("Linked pull requests: none");
     expect(user).toContain("Linked branches: none");

@@ -10,6 +10,8 @@ datasource db {
 
 enum Platform {
   AZURE
+  /// A Solidtime time-tracking server (cloud or self-hosted).
+  SOLIDTIME
 }
 
 enum ValidationStatus {
@@ -30,6 +32,17 @@ enum ActionKind {
   PIPELINE_QUEUE_RUN
   BUILD_RETRY_STAGE
   BUILD_CANCEL
+  SOLIDTIME_TIMER_START
+  SOLIDTIME_TIMER_STOP
+  SOLIDTIME_ENTRY_CREATE
+  SOLIDTIME_ENTRY_UPDATE
+  SOLIDTIME_ENTRY_DELETE
+  /// Several entries at once (a day drafted from Azure), approved together.
+  SOLIDTIME_ENTRIES_CREATE
+  SOLIDTIME_PROJECT_CREATE
+  SOLIDTIME_TASK_CREATE
+  SOLIDTIME_TAG_CREATE
+  SOLIDTIME_CLIENT_CREATE
 }
 
 enum ActionStatus {
@@ -107,6 +120,10 @@ model Credential {
   triageMarks          TriageMark[]
   sopAiChecks          SopAiCheck[]
   sopReportRuns        SopReportRun[]
+  /// Set for Solidtime credentials: the chosen organization and options.
+  solidtime            SolidtimeConnection? @relation("SolidtimeCredential")
+  /// Solidtime connections that read tickets from this Azure credential.
+  linkedSolidtime      SolidtimeConnection[] @relation("SolidtimeAzureLink")
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -338,6 +355,8 @@ model SopAiCheck {
   projectName  String
   /// Ticket revision, rules versions and model settings; unchanged = no new AI call.
   inputHash    String
+  /// Solidtime hours the check was made with (null: none linked); reused when Solidtime cannot be read.
+  trackedHours Float?
   status       SopAiStatus @default(QUEUED)
   /// Verified verdicts: [{ ruleId, ruleTitle, verdict, reason, quotes, fix }].
   results      Json?
@@ -374,9 +393,34 @@ model SopReportRun {
   rules          Json
   /// The project's roles at run time: { tl: [], qa: [], po: [] }.
   roles          Json
-  /// Every checked ticket: [{ workItemId, title, type, state, assignee, violations, passed }].
+  /// Every checked ticket: [{ workItemId, title, type, state, assignee, violations, passed, trackedHours? }].
   tickets        Json
+  /// Whose Solidtime hours the run includes: "team", "mine", or null when no Solidtime connection is linked.
+  timeScope      String?
   createdAt      DateTime   @default(now())
 
   @@index([userId, credentialId, projectName, createdAt])
+}
+
+/// A Solidtime credential's chosen organization and the user's options for it.
+model SolidtimeConnection {
+  credentialId      String      @id
+  credential        Credential  @relation("SolidtimeCredential", fields: [credentialId], references: [id], onDelete: Cascade)
+  /// Chosen after the token is checked; null until then.
+  organizationId    String?
+  organizationName  String?
+  /// The user's membership (member) id and Solidtime user id in that organization.
+  memberId          String?
+  solidtimeUserId   String?
+  /// owner | admin | manager | employee | placeholder; decides team views.
+  role              String?
+  /// The Azure organization whose ticket ids appear in entry descriptions.
+  azureCredentialId String?
+  azureCredential   Credential? @relation("SolidtimeAzureLink", fields: [azureCredentialId], references: [id], onDelete: SetNull)
+  /// Azure project name (lower-cased) -> Solidtime project id; unmapped projects match by name.
+  projectMap        Json        @default("{}")
+  dailyTargetHours  Float       @default(8)
+  timerAlertHours   Float       @default(10)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }

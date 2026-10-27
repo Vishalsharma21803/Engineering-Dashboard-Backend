@@ -38,6 +38,8 @@ const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
 const { addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
 const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
+const { createFakeSolidtime, fakeSolidtimeHandlers } = await import("../support/fake-solidtime.js");
+const { clearSolidtimeCache } = await import("../../src/lib/solidtime/client.js");
 const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
 const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
 const { clearMyWorkSnapshots } = await import("../../src/services/work-item-list/my-work.service.js");
@@ -66,7 +68,8 @@ const secondOrg = http.all(`${SECOND_ORG}/*`, ({ request }) => {
 
 let fake = createFakeAzure();
 let fakeAi = createFakeAi();
-const server = setupServer(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
+let fakeSolidtime = createFakeSolidtime();
+const server = setupServer(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), ...fakeSolidtimeHandlers(fakeSolidtime), secondOrg, blockExternal);
 server.listen({ onUnhandledFrame: "bypass" });
 
 async function reset(): Promise<void> {
@@ -76,11 +79,13 @@ async function reset(): Promise<void> {
   clearAzureCache();
   fake = createFakeAzure();
   fakeAi = createFakeAi();
+  fakeSolidtime = createFakeSolidtime();
+  clearSolidtimeCache();
   clearOpenRouterModelsCache();
   clearOpenCodeModelsCache();
   clearMyWorkSnapshots();
   clearDashboardLists();
-  server.resetHandlers(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), secondOrg, blockExternal);
+  server.resetHandlers(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), ...fakeSolidtimeHandlers(fakeSolidtime), secondOrg, blockExternal);
 }
 
 await reset();
@@ -123,6 +128,11 @@ app.get("/__e2e/requests", (_req, res) => {
       body: request.body,
     })),
   });
+});
+
+// What reached "Solidtime" (entries as stored there).
+app.get("/__e2e/solidtime", (_req, res) => {
+  res.json({ entries: fakeSolidtime.entries, writes: fakeSolidtime.requests.filter((request) => request.method !== "GET").map((request) => ({ method: request.method, path: request.path })) });
 });
 
 app.get("/__e2e/work-items/:id", (req, res) => {

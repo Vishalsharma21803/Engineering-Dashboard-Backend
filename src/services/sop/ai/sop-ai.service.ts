@@ -15,6 +15,8 @@ import { recordAiUsage, spentSince, startOfUtcDay } from "../../ai/ai-usage.serv
 import { createAzureClientForCredential } from "../../azure/azure-context.service.js";
 import { getWorkItem, getWorkItemsByIds, toWorkItemSummaries, workItemProjectName, workItemType } from "../../azure/work-items.service.js";
 import { buildDossier, kindOf } from "../dossier.js";
+import { linkedSolidtimeFor } from "../../solidtime/connection.service.js";
+import { trackedHoursByTicket } from "../../solidtime/reports.service.js";
 import { findProjectProfile } from "../rulebook.merge.js";
 import { getEffectiveRulebook } from "../rulebook.service.js";
 import type { AiRuleCard, ProjectProfile } from "../rulebook.types.js";
@@ -55,13 +57,39 @@ function inputHash(
   rev: number,
   cards: AiRuleCard[],
   profile: ProjectProfile,
-  settings: { provider: string; model: string; effort: string }
+  settings: { provider: string; model: string; effort: string },
+  trackedHours: number | null = null
 ): string {
   // The whole project set-up counts: stages decide which rules apply, categories what a fix may suggest.
   const { line: _line, ...project } = profile;
   return createHash("sha256")
-    .update(JSON.stringify({ rev, settings, project, cards: cards.map((card) => [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]) }))
+    .update(
+      JSON.stringify({
+        rev,
+        settings,
+        project,
+        cards: cards.map((card) => [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]),
+        // Tracked time is part of what the AI sees; a change (to the quarter hour) re-checks.
+        ...(trackedHours === null ? {} : { trackedHours }),
+      })
+    )
     .digest("hex");
+}
+
+/**
+ * Solidtime hours per ticket for AI checks: empty when no connection is
+ * linked, null when Solidtime could not be read (so nothing is re-checked
+ * just because Solidtime was briefly unavailable).
+ */
+async function trackedHoursFor(userId: string, azureCredentialId: string, ids: number[]): Promise<Map<number, number> | null> {
+  try {
+    const linked = await linkedSolidtimeFor(userId, azureCredentialId, { background: true });
+    if (!linked || ids.length === 0) return new Map();
+    const { hours } = await trackedHoursByTicket(linked.client, linked.connection, ids);
+    return new Map([...hours].map(([id, value]) => [id, Math.round(value * 4) / 4]));
+  } catch {
+    return null;
+  }
 }
 
 async function hiddenByTriage(userId: string, credentialId: string, now: Date) {
@@ -107,6 +135,7 @@ export async function enqueueAiChecks(
     ids.length ? getWorkItemsByIds(client, ids) : Promise.resolve([]),
     prisma.sopAiCheck.findMany({ where: { userId, credentialId, workItemId: { in: ids } } }),
   ]);
+  const tracked = await trackedHoursFor(userId, credentialId, ids);
   const previous = new Map(existing.map((row) => [row.workItemId, row]));
   // A rate-limit pause applies to the user's key at that provider, so newly queued tickets for the
   // same provider wait for it too. Switching provider (e.g. OpenRouter → OpenCode) is not held back.
@@ -148,8 +177,10 @@ export async function enqueueAiChecks(
       continue;
     }
 
-    const hash = inputHash(raw.rev, cards, profile, settings);
     const before = previous.get(id);
+    // Solidtime unreadable: use the hours the last check was made with, so nothing is re-checked just for that.
+    const hours = tracked === null ? (before?.trackedHours ?? null) : (tracked.get(id) ?? null);
+    const hash = inputHash(raw.rev, cards, profile, settings, hours);
     const retryable = before && (before.status === "FAILED" || before.status === "SKIPPED") && RETRYABLE_REASONS.has(before.errorReason ?? "");
 
     // A live running check is never re-queued: it would run (and be paid for) twice.
@@ -169,6 +200,7 @@ export async function enqueueAiChecks(
         workItemId: id,
         projectName,
         inputHash: hash,
+        trackedHours: hours,
         notBefore: pauseUntil,
         ...(pauseUntil ? { errorReason: "AI_RATE_LIMITED", provider: preference.provider, model: preference.model } : {}),
       },
@@ -177,6 +209,7 @@ export async function enqueueAiChecks(
       update: {
         projectName,
         inputHash: hash,
+        trackedHours: hours,
         status: "QUEUED",
         notBefore: pauseUntil,
         ...(pauseUntil
@@ -344,7 +377,8 @@ async function runCheck(id: string): Promise<void> {
       model: model.id,
       effort: model.efforts.includes(preference.effort) ? preference.effort : null,
       system: buildSystemPrompt(allAiCards(rulebook)),
-      user: buildUserPrompt(dossier, cards),
+      // The hours the check was queued with (part of its input hash).
+      user: buildUserPrompt(dossier, cards, { trackedHours: row.trackedHours }),
       schema: verdictSchema,
       jsonSchema: VERDICT_JSON_SCHEMA,
       allowDataCollection: preference.dataCollectionAcceptedAt !== null,

@@ -66,7 +66,8 @@ export const ModelName = {
   SopProjectExclusion: 'SopProjectExclusion',
   UserRulebook: 'UserRulebook',
   SopAiCheck: 'SopAiCheck',
-  SopReportRun: 'SopReportRun'
+  SopReportRun: 'SopReportRun',
+  SolidtimeConnection: 'SolidtimeConnection'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -291,6 +292,7 @@ export const SopAiCheckScalarFieldEnum = {
   workItemId: 'workItemId',
   projectName: 'projectName',
   inputHash: 'inputHash',
+  trackedHours: 'trackedHours',
   status: 'status',
   results: 'results',
   errorReason: 'errorReason',
@@ -319,10 +321,29 @@ export const SopReportRunScalarFieldEnum = {
   rules: 'rules',
   roles: 'roles',
   tickets: 'tickets',
+  timeScope: 'timeScope',
   createdAt: 'createdAt'
 } as const
 
 export type SopReportRunScalarFieldEnum = (typeof SopReportRunScalarFieldEnum)[keyof typeof SopReportRunScalarFieldEnum]
+
+
+export const SolidtimeConnectionScalarFieldEnum = {
+  credentialId: 'credentialId',
+  organizationId: 'organizationId',
+  organizationName: 'organizationName',
+  memberId: 'memberId',
+  solidtimeUserId: 'solidtimeUserId',
+  role: 'role',
+  azureCredentialId: 'azureCredentialId',
+  projectMap: 'projectMap',
+  dailyTargetHours: 'dailyTargetHours',
+  timerAlertHours: 'timerAlertHours',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SolidtimeConnectionScalarFieldEnum = (typeof SolidtimeConnectionScalarFieldEnum)[keyof typeof SolidtimeConnectionScalarFieldEnum]
 
 
 export const SortOrder = {

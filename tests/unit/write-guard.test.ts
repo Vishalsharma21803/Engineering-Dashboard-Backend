@@ -56,8 +56,22 @@ describe("write guard", () => {
       "lib/ai/opencode.ts",
       "lib/ai/openrouter.ts",
       "lib/azure/client.ts",
+      "lib/solidtime/client.ts",
       "services/azure.service.ts",
     ]);
+  });
+
+  it("only the Solidtime action runner writes to Solidtime", () => {
+    expect(filesMatching(/\bclient\.(post|put|delete)(<[^>]*>)?\(/)).toEqual(["services/actions/solidtime-actions.ts"]);
+  });
+
+  it("only the approve flow runs Solidtime changes", () => {
+    expect(filesMatching(/executeSolidtimeAction\(/)).toEqual(["services/actions/action.service.ts", "services/actions/solidtime-actions.ts"]);
+  });
+
+  it("Solidtime routes only read (connection settings aside)", () => {
+    const routes = files.find((file) => file.path === "routes/solidtime.routes.ts")!.text;
+    expect(routes).not.toMatch(/read\.(post|put|patch|delete)\(/);
   });
 
   it("Azure read routes register GET handlers only", () => {

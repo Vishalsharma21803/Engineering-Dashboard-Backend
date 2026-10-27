@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { encryptSecret } from "../lib/encryption.js";
-import { ValidationStatus } from "../generated/prisma/enums.js";
+import { Platform, ValidationStatus } from "../generated/prisma/enums.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import type {
   CreateCredentialInput,
@@ -79,10 +79,12 @@ export async function updateCredential(
   }
 
   try {
+    // This path edits Azure credentials only; Solidtime connections have their own.
     const result = await prisma.credential.updateMany({
       where: {
         id: credentialId,
         userId,
+        platform: Platform.AZURE,
       },
       data,
     });
@@ -115,14 +117,17 @@ export async function listCredentials(userId: string) {
   });
 }
 
+/** Only credentials of the given platform: an Azure route can never load a Solidtime token, and the other way round. */
 export async function getCredentialWithSecret(
   userId: string,
-  credentialId: string
+  credentialId: string,
+  platform: Platform = Platform.AZURE
 ) {
   return prisma.credential.findFirst({
     where: {
       id: credentialId,
       userId,
+      platform,
     },
     select: {
       id: true,

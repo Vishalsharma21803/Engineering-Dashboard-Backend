@@ -4,6 +4,7 @@ import cors from "cors";
 
 import authRoutes from "./routes/auth.routes.js";
 import credentialRoutes from "./routes/credential.routes.js";
+import solidtimeRoutes from "./routes/solidtime.routes.js";
 import azureRoutes from "./routes/azure.routes.js";
 import actionRoutes from "./routes/action.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
@@ -87,6 +88,7 @@ export function createApp() {
   app.use("/api/triage", triageRoutes);
   app.use("/api/ai", aiRoutes);
   app.use("/api/sop", sopRoutes);
+  app.use("/api/solidtime", solidtimeRoutes);
 
   app.use(handleUnexpectedError);
 

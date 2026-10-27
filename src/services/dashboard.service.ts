@@ -11,6 +11,7 @@ import { sectionData, toSection } from "./azure/section.js";
 import { listAssignedWorkItemRecords } from "./azure/work-items.service.js";
 import { buildRecommendations } from "./recommendation.service.js";
 import { rememberDashboardLists } from "./work-item-list/dashboard-lists.service.js";
+import { timeNudges } from "./solidtime/time-nudges.service.js";
 import { rememberMyWork } from "./work-item-list/my-work.service.js";
 
 export const MAX_DASHBOARD_PROJECTS = 30;
@@ -72,6 +73,8 @@ export async function getDashboard(
   );
   const records = sectionData(workItemsSection, []);
   const allWorkItems = records.map((record) => record.summary);
+  // Time nudges read Solidtime in parallel with the rest (short timeout; never fails the dashboard).
+  const nudges = timeNudges(userId, client.credentialId, identity, records, now);
 
   const [compliance, pullRequests, pipelines] = await Promise.all([
     workItemsSection.status === "ok"
@@ -111,13 +114,17 @@ export async function getDashboard(
       ? { ...workItemsSection, data: openWorkItems }
       : { ...workItemsSection, data: null };
 
-  const recommendations = buildRecommendations({
-    workItems: allWorkItems,
-    compliance: sectionData(compliance, []),
-    pullRequests: sectionData(pullRequests, []),
-    builds: sectionData(pipelines, []),
-    now,
-  });
+  const recommendations = [
+    ...buildRecommendations({
+      workItems: allWorkItems,
+      compliance: sectionData(compliance, []),
+      pullRequests: sectionData(pullRequests, []),
+      builds: sectionData(pipelines, []),
+      now,
+    }),
+    // Time-tracking nudges, when a Solidtime connection is linked to this organization.
+    ...(await nudges),
+  ].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 
   // The paged My work table reads these rows instead of re-running every SOP check per page.
   if (workItemsSection.status === "ok" && compliance.status === "ok") {

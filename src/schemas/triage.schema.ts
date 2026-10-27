@@ -12,7 +12,7 @@ export const triageItemKeySchema = z
   .string()
   .max(600)
   .regex(
-    /^(wi:\d{1,10}|pr:[A-Za-z0-9-]{1,64}:\d{1,10}|pipeline:[^:\p{Cc}]{1,128}:\d{1,10}:[^:\s]{0,400}|project:[^:\p{Cc}]{1,128})$/u,
+    /^(wi:\d{1,10}|pr:[A-Za-z0-9-]{1,64}:\d{1,10}|pipeline:[^:\p{Cc}]{1,128}:\d{1,10}:[^:\s]{0,400}|project:[^:\p{Cc}]{1,128}|time:[A-Za-z0-9:-]{1,64})$/u,
     "Invalid item key"
   );
 
