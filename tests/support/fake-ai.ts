@@ -37,6 +37,25 @@ export function requestedRules(userText: string): string[] {
   return match?.[1] ? match[1].split(", ") : [];
 }
 
+export interface FakeTimeEstimate {
+  ticketId: number;
+  hours: number;
+  confidence: "low" | "medium" | "high";
+  reason: string;
+}
+
+/** The ticket ids a timesheet estimate request asks about ("- ticketId 103: ..."). */
+export function requestedTickets(userText: string): number[] | null {
+  if (!userText.includes("Estimate the hours for these tickets:")) return null;
+  return [...userText.matchAll(/^- ticketId (\d+):/gm)].map((match) => Number(match[1]));
+}
+
+/** The judge's answer: time estimates for a timesheet prompt, otherwise SOP verdicts. */
+function answerFor(fake: FakeAi, userText: string): unknown {
+  const tickets = requestedTickets(userText);
+  return tickets ? { estimates: fake.timeEstimates(tickets, userText) } : { results: fake.verdicts(requestedRules(userText), userText) };
+}
+
 function defaultVerdicts(rules: string[]): FakeVerdict[] {
   return rules.map((ruleId) => ({ ruleId, verdict: "fail", reason: `Fake verdict for ${ruleId}.`, advice: `Fake advice for ${ruleId}.`, quotes: [], fix: { target: "none", text: "" } }));
 }
@@ -73,6 +92,8 @@ export function createFakeAi() {
     openRouterDown: false,
     /** Builds the judge's answer from the rule ids asked about and the ticket text. */
     verdicts: (rules: string[], _ticket: string): FakeVerdict[] => defaultVerdicts(rules),
+    /** Hours for a timesheet estimate request (1 h each by default). */
+    timeEstimates: (tickets: number[], _prompt: string): FakeTimeEstimate[] => tickets.map((ticketId) => ({ ticketId, hours: 1, confidence: "medium", reason: `Fake estimate for #${ticketId}.` })),
     claudeStopReason: "end_turn" as "end_turn" | "refusal" | "max_tokens",
     /** Answer the next N judge calls with 429. */
     rateLimitNext: 0,
@@ -111,14 +132,13 @@ export function fakeAiHandlers(fake: FakeAi): HttpHandler[] {
 
       const messages = body.messages as Array<{ content: string }>;
       const ticket = messages[0]?.content ?? "";
-      const verdicts = fake.verdicts(requestedRules(ticket), ticket);
 
       return HttpResponse.json({
         id: "msg_fake",
         type: "message",
         role: "assistant",
         model: body.model,
-        content: fake.claudeStopReason === "refusal" ? [] : [{ type: "text", text: fake.badJson ? "{not json" : JSON.stringify({ results: verdicts }) }],
+        content: fake.claudeStopReason === "refusal" ? [] : [{ type: "text", text: fake.badJson ? "{not json" : JSON.stringify(answerFor(fake, ticket)) }],
         stop_reason: fake.claudeStopReason,
         stop_sequence: null,
         usage: {
@@ -172,7 +192,7 @@ export function fakeAiHandlers(fake: FakeAi): HttpHandler[] {
       return HttpResponse.json({
         id: "oc-fake",
         model,
-        choices: [{ finish_reason: "stop", message: { role: "assistant", content: JSON.stringify({ results: fake.verdicts(requestedRules(ticket), ticket) }) } }],
+        choices: [{ finish_reason: "stop", message: { role: "assistant", content: JSON.stringify(answerFor(fake, ticket)) } }],
         usage: { prompt_tokens: fake.usage.input, completion_tokens: fake.usage.output },
       });
     }),
@@ -196,7 +216,7 @@ export function fakeAiHandlers(fake: FakeAi): HttpHandler[] {
       return HttpResponse.json({
         id: "gen-fake",
         model: body.model,
-        choices: [{ finish_reason: "stop", message: { role: "assistant", content: JSON.stringify({ results: fake.verdicts(requestedRules(ticket), ticket) }) } }],
+        choices: [{ finish_reason: "stop", message: { role: "assistant", content: JSON.stringify(answerFor(fake, ticket)) } }],
         usage: { prompt_tokens: fake.usage.input, completion_tokens: fake.usage.output },
       });
     }),

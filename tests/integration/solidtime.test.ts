@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
+import { clearAzureCache } from "../../src/lib/azure/cache.js";
+import { clearSolidtimeCache } from "../../src/lib/solidtime/client.js";
+import { server } from "../setup.js";
+import { VALID_CLAUDE_KEY, createFakeAi, fakeAiHandlers, type FakeAi } from "../support/fake-ai.js";
 import type { FakeAzure } from "../support/fake-azure.js";
-import { ME } from "../support/fake-azure.js";
+import { ME, writeRequests } from "../support/fake-azure.js";
 import {
   EMPLOYEE,
   EMPLOYEE_TOKEN,
@@ -30,6 +34,10 @@ beforeEach(async () => {
   ({ agent, credentialId } = await setupUser());
 });
 
+const CLIENT_WORK = "dddddddd-0000-4000-8000-0000000000c1";
+const SUPPORT = "dddddddd-0000-4000-8000-0000000000c2";
+const BETA_ONE = "dddddddd-0000-4000-8000-0000000000c3";
+const BETA_TWO = "dddddddd-0000-4000-8000-0000000000c4";
 const hoursAgo = (hours: number) => `${new Date(Date.now() - hours * 3_600_000).toISOString().slice(0, 19)}Z`;
 const st = (connection: string, path: string) => `/api/solidtime/${connection}${path}`;
 
@@ -306,6 +314,152 @@ describe("time on tickets", () => {
     expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 103)).toMatchObject({ hours: null, activity: [expect.objectContaining({ what: "Edited Title" })] });
     await agent.get(st(connection, "/draft?day=2020-01-01")).expect(422);
     expect(solidtimeWrites(solidtime)).toEqual([]);
+  });
+
+  it("fills every drafted row: the project from my mapping or earlier entries, an anchor time, and the day's totals", async () => {
+    const connection = await connectSolidtime(agent);
+    const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const at = (time: string) => `${day}T${time}:00Z`;
+    solidtime.projects.push(
+      { id: CLIENT_WORK, name: "Client work", color: "#000000", client_id: null, is_archived: false, is_billable: false, estimated_time: null, spent_time: 0 },
+      { id: SUPPORT, name: "Support", color: "#000000", client_id: null, is_archived: false, is_billable: false, estimated_time: null, spent_time: 0 }
+    );
+    // Earlier entries: #102 went to Client work; Alpha tickets mostly went to Support.
+    addEntry(solidtime, { start: hoursAgo(24 * 10), end: hoursAgo(24 * 10 - 1), description: "#102 Fix flaky test", projectId: CLIENT_WORK });
+    addEntry(solidtime, { start: hoursAgo(24 * 5), end: hoursAgo(24 * 5 - 1), description: "#101 Implement login", projectId: SUPPORT });
+    addEntry(solidtime, { start: hoursAgo(24 * 4), end: hoursAgo(24 * 4 - 1), description: "#101 Implement login", projectId: SUPPORT });
+    addEntry(solidtime, { start: at("08:00"), end: at("09:00"), description: "Standup" });
+    azure.updates.set(102, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("11:00") }, "Microsoft.VSTS.Scheduling.CompletedWork": { oldValue: 0, newValue: 2 } } }]);
+    azure.updates.set(103, [
+      { id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("13:00") }, "System.Title": { oldValue: "a", newValue: "b" } } },
+      { id: 2, rev: 5, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:30") }, "System.State": { oldValue: "Active", newValue: "Resolved" } } },
+    ]);
+
+    const draft = (await agent.get(st(connection, `/draft?day=${day}`)).expect(200)).body.draft;
+    expect(draft).toMatchObject({ day, timeZone: "UTC", targetHours: 8, trackedHours: 1, busy: [{ start: new Date(at("08:00")).toISOString(), end: new Date(at("09:00")).toISOString() }] });
+    const row = (id: number) => draft.rows.find((item: { ticketId: number }) => item.ticketId === id);
+    expect(row(102)).toMatchObject({ hours: 2, hoursSource: "completed-work", solidtimeProjectId: CLIENT_WORK, projectSource: "ticket", type: "Task", state: "Active" });
+    expect(row(102).anchor).toBe(new Date(at("11:00")).toISOString());
+    // No hours known: no times yet, but the anchor is my last activity and the project comes from other Alpha tickets.
+    expect(row(103)).toMatchObject({ hours: null, hoursSource: null, start: null, solidtimeProjectId: SUPPORT, projectSource: "azure-project", remainingWork: 1 });
+    expect(row(103).anchor).toBe(new Date(at("15:30")).toISOString());
+
+    // A ticket from a project named differently only by case and separators finds it; two such projects: none is guessed.
+    azure.workItems.get(103)!.fields["System.TeamProject"] = "beta";
+    clearAzureCache();
+    solidtime.projects.push({ id: BETA_ONE, name: "BETA-", color: "#000000", client_id: null, is_archived: false, is_billable: false, estimated_time: null, spent_time: 0 });
+    clearSolidtimeCache();
+    const beta = (await agent.get(st(connection, `/draft?day=${day}`)).expect(200)).body.draft.rows.find((item: { ticketId: number }) => item.ticketId === 103);
+    expect(beta).toMatchObject({ solidtimeProjectId: BETA_ONE, projectSource: "name", projectMatches: [] });
+    solidtime.projects.push({ id: BETA_TWO, name: "Beta", color: "#000000", client_id: null, is_archived: false, is_billable: false, estimated_time: null, spent_time: 0 });
+    clearSolidtimeCache();
+    const twoBetas = (await agent.get(st(connection, `/draft?day=${day}`)).expect(200)).body.draft.rows.find((item: { ticketId: number }) => item.ticketId === 103);
+    expect(twoBetas).toMatchObject({ solidtimeProjectId: null, projectSource: null, projectMatches: ["BETA-", "Beta"] });
+
+    // My mapping wins over history.
+    await agent.patch(`/api/solidtime/connections/${connection}`).send({ projectMap: { alpha: PROJECT_ALPHA } }).expect(200);
+    const mapped = (await agent.get(st(connection, `/draft?day=${day}`)).expect(200)).body.draft;
+    expect(mapped.rows.find((item: { ticketId: number }) => item.ticketId === 102)).toMatchObject({ projectSource: "mapping", solidtimeProjectId: PROJECT_ALPHA });
+    expect(solidtimeWrites(solidtime)).toEqual([]);
+  });
+});
+
+describe("AI hours for a draft", () => {
+  let ai: FakeAi;
+  const day = () => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const at = (time: string) => `${day()}T${time}:00Z`;
+
+  beforeEach(() => {
+    ai = createFakeAi();
+    server.use(...fakeAiHandlers(ai));
+    addEntry(solidtime, { start: at("08:00"), end: at("08:30"), description: "Standup" });
+    azure.updates.set(102, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("11:00") }, "Microsoft.VSTS.Scheduling.CompletedWork": { oldValue: 0, newValue: 2 } } }]);
+    azure.updates.set(103, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:00") }, "System.State": { oldValue: "Active", newValue: "Resolved" } } }]);
+    azure.updates.set(101, [{ id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "System.Tags": { oldValue: "", newValue: "ui" } } }]);
+  });
+
+  async function useClaude() {
+    await agent.post("/api/ai/credentials").send({ provider: "CLAUDE", apiKey: VALID_CLAUDE_KEY }).expect(201);
+    await agent.put("/api/ai/preferences").send({ provider: "CLAUDE", model: "claude-sonnet-5-5", effort: "LOW", dailyLimitUsd: 2, acceptDataCollection: false }).expect(200);
+  }
+
+  const estimate = (connection: string, body: Record<string, unknown>) => agent.post(st(connection, "/draft/estimate")).send(body);
+  const judgeCalls = () => ai.requests.filter((request) => request.method === "POST");
+
+  it("needs an AI model, and only estimates tickets with activity that day", async () => {
+    const connection = await connectSolidtime(agent);
+    expect((await estimate(connection, { day: day(), ticketIds: [103] }).expect(422)).body.reason).toBe("AI_NOT_CONFIGURED");
+
+    await useClaude();
+    expect((await estimate(connection, { day: day(), ticketIds: [104] }).expect(422)).body.reason).toBe("NOTHING_TO_ESTIMATE");
+    await estimate(connection, { day: day(), ticketIds: [] }).expect(400);
+    await estimate(connection, { day: "2020-01-01", ticketIds: [103] }).expect(422);
+    expect(judgeCalls()).toEqual([]);
+  });
+
+  it("shares out what is left of the day, places the entries and records the cost, writing nothing", async () => {
+    const connection = await connectSolidtime(agent);
+    await useClaude();
+    ai.timeEstimates = () => [
+      { ticketId: 103, hours: 3, confidence: "high", reason: "Resolved after a long stretch." },
+      { ticketId: 101, hours: 20, confidence: "low", reason: "Only a tag edit." },
+      { ticketId: 999, hours: 2, confidence: "high", reason: "Not asked about." },
+      { ticketId: 103, hours: 5, confidence: "low", reason: "Duplicate." },
+    ];
+
+    // 8 h target − 0.5 h tracked − 2 h planned (the Completed Work row) = 5.5 h to share; 3 + 12 is scaled down to fit.
+    const response = (await estimate(connection, { day: day(), ticketIds: [101, 103], plannedHours: 2 }).expect(200)).body.estimate;
+    expect(response).toMatchObject({ day: day(), availableHours: 5.5, model: "claude-sonnet-5-5" });
+    expect(response.costUsd).toBeGreaterThan(0);
+    expect(response.estimates.map((item: { ticketId: number; hours: number; confidence: string }) => [item.ticketId, item.hours, item.confidence])).toEqual([
+      [103, 1, "high"],
+      [101, 4.25, "low"],
+    ]);
+
+    // Placed inside the day, around existing time and the Completed Work row, never overlapping.
+    const taken = [
+      [Date.parse(at("08:00")), Date.parse(at("08:30"))],
+      [Date.parse(at("09:00")), Date.parse(at("11:00"))],
+      ...response.estimates.map((item: { start: string; end: string }) => [Date.parse(item.start), Date.parse(item.end)]),
+    ].sort((a, b) => a[0]! - b[0]!);
+    for (let index = 1; index < taken.length; index += 1) expect(taken[index]![0]).toBeGreaterThanOrEqual(taken[index - 1]![1]!);
+    expect(response.estimates[0].end).toBe(new Date(at("15:00")).toISOString());
+
+    // One call, about the asked tickets only, without comment text; usage recorded under its own purpose.
+    expect(judgeCalls()).toHaveLength(1);
+    const prompt = String((judgeCalls()[0]!.body!.messages as Array<{ content: string }>)[0]!.content);
+    expect(prompt).toContain("Hours available to share: 5.5 h.");
+    expect(prompt).toContain('- ticketId 103: "Crash on save"');
+    expect(prompt).not.toContain("ticketId 102");
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true } })).toEqual([{ purpose: "time-draft" }]);
+    expect(solidtimeWrites(solidtime)).toEqual([]);
+    expect(writeRequests(azure)).toEqual([]);
+  });
+
+  it("never estimates Completed Work rows (even ones already in Solidtime) and places around the rows I planned", async () => {
+    const connection = await connectSolidtime(agent);
+    await useClaude();
+    // #102's 2 h of Completed Work is already tracked: its row has 0 h, and it must not get more from the AI.
+    addEntry(solidtime, { start: at("09:00"), end: at("11:00"), description: "#102 Fix flaky test" });
+    expect((await estimate(connection, { day: day(), ticketIds: [102] }).expect(422)).body.reason).toBe("NOTHING_TO_ESTIMATE");
+
+    ai.timeEstimates = (tickets) => tickets.map((ticketId) => ({ ticketId, hours: 1, confidence: "medium", reason: "x" }));
+    // I planned something at 14:00-15:00 in the browser: #103 (last change 15:00) moves before it.
+    const response = (await estimate(connection, { day: day(), ticketIds: [102, 103], planned: [{ start: at("14:00"), end: at("15:00") }] }).expect(200)).body.estimate;
+    expect(response.estimates.map((item: { ticketId: number }) => item.ticketId)).toEqual([103]);
+    expect(response.estimates[0]).toMatchObject({ start: new Date(at("13:00")).toISOString(), end: new Date(at("14:00")).toISOString() });
+    expect(String((judgeCalls()[0]!.body!.messages as Array<{ content: string }>)[0]!.content)).not.toContain("ticketId 102");
+  });
+
+  it("makes no call when the day is already full, and reports bad answers after counting their cost", async () => {
+    const connection = await connectSolidtime(agent);
+    await useClaude();
+    expect((await estimate(connection, { day: day(), ticketIds: [103], plannedHours: 8 }).expect(200)).body.estimate).toMatchObject({ availableHours: 0, estimates: [], model: null });
+    expect(judgeCalls()).toEqual([]);
+
+    ai.badJson = true;
+    expect((await estimate(connection, { day: day(), ticketIds: [103] }).expect(502)).body.reason).toBe("AI_BAD_OUTPUT");
+    expect(await prisma.aiUsage.count({ where: { purpose: "time-draft" } })).toBe(1);
   });
 });
 

@@ -72,6 +72,8 @@ describe("write guard", () => {
   it("Solidtime routes only read (connection settings aside)", () => {
     const routes = files.find((file) => file.path === "routes/solidtime.routes.ts")!.text;
     expect(routes).not.toMatch(/read\.(post|put|patch|delete)\(/);
+    // Under a connection, the only other route asks the AI for draft hours; it never reaches Solidtime's write API.
+    expect(routes.match(/router\.(post|put|patch|delete)\("\/:credentialId[^"]*"/g)).toEqual(['router.post("/:credentialId/draft/estimate"']);
   });
 
   it("Azure read routes register GET handlers only", () => {

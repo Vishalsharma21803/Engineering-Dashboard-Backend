@@ -7,6 +7,7 @@ import { credentialIdSchema } from "../schemas/credential.schema.js";
 import {
   accuracyQuerySchema,
   catalogPageQuerySchema,
+  draftEstimateBodySchema,
   draftQuerySchema,
   weekQuerySchema,
   createSolidtimeConnectionSchema,
@@ -30,6 +31,7 @@ import { compareWithEstimate, getTicketTimes, TICKET_LOOKBACK_DAYS } from "../se
 import { linkedAzureClient, lookUpTickets } from "../services/solidtime/tickets.service.js";
 import { getTimesheet, getUnlinkedEntries } from "../services/solidtime/timesheet.service.js";
 import { draftDayFromAzure } from "../services/solidtime/draft.service.js";
+import { estimateDraftHours } from "../services/solidtime/draft-ai.service.js";
 import { estimateAccuracy, weeklyCsv } from "../services/solidtime/reports.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -218,6 +220,12 @@ export const ticketTimesController = solidtimeRoute("Reading time for tickets fa
 export const draftController = solidtimeRoute("Drafting the day from Azure DevOps failed", async (req, { client, connection }, userId) => {
   const { day } = parse(draftQuerySchema, req.query);
   return { draft: await draftDayFromAzure(client, connection, await linkedAzureClient(userId, connection.azureCredentialId), day) };
+});
+
+/** AI hours for drafted rows. Calls the user's AI provider (counted against their spend limit); writes nothing to Solidtime or Azure. */
+export const draftEstimateController = solidtimeRoute("Estimating hours with AI failed", async (req, { client, connection }, userId) => {
+  const body = parse(draftEstimateBodySchema, req.body);
+  return { estimate: await estimateDraftHours(userId, client, connection, await linkedAzureClient(userId, connection.azureCredentialId), body) };
 });
 
 export const accuracyController = solidtimeRoute("Building the estimate accuracy report failed", async (req, { client, connection }, userId) => {

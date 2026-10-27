@@ -36,9 +36,9 @@ process.env.FRONTEND_ORIGIN = process.env.E2E_FRONTEND_ORIGIN ?? "http://localho
 const { createApp } = await import("../../src/app.js");
 const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
-const { addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
+const { ME, addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
 const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
-const { createFakeSolidtime, fakeSolidtimeHandlers } = await import("../support/fake-solidtime.js");
+const { addEntry, createFakeSolidtime, fakeSolidtimeHandlers } = await import("../support/fake-solidtime.js");
 const { clearSolidtimeCache } = await import("../../src/lib/solidtime/client.js");
 const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
 const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
@@ -111,6 +111,19 @@ app.post("/__e2e/tickets", (req, res) => {
   const count = Math.min(Number((req.body as { count?: unknown }).count) || 0, 200);
   addFakeTasks(fake, count);
   res.json({ ok: true, count });
+});
+
+// Yesterday (UTC) for the Time → Draft tab: #102 Completed Work +2 h, #103 edited and resolved (no hours), a 30 min standup already in Solidtime.
+app.post("/__e2e/draft-activity", (_req, res) => {
+  const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const at = (time: string) => `${day}T${time}:00Z`;
+  fake.updates.set(102, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("11:00") }, "Microsoft.VSTS.Scheduling.CompletedWork": { oldValue: 0, newValue: 2 } } }]);
+  fake.updates.set(103, [
+    { id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("13:00") }, "System.Title": { oldValue: "Crash", newValue: "Crash on save" } } },
+    { id: 2, rev: 5, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:00") }, "System.State": { oldValue: "Active", newValue: "Resolved" } } },
+  ]);
+  addEntry(fakeSolidtime, { start: at("08:00"), end: at("08:30"), description: "Standup" });
+  res.json({ ok: true, day });
 });
 
 // Default SOP rules covering the fake Alpha project (Beta stays unconfigured).
