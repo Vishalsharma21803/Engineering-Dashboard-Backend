@@ -18,8 +18,8 @@ export interface TicketInfo {
 const asNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
 
 /** The linked Azure organization, or null when none is linked (time then shows without ticket titles). */
-export async function linkedAzureClient(userId: string, azureCredentialId: string | null): Promise<AzureClient | null> {
-  return azureCredentialId ? createAzureClientForCredential(userId, azureCredentialId) : null;
+export async function linkedAzureClient(userId: string, azureCredentialId: string | null, options: { refresh?: boolean } = {}): Promise<AzureClient | null> {
+  return azureCredentialId ? createAzureClientForCredential(userId, azureCredentialId, options) : null;
 }
 
 export interface TicketLookup {

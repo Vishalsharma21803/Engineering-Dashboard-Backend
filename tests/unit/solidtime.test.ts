@@ -76,12 +76,14 @@ describe("tracked time vs estimate", () => {
       overEstimate: true,
       suggested: { completedWork: 5.25, remainingWork: 0 },
       inSync: false,
+      basis: "team",
     });
     expect(compareWithEstimate({ ...time, teamSeconds: null }, { originalEstimate: null, completedWork: 1, remainingWork: 2 })).toMatchObject({
       trackedHours: 1,
       overEstimate: false,
       suggested: { completedWork: 1, remainingWork: 2 },
       inSync: true,
+      basis: "mine",
     });
   });
 });

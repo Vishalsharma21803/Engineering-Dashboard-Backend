@@ -256,7 +256,14 @@ describe("time on tickets", () => {
     const mine = (await agent.get(st(employee, "/tickets/101/time")).expect(200)).body;
     expect(mine.time).toMatchObject({ ticketId: 101, mySeconds: 3 * 3600, teamSeconds: null, people: null, running: false });
     expect(mine.ticket).toMatchObject({ id: 101, title: "Implement login" });
-    expect(mine.comparison).toMatchObject({ trackedHours: 3 });
+    expect(mine.comparison).toMatchObject({ trackedHours: 3, basis: "mine" });
+
+    // The total is all time: an entry from two years ago counts too (read fresh with ?refresh=true).
+    addEntry(solidtime, { start: hoursAgo(24 * 730), end: hoursAgo(24 * 730 - 2), description: "#101 Implement login" });
+    const allTime = (await agent.get(st(employee, "/tickets/101/time?refresh=true")).expect(200)).body;
+    expect(allTime.time.mySeconds).toBe(5 * 3600);
+    expect(allTime.comparison).toMatchObject({ trackedHours: 5, suggested: { completedWork: 5, remainingWork: 3 }, inSync: false });
+    expect(solidtimeWrites(solidtime)).toEqual([]);
 
     const times = (await agent.get(st(employee, "/ticket-times?ids=101,102")).expect(200)).body.times;
     expect(times).toEqual([expect.objectContaining({ ticketId: 101, mySeconds: 10_800 }), expect.objectContaining({ ticketId: 102, mySeconds: 0 })]);
@@ -265,9 +272,10 @@ describe("time on tickets", () => {
     const manager = await setupUser("lead@example.com");
     const managerConnection = await connectSolidtime(manager.agent, MANAGER_TOKEN);
     const team = (await manager.agent.get(st(managerConnection, "/tickets/101/time")).expect(200)).body.time;
-    expect(team).toMatchObject({ mySeconds: 3600, teamSeconds: 4 * 3600 });
+    expect(team).toMatchObject({ mySeconds: 3600, teamSeconds: 6 * 3600 });
+    expect((await manager.agent.get(st(managerConnection, "/tickets/101/time")).expect(200)).body.comparison).toMatchObject({ basis: "team", trackedHours: 6 });
     expect(team.people).toEqual([
-      { name: "Dev Example", seconds: 3 * 3600 },
+      { name: "Dev Example", seconds: 5 * 3600 },
       { name: "Lead Person", seconds: 3600 },
     ]);
   });

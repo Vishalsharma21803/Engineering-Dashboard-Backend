@@ -66,7 +66,8 @@ export async function getTicketTimes(
   client: SolidtimeClient,
   connection: Connection,
   ticketIds: number[],
-  options: { since: Date; now?: Date; withPeople?: boolean }
+  /** `since` omitted: all time. */
+  options: { since?: Date; now?: Date; withPeople?: boolean }
 ): Promise<Map<number, TicketTime>> {
   const now = options.now ?? new Date();
   const wanted = new Set(ticketIds);
@@ -123,6 +124,8 @@ export interface TimeVsEstimate {
   suggested: { completedWork: number; remainingWork: number | null };
   /** Azure already matches the suggestion. */
   inSync: boolean;
+  /** "team": everyone's time on the ticket; "mine": only my own (my Solidtime role cannot read others'). */
+  basis: "team" | "mine";
 }
 
 /**
@@ -141,5 +144,6 @@ export function compareWithEstimate(time: TicketTime, ticket: Pick<TicketInfo, "
     overEstimate: estimate !== null && trackedHours > estimate,
     suggested: { completedWork: trackedHours, remainingWork: remaining },
     inSync: (ticket.completedWork ?? 0) === trackedHours && (remaining === null || (ticket.remainingWork ?? null) === remaining),
+    basis: time.teamSeconds === null ? "mine" : "team",
   };
 }

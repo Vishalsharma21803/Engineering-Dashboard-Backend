@@ -126,6 +126,16 @@ app.post("/__e2e/draft-activity", (_req, res) => {
   res.json({ ok: true, day });
 });
 
+// A finished Solidtime entry for the developer: { "description": "#101 Implement login", "hours": 2 } (ends now).
+app.post("/__e2e/solidtime-entry", (req, res) => {
+  const { description, hours } = req.body as { description: string; hours: number };
+  const end = new Date();
+  const start = new Date(end.getTime() - Number(hours) * 3_600_000);
+  const iso = (at: Date) => `${at.toISOString().slice(0, 19)}Z`;
+  addEntry(fakeSolidtime, { start: iso(start), end: iso(end), description: String(description) });
+  res.json({ ok: true });
+});
+
 // Default SOP rules covering the fake Alpha project (Beta stays unconfigured).
 app.post("/__e2e/rulebook", async (_req, res) => {
   await useAlphaRulebook();

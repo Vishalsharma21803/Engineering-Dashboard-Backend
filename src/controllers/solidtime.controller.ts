@@ -3,6 +3,7 @@ import type { z } from "zod";
 
 import { paginate } from "../lib/pagination.js";
 import { SolidtimeApiError } from "../lib/solidtime/errors.js";
+import { refreshQuerySchema } from "../schemas/azure.schema.js";
 import { credentialIdSchema } from "../schemas/credential.schema.js";
 import {
   accuracyQuerySchema,
@@ -196,13 +197,17 @@ export const unlinkedController = solidtimeRoute("Reading unlinked entries faile
 
 const lookbackStart = (now: Date) => new Date(now.getTime() - TICKET_LOOKBACK_DAYS * 86_400_000);
 
-/** Time on one ticket (mine, the team's if my role allows, per person), compared with its Azure estimate. */
+/**
+ * All the time ever tracked on one ticket (mine, the team's if my role allows,
+ * per person), compared with its Azure fields. ?refresh=true reads both fresh.
+ */
 export const ticketTimeController = solidtimeRoute("Reading time for the ticket failed", async (req, { client, connection }, userId) => {
   const ticketId = parse(ticketIdParamSchema, req.params.ticketId);
+  const { refresh } = parse(refreshQuerySchema, req.query);
   const now = new Date();
-  const lookup = await lookUpTickets(await linkedAzureClient(userId, connection.azureCredentialId), [ticketId]);
+  const lookup = await lookUpTickets(await linkedAzureClient(userId, connection.azureCredentialId, { refresh }), [ticketId]);
   const ticket = lookup.tickets.get(ticketId) ?? null;
-  const times = await getTicketTimes(client, connection, [ticketId], { since: lookbackStart(now), now, withPeople: true });
+  const times = await getTicketTimes(client, connection, [ticketId], { now, withPeople: true });
   const time = times.get(ticketId)!;
 
   return { time, ticket, comparison: ticket ? compareWithEstimate(time, ticket) : null };
