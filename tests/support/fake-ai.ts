@@ -1,4 +1,4 @@
-import { HttpResponse, http, type HttpHandler } from "msw";
+import { HttpResponse, delay, http, type HttpHandler } from "msw";
 
 /**
  * Fake Anthropic and OpenRouter endpoints. Keys are accepted only if they
@@ -95,6 +95,8 @@ export function createFakeAi() {
     /** Hours for a timesheet estimate request (1 h each by default). */
     timeEstimates: (tickets: number[], _prompt: string): FakeTimeEstimate[] => tickets.map((ticketId) => ({ ticketId, hours: 1, confidence: "medium", reason: `Fake estimate for #${ticketId}.` })),
     claudeStopReason: "end_turn" as "end_turn" | "refusal" | "max_tokens",
+    /** Claude answers after this long (ms), e.g. to overlap two calls. */
+    answerDelayMs: 0,
     /** Answer the next N judge calls with 429. */
     rateLimitNext: 0,
     /** Retry-After sent with a 429; null = no header. */
@@ -128,6 +130,10 @@ export function fakeAiHandlers(fake: FakeAi): HttpHandler[] {
       if (fake.rateLimitNext > 0) {
         fake.rateLimitNext -= 1;
         return HttpResponse.json({ type: "error", error: { type: "rate_limit_error", message: "slow down" } }, { status: 429, headers: fake.retryAfter ? { "retry-after": fake.retryAfter } : {} });
+      }
+
+      if (fake.answerDelayMs > 0) {
+        await delay(fake.answerDelayMs);
       }
 
       const messages = body.messages as Array<{ content: string }>;

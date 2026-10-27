@@ -53,10 +53,18 @@ async function loadNames(client: SolidtimeClient, connection: Connection): Promi
   };
 }
 
-/** Solidtime has no "get one entry" call: find my entry by id within a one-second window on its start. */
+/** How far after an entry's start the lookup reads (covers its end too, whichever field Solidtime's end filter uses). */
+const ENTRY_LOOKUP_WINDOW_MS = 2 * 86_400_000;
+
+/**
+ * Solidtime has no "get one entry" call: my entry by id, read from my entries
+ * around its start. The window starts a minute early (the start filter may or
+ * may not include an entry starting exactly at it) and runs two days on (the
+ * end filter may apply to the entry's end rather than its start).
+ */
 export async function findMyEntry(client: SolidtimeClient, connection: Connection, entryId: string, entryStart: Date): Promise<SolidtimeTimeEntry | null> {
-  const start = whole(entryStart);
-  const { entries } = await listEntries(client, connection.organizationId, { memberId: connection.memberId, start, end: new Date(start.getTime() + 1000) });
+  const start = new Date(whole(entryStart).getTime() - 60_000);
+  const { entries } = await listEntries(client, connection.organizationId, { memberId: connection.memberId, start, end: new Date(start.getTime() + ENTRY_LOOKUP_WINDOW_MS) });
   return entries.find((entry) => entry.id === entryId) ?? null;
 }
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
+import { EXECUTION_STALE_MS, recoverInterruptedActions } from "../../src/services/actions/action.service.js";
 import { ALPHA_REPO, writeRequests, type FakeAzure } from "../support/fake-azure.js";
 import { ALPHA_RULEBOOK, ALPHA_SETTINGS, useAlphaRulebook } from "../support/test-rulebook.js";
 import {
@@ -622,5 +623,48 @@ describe("hardening", () => {
   it("does not advertise the framework", async () => {
     const response = await agent.get("/");
     expect(response.headers["x-powered-by"]).toBeUndefined();
+  });
+});
+
+describe("interrupted executions and fresh lists", () => {
+  it("marks actions cut off mid-execution as failed with an audit entry, and leaves running ones alone", async () => {
+    const old = await propose(comment("old"));
+    const recent = await propose(comment("recent"));
+    const now = new Date();
+    await prisma.proposedAction.update({ where: { id: old.id }, data: { status: "EXECUTING", decidedAt: new Date(now.getTime() - EXECUTION_STALE_MS - 1000) } });
+    await prisma.proposedAction.update({ where: { id: recent.id }, data: { status: "EXECUTING", decidedAt: new Date(now.getTime() - 60_000) } });
+
+    expect(await recoverInterruptedActions(now)).toBe(1);
+    expect(await prisma.proposedAction.findUnique({ where: { id: old.id } })).toMatchObject({ status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", result: { writeSent: "unknown" } });
+    expect(await auditEvents(old.id)).toEqual(["PROPOSED", "EXECUTION_FAILED"]);
+    expect((await prisma.proposedAction.findUnique({ where: { id: recent.id } }))?.status).toBe("EXECUTING");
+    // Run again: nothing more to do.
+    expect(await recoverInterruptedActions(now)).toBe(0);
+  });
+
+  it("keeps the interrupted outcome if a very long run finishes after the sweep", async () => {
+    const action = await propose(comment("slow"));
+    // The sweep ends the run while Azure is still answering.
+    fake.beforeWrite = async () => {
+      await prisma.proposedAction.update({ where: { id: action.id }, data: { decidedAt: new Date(Date.now() - EXECUTION_STALE_MS - 1000) } });
+      await recoverInterruptedActions();
+    };
+
+    const response = await approve(action);
+    expect(response.status).toBe(200);
+    expect(response.body.action).toMatchObject({ status: "FAILED", errorCode: "EXECUTION_INTERRUPTED" });
+    expect(await auditEvents(action.id)).toEqual(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_FAILED"]);
+  });
+
+  it("shows an approved change in My work at once, not after the list snapshot expires", async () => {
+    await useAlphaRulebook();
+    const before = (await agent.get(azurePath(credentialId, "/my-work")).expect(200)).body.myWork;
+    expect(before.items.find((row: { workItem: { id: number } }) => row.workItem.id === 102).workItem.priority).toBe(2);
+
+    const action = await propose({ kind: "WORK_ITEM_UPDATE_FIELDS", target: { projectId: "Alpha", workItemId: 102 }, params: { priority: 1 } });
+    expect((await approve(action)).status).toBe(200);
+
+    const after = (await agent.get(azurePath(credentialId, "/my-work")).expect(200)).body.myWork;
+    expect(after.items.find((row: { workItem: { id: number } }) => row.workItem.id === 102).workItem.priority).toBe(1);
   });
 });

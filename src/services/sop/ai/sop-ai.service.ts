@@ -261,7 +261,7 @@ export async function listAiChecks(userId: string, credentialId: string, workIte
  * the AI call itself times out after 2 minutes, so 10 minutes is safely past
  * any live run, including one owned by another server instance.
  */
-const STALE_RUN_MS = 10 * 60_000;
+export const STALE_RUN_MS = 10 * 60_000;
 
 const runningByUser = new Map<string, number>();
 let runningGlobal = 0;
@@ -269,6 +269,8 @@ let draining: Promise<void> | null = null;
 let kickAgain = false;
 let stopping = false;
 let wakeTimer: NodeJS.Timeout | null = null;
+/** Checks this process is running now (handed back to the queue if it shuts down before they finish). */
+const runningHere = new Set<string>();
 
 function adjustRunning(userId: string, delta: 1 | -1) {
   runningGlobal += delta;
@@ -493,6 +495,7 @@ async function drain(): Promise<void> {
       }
 
       adjustRunning(candidate.userId, 1);
+      runningHere.add(candidate.id);
       const run: Promise<void> = runCheck(candidate.id)
         .catch(async (error: unknown) => {
           console.error("SOP AI worker error:", { checkId: candidate.id, error });
@@ -500,20 +503,22 @@ async function drain(): Promise<void> {
         })
         .finally(() => {
           adjustRunning(candidate.userId, -1);
+          runningHere.delete(candidate.id);
           active.delete(run);
         });
       active.add(run);
     }
 
     if (active.size === 0) {
-      const waiting = await prisma.sopAiCheck.findFirst({
-        where: { status: "QUEUED", notBefore: { gt: now } },
-        orderBy: { notBefore: "asc" },
-        select: { notBefore: true },
-      });
+      const [waiting, running] = await Promise.all([
+        prisma.sopAiCheck.findFirst({ where: { status: "QUEUED", notBefore: { gt: now } }, orderBy: { notBefore: "asc" }, select: { notBefore: true } }),
+        // A run left RUNNING by a process that died is re-queued once it is stale; wake up for that too.
+        prisma.sopAiCheck.findFirst({ where: { status: "RUNNING", startedAt: { not: null } }, orderBy: { startedAt: "asc" }, select: { startedAt: true } }),
+      ]);
+      const wakes = [waiting?.notBefore?.getTime(), running?.startedAt ? running.startedAt.getTime() + STALE_RUN_MS : undefined].filter((at): at is number => at !== undefined);
 
-      if (waiting?.notBefore) {
-        scheduleWake(waiting.notBefore);
+      if (wakes.length > 0) {
+        scheduleWake(new Date(Math.min(...wakes)));
       }
 
       return;
@@ -564,7 +569,9 @@ export async function recoverSopAiQueue(): Promise<void> {
 
 /**
  * For shutdown: claim no new checks and wait (up to `timeoutMs`) for the
- * running ones, so paid AI calls are not cut off mid-flight.
+ * running ones, so paid AI calls are not cut off mid-flight. Checks still
+ * running after that go back to the queue, so the next start runs them again
+ * instead of leaving them RUNNING.
  */
 export async function stopSopAiWorker(timeoutMs: number): Promise<void> {
   stopping = true;
@@ -575,4 +582,8 @@ export async function stopSopAiWorker(timeoutMs: number): Promise<void> {
   }
 
   await Promise.race([waitForSopAiIdle(), new Promise((resolve) => setTimeout(resolve, timeoutMs).unref())]);
+
+  if (runningHere.size > 0) {
+    await prisma.sopAiCheck.updateMany({ where: { id: { in: [...runningHere] }, status: "RUNNING" }, data: { status: "QUEUED", startedAt: null } });
+  }
 }

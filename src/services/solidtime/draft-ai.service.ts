@@ -158,12 +158,40 @@ function pricingFor(model: AiModelOption, servedBy: string): AiModelOption {
 }
 
 /**
+ * Users with an AI estimate in progress (in this process). One at a time per
+ * user: the daily spend limit is checked before a call and its cost recorded
+ * after, so parallel calls could all pass the check and overshoot it.
+ */
+const estimating = new Set<string>();
+
+/**
  * Asks the user's AI model how many hours the chosen draft rows took, within
  * what is left of the daily target. The draft is rebuilt here from Azure and
  * Solidtime, so nothing the browser sends is trusted. Read-only: nothing is
  * written to Solidtime or Azure; the user still edits and proposes the day.
  */
 export async function estimateDraftHours(
+  userId: string,
+  client: SolidtimeClient,
+  connection: Connection,
+  azure: AzureClient | null,
+  input: { day: string; ticketIds: number[]; plannedHours: number; planned?: Array<{ start: string; end: string }> | undefined },
+  now = new Date()
+): Promise<DraftEstimate> {
+  if (estimating.has(userId)) {
+    throw new AppError(429, "AI_ESTIMATE_IN_PROGRESS", "An AI estimate is already running for you. Wait for it to finish, then try again.");
+  }
+
+  estimating.add(userId);
+
+  try {
+    return await estimateOnce(userId, client, connection, azure, input, now);
+  } finally {
+    estimating.delete(userId);
+  }
+}
+
+async function estimateOnce(
   userId: string,
   client: SolidtimeClient,
   connection: Connection,

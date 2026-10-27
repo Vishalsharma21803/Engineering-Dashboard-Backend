@@ -459,6 +459,20 @@ describe("AI hours for a draft", () => {
     expect(String((judgeCalls()[0]!.body!.messages as Array<{ content: string }>)[0]!.content)).not.toContain("ticketId 102");
   });
 
+  it("runs one estimate per person at a time, so parallel requests cannot overshoot the spend limit", async () => {
+    const connection = await connectSolidtime(agent);
+    await useClaude();
+    ai.answerDelayMs = 300;
+
+    const [first, second] = await Promise.all([estimate(connection, { day: day(), ticketIds: [103] }), estimate(connection, { day: day(), ticketIds: [103] })]);
+    expect([first.status, second.status].sort()).toEqual([200, 429]);
+    expect([first.body.reason, second.body.reason]).toContain("AI_ESTIMATE_IN_PROGRESS");
+    expect(judgeCalls()).toHaveLength(1);
+
+    // Once it finished, the next one runs.
+    await estimate(connection, { day: day(), ticketIds: [103] }).expect(200);
+  });
+
   it("makes no call when the day is already full, and reports bad answers after counting their cost", async () => {
     const connection = await connectSolidtime(agent);
     await useClaude();

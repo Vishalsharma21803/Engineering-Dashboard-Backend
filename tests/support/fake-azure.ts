@@ -357,6 +357,8 @@ export function createFakeAzure() {
     requests: [] as RecordedRequest[],
     nextCommentId: 100,
     nextBuildId: 900,
+    /** Runs before each write is answered (e.g. to change state while Azure is "busy"). */
+    beforeWrite: null as (() => Promise<void>) | null,
   };
 
   return state;
@@ -442,6 +444,10 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
 
     if (fake.missingScopes.has(area)) {
       return new HttpResponse(null, { status: fake.scopeErrorStatus });
+    }
+
+    if (isWrite && fake.beforeWrite) {
+      await fake.beforeWrite();
     }
 
     if (isWrite) {

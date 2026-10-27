@@ -398,6 +398,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   User: 'User',
+  RevokedToken: 'RevokedToken',
   Credential: 'Credential',
   ProposedAction: 'ProposedAction',
   AuditLog: 'AuditLog',
@@ -429,7 +430,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck" | "sopReportRun" | "solidtimeConnection"
+    modelProps: "user" | "revokedToken" | "credential" | "proposedAction" | "auditLog" | "triageMark" | "aiCredential" | "aiPreference" | "aiUsage" | "appSetting" | "rulebook" | "sopProject" | "sopProjectChange" | "sopProjectExclusion" | "userRulebook" | "sopAiCheck" | "sopReportRun" | "solidtimeConnection"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -504,6 +505,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.UserCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.UserCountAggregateOutputType> | number
+        }
+      }
+    }
+    RevokedToken: {
+      payload: Prisma.$RevokedTokenPayload<ExtArgs>
+      fields: Prisma.RevokedTokenFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.RevokedTokenFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.RevokedTokenFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        findFirst: {
+          args: Prisma.RevokedTokenFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.RevokedTokenFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        findMany: {
+          args: Prisma.RevokedTokenFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>[]
+        }
+        create: {
+          args: Prisma.RevokedTokenCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        createMany: {
+          args: Prisma.RevokedTokenCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.RevokedTokenCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>[]
+        }
+        delete: {
+          args: Prisma.RevokedTokenDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        update: {
+          args: Prisma.RevokedTokenUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        deleteMany: {
+          args: Prisma.RevokedTokenDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.RevokedTokenUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.RevokedTokenUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>[]
+        }
+        upsert: {
+          args: Prisma.RevokedTokenUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RevokedTokenPayload>
+        }
+        aggregate: {
+          args: Prisma.RevokedTokenAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateRevokedToken>
+        }
+        groupBy: {
+          args: Prisma.RevokedTokenGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.RevokedTokenGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.RevokedTokenCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.RevokedTokenCountAggregateOutputType> | number
         }
       }
     }
@@ -1742,6 +1817,16 @@ export const UserScalarFieldEnum = {
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
+export const RevokedTokenScalarFieldEnum = {
+  jti: 'jti',
+  userId: 'userId',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
+} as const
+
+export type RevokedTokenScalarFieldEnum = (typeof RevokedTokenScalarFieldEnum)[keyof typeof RevokedTokenScalarFieldEnum]
+
+
 export const CredentialScalarFieldEnum = {
   id: 'id',
   platform: 'platform',
@@ -2419,6 +2504,7 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
   user?: Prisma.UserOmit
+  revokedToken?: Prisma.RevokedTokenOmit
   credential?: Prisma.CredentialOmit
   proposedAction?: Prisma.ProposedActionOmit
   auditLog?: Prisma.AuditLogOmit

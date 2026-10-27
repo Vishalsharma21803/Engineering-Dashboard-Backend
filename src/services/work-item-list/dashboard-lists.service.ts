@@ -36,9 +36,18 @@ const snapshots = new Map<string, { expiresAt: number; lists: DashboardLists }>(
 const rebuilding = new Map<string, Promise<DashboardLists>>();
 
 const keyOf = (userId: string, credentialId: string, projectName: string | undefined) => `${userId}|${credentialId}|${projectName ?? "*"}`;
+/** When each user's lists for a credential were last forgotten (userId|credentialId|): older reads are not cached. */
+const forgottenAt = new Map<string, number>();
 
-/** Called by the dashboard with what it computed. */
-export function rememberDashboardLists(userId: string, credentialId: string, projectName: string | undefined, lists: DashboardLists): void {
+/**
+ * Called by the dashboard with what it computed. `readStartedAt`: when its
+ * Azure reads began; a result read before an approved change is not cached.
+ */
+export function rememberDashboardLists(userId: string, credentialId: string, projectName: string | undefined, lists: DashboardLists, readStartedAt = Date.now()): void {
+  if ((forgottenAt.get(`${userId}|${credentialId}|`) ?? 0) > readStartedAt) {
+    return;
+  }
+
   if (snapshots.size >= MAX_SNAPSHOTS) {
     const oldest = snapshots.keys().next().value;
 
@@ -52,10 +61,26 @@ export function rememberDashboardLists(userId: string, credentialId: string, pro
   snapshots.set(key, { expiresAt: Date.now() + SNAPSHOT_TTL_MS, lists });
 }
 
+/** After an approved change: the dashboard lists are rebuilt on the next read instead of up to a minute later. */
+export function forgetDashboardLists(userId: string, credentialId: string): void {
+  const prefix = `${userId}|${credentialId}|`;
+  forgottenAt.set(prefix, Date.now());
+
+  for (const key of [...snapshots.keys()]) {
+    if (key.startsWith(prefix)) snapshots.delete(key);
+  }
+
+  // A rebuild already under way read Azure before the change: later readers start a fresh one.
+  for (const key of [...rebuilding.keys()]) {
+    if (key.startsWith(prefix)) rebuilding.delete(key);
+  }
+}
+
 /** Exposed for tests. */
 export function clearDashboardLists(): void {
   snapshots.clear();
   rebuilding.clear();
+  forgottenAt.clear();
 }
 
 async function loadLists(client: AzureClient, userId: string, project: { id: string; name: string } | undefined): Promise<DashboardLists> {
@@ -90,7 +115,8 @@ async function loadLists(client: AzureClient, userId: string, project: { id: str
   try {
     return await rebuild;
   } finally {
-    rebuilding.delete(key);
+    // Only this rebuild's entry: a newer one may have started after an approved change.
+    if (rebuilding.get(key) === rebuild) rebuilding.delete(key);
   }
 }
 

@@ -1,8 +1,9 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
 
-import authRoutes from "./routes/auth.routes.js";
+import { createAuthRoutes } from "./routes/auth.routes.js";
 import credentialRoutes from "./routes/credential.routes.js";
 import solidtimeRoutes from "./routes/solidtime.routes.js";
 import azureRoutes from "./routes/azure.routes.js";
@@ -39,10 +40,17 @@ function handleUnexpectedError(error: unknown, req: Request, res: Response, next
     .json({ message: "Something went wrong", reason: "INTERNAL_ERROR" });
 }
 
-export function createApp() {
+export interface AppOptions {
+  /** Rate limits on sign-in and sign-up. Off only in tests that sign up many users from one address. */
+  authRateLimit?: boolean;
+}
+
+export function createApp(options: AppOptions = {}) {
   const app = express();
 
   app.disable("x-powered-by");
+  // Security headers (HSTS, nosniff, frame and referrer policies, a strict CSP). The API serves only JSON.
+  app.use(helmet());
 
   // Behind a reverse proxy (TRUST_PROXY=1 or a hop count/list), req.ip in audit logs is the client's, not the proxy's.
   if (process.env.TRUST_PROXY) {
@@ -80,7 +88,7 @@ export function createApp() {
     }
   });
 
-  app.use("/api/auth", authRoutes);
+  app.use("/api/auth", createAuthRoutes({ rateLimit: options.authRateLimit ?? true }));
   app.use("/api/credentials", credentialRoutes);
   app.use("/api/azure/:credentialId", azureRoutes);
   app.use("/api/actions", actionRoutes);

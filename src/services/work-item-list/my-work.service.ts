@@ -26,18 +26,24 @@ export interface MyWorkSnapshot {
 }
 
 const snapshots = new Map<string, { expiresAt: number; snapshot: MyWorkSnapshot }>();
+/** When each user's lists for a credential were last forgotten (userId|credentialId|): older reads are not cached. */
+const forgottenAt = new Map<string, number>();
 
 function snapshotKey(userId: string, credentialId: string, projectName: string | undefined): string {
   return `${userId}|${credentialId}|${projectName ?? "*"}`;
 }
 
-/** Called by the dashboard with what it computed. */
+/**
+ * Called by the dashboard with what it computed. `readStartedAt`: when its
+ * Azure reads began; a result read before an approved change is not cached.
+ */
 export function rememberMyWork(
   userId: string,
   credentialId: string,
   projectName: string | undefined,
-  input: { workItems: WorkItemSummary[]; compliance: ComplianceResult[]; recommendations: Recommendation[] }
-): void {
+  input: { workItems: WorkItemSummary[]; compliance: ComplianceResult[]; recommendations: Recommendation[] },
+  readStartedAt = Date.now()
+): MyWorkSnapshot {
   const open = input.workItems.filter((item) => item.stateCategory !== "Completed" && item.stateCategory !== "Removed");
   const signals = new Map<number, string[]>();
 
@@ -45,6 +51,12 @@ export function rememberMyWork(
     if (recommendation.target.type === "workItem") {
       signals.set(recommendation.target.id, [...(signals.get(recommendation.target.id) ?? []), ...recommendation.signals]);
     }
+  }
+
+  const snapshot: MyWorkSnapshot = { items: open, compliance: new Map(input.compliance.map((result) => [result.workItemId, result])), signals };
+
+  if ((forgottenAt.get(`${userId}|${credentialId}|`) ?? 0) > readStartedAt) {
+    return snapshot;
   }
 
   // Oldest entries go first once the cap is reached (Map keeps insertion order).
@@ -58,15 +70,24 @@ export function rememberMyWork(
 
   const key = snapshotKey(userId, credentialId, projectName);
   snapshots.delete(key);
-  snapshots.set(key, {
-    expiresAt: Date.now() + SNAPSHOT_TTL_MS,
-    snapshot: { items: open, compliance: new Map(input.compliance.map((result) => [result.workItemId, result])), signals },
-  });
+  snapshots.set(key, { expiresAt: Date.now() + SNAPSHOT_TTL_MS, snapshot });
+  return snapshot;
+}
+
+/** After an approved change: My work is rebuilt from Azure on the next read instead of up to a minute later. */
+export function forgetMyWorkSnapshots(userId: string, credentialId: string): void {
+  const prefix = `${userId}|${credentialId}|`;
+  forgottenAt.set(prefix, Date.now());
+
+  for (const key of [...snapshots.keys()]) {
+    if (key.startsWith(prefix)) snapshots.delete(key);
+  }
 }
 
 /** Exposed for tests. */
 export function clearMyWorkSnapshots(): void {
   snapshots.clear();
+  forgottenAt.clear();
 }
 
 async function loadSnapshot(client: AzureClient, userId: string, projectName: string | undefined, refresh: boolean): Promise<MyWorkSnapshot> {
@@ -84,8 +105,7 @@ async function loadSnapshot(client: AzureClient, userId: string, projectName: st
   // Ticket signals depend only on the ticket and its SOP results.
   const recommendations = buildRecommendations({ workItems, compliance, pullRequests: [], builds: [], now });
 
-  rememberMyWork(userId, client.credentialId, projectName, { workItems, compliance, recommendations });
-  return snapshots.get(key)?.snapshot ?? { items: [], compliance: new Map(), signals: new Map() };
+  return rememberMyWork(userId, client.credentialId, projectName, { workItems, compliance, recommendations }, now.getTime());
 }
 
 /** The user's own AI "fail" verdicts become violations (notice rules: notices), like on the dashboard. */

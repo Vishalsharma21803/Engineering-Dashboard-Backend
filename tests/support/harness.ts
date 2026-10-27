@@ -12,7 +12,8 @@ export type Agent = ReturnType<typeof request.agent>;
 let app: Express | null = null;
 
 export function getApp(): Express {
-  app ??= createApp();
+  // Tests sign up a user per test from one address: no sign-up/sign-in limits here (they have their own test).
+  app ??= createApp({ authRateLimit: false });
   return app;
 }
 

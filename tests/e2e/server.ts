@@ -90,7 +90,8 @@ async function reset(): Promise<void> {
 
 await reset();
 
-const app = createApp();
+// Every Playwright test registers a user from localhost: no auth rate limits.
+const app = createApp({ authRateLimit: false });
 
 // Test-only inspection of what reached "Azure DevOps".
 app.post("/__e2e/reset", async (_req, res) => {

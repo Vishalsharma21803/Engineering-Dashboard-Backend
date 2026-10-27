@@ -72,3 +72,17 @@ export async function getCurrentUser(userId: string) {
     },
   });
 }
+
+/** Ends one sign-in before it expires: its jti is refused from now on. Tokens without a jti (older sign-ins) just expire. */
+export async function revokeToken(userId: string, jti: string, expiresAt: Date): Promise<void> {
+  await prisma.revokedToken.upsert({ where: { jti }, create: { jti, userId, expiresAt }, update: {} });
+}
+
+export async function isTokenRevoked(jti: string): Promise<boolean> {
+  return (await prisma.revokedToken.findUnique({ where: { jti }, select: { jti: true } })) !== null;
+}
+
+/** Revocations of tokens that have expired anyway are no longer needed. */
+export async function purgeExpiredRevocations(now = new Date()): Promise<number> {
+  return (await prisma.revokedToken.deleteMany({ where: { expiresAt: { lt: now } } })).count;
+}

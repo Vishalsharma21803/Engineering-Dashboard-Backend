@@ -1,12 +1,13 @@
-
 import type { Request, Response, NextFunction } from "express";
-import jwt, { type JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
-export function authenticate(
+import { isTokenRevoked } from "../services/auth.service.js";
+
+export async function authenticate(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const token: unknown = req.cookies?.token;
 
   if (typeof token !== "string" || !token) {
@@ -26,24 +27,41 @@ export function authenticate(
     return;
   }
 
+  let decoded: string | jwt.JwtPayload;
+
   try {
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] });
-
-    if (
-      typeof decoded === "string" ||
-      typeof decoded.sub !== "string"
-    ) {
-      res.status(401).json({
-        message: "Invalid authentication token",
-      });
-      return;
-    }
-
-    req.userId = decoded.sub;
-    next();
+    decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] });
   } catch {
     res.status(401).json({
       message: "Invalid or expired authentication token",
     });
+    return;
   }
+
+  if (
+    typeof decoded === "string" ||
+    typeof decoded.sub !== "string"
+  ) {
+    res.status(401).json({
+      message: "Invalid authentication token",
+    });
+    return;
+  }
+
+  // Signed out: logout revoked this token's jti (tokens issued before jti existed simply expire).
+  try {
+    if (typeof decoded.jti === "string" && (await isTokenRevoked(decoded.jti))) {
+      res.status(401).json({
+        message: "This session has ended. Sign in again.",
+      });
+      return;
+    }
+  } catch (error) {
+    console.error("Checking the session failed:", error);
+    res.status(503).json({ message: "Service unavailable", reason: "SERVICE_UNAVAILABLE" });
+    return;
+  }
+
+  req.userId = decoded.sub;
+  next();
 }

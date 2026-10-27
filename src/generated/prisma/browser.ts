@@ -23,6 +23,11 @@ export * from './enums.js';
  */
 export type User = Prisma.UserModel
 /**
+ * Model RevokedToken
+ * Sign-in tokens ended by logout before they expire (by the token's jti). Rows past expiresAt are deleted.
+ */
+export type RevokedToken = Prisma.RevokedTokenModel
+/**
  * Model Credential
  * 
  */

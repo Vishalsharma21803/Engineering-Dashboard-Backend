@@ -1,9 +1,10 @@
 
 import type { Request, Response } from "express";
+import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { registerSchema, loginSchema } from "../schemas/auth.schema.js";
-import { registerUser, loginUser, getCurrentUser } from "../services/auth.service.js";
+import { registerUser, loginUser, getCurrentUser, revokeToken } from "../services/auth.service.js";
 import { isSopAdmin } from "../lib/sop-admin.js";
 
 export async function register(
@@ -87,10 +88,11 @@ export async function login(
       return;
     }
 
+    // jwtid: logout can end this one sign-in (other devices stay signed in).
     const token = jwt.sign(
       { sub: user.id },
       jwtSecret,
-      { expiresIn: "1d", algorithm: "HS256" }
+      { expiresIn: "1d", algorithm: "HS256", jwtid: randomUUID() }
     );
 
     res.cookie("token", token, {
@@ -146,10 +148,29 @@ export async function me(
   }
 }
 
-export function logout(
-  _req: Request,
+export async function logout(
+  req: Request,
   res: Response
-): void {
+): Promise<void> {
+  const token: unknown = req.cookies?.token;
+  const jwtSecret = process.env.JWT_SECRET;
+
+  // A still-valid token is revoked, so a copy of the cookie stops working too. A bad or expired one needs nothing.
+  if (typeof token === "string" && token && jwtSecret) {
+    try {
+      const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] });
+
+      if (typeof decoded !== "string" && typeof decoded.sub === "string" && typeof decoded.jti === "string" && typeof decoded.exp === "number") {
+        await revokeToken(decoded.sub, decoded.jti, new Date(decoded.exp * 1000));
+      }
+    } catch (error) {
+      // Signing out always clears the cookie; a revocation that could not be saved is only logged.
+      if (!(error instanceof jwt.JsonWebTokenError)) {
+        console.error("Revoking the sign-in token failed:", error);
+      }
+    }
+  }
+
   res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

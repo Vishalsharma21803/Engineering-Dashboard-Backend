@@ -21,6 +21,8 @@ import {
   createAzureClientForCredential,
   markCredentialInvalid,
 } from "../azure/azure-context.service.js";
+import { forgetDashboardLists } from "../work-item-list/dashboard-lists.service.js";
+import { forgetMyWorkSnapshots } from "../work-item-list/my-work.service.js";
 import { ExecutionFailure, executeAction, type ExecutionResult } from "./executor.js";
 import { prepareAction, type PreparedAction } from "./prepare.js";
 
@@ -111,6 +113,54 @@ function asRecord(value: Prisma.JsonValue): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+/**
+ * An action still EXECUTING this long after approval was cut off (process
+ * crash or a failed final write). Real runs finish far sooner: requests time
+ * out after seconds, and even a 50-entry Solidtime batch stays well under it.
+ */
+export const EXECUTION_STALE_MS = 30 * 60_000;
+
+/**
+ * Marks actions abandoned mid-execution as FAILED (EXECUTION_INTERRUPTED), with
+ * an audit entry, so they do not stay "executing" forever. Whether the change
+ * reached Azure DevOps or Solidtime is unknown, and the message says so.
+ */
+export async function recoverInterruptedActions(now = new Date()): Promise<number> {
+  const stale = await prisma.proposedAction.findMany({
+    where: { status: ActionStatus.EXECUTING, decidedAt: { lt: new Date(now.getTime() - EXECUTION_STALE_MS) } },
+    select: { id: true, userId: true },
+  });
+  let recovered = 0;
+
+  for (const { id, userId } of stale) {
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.proposedAction.updateMany({
+        where: { id, status: ActionStatus.EXECUTING },
+        data: {
+          status: ActionStatus.FAILED,
+          executedAt: now,
+          errorCode: "EXECUTION_INTERRUPTED",
+          errorMessage: "Cockpit stopped before this change finished. Check the ticket or time entry to see whether it was applied before proposing it again.",
+          result: { writeSent: "unknown" },
+        },
+      });
+
+      if (updated.count > 0) {
+        recovered += 1;
+        await recordAudit(tx, {
+          userId,
+          actionId: id,
+          event: AuditEvent.EXECUTION_FAILED,
+          metadata: { errorCode: "EXECUTION_INTERRUPTED", writeSent: "unknown" },
+          context: { ipAddress: null, userAgent: null },
+        });
+      }
+    });
+  }
+
+  return recovered;
 }
 
 export async function expireStaleActions(userId: string, context: RequestContext): Promise<void> {
@@ -418,6 +468,14 @@ async function runnerFor(userId: string, action: ActionDto): Promise<Runner> {
   };
 }
 
+/** An Azure change (even a failed one may have landed) makes the remembered dashboard lists stale. */
+function forgetListsAfterChange(userId: string, action: ActionDto): void {
+  if (action.credentialId && !action.kind.startsWith("SOLIDTIME_")) {
+    forgetMyWorkSnapshots(userId, action.credentialId);
+    forgetDashboardLists(userId, action.credentialId);
+  }
+}
+
 export async function approveAction(
   userId: string,
   actionId: string,
@@ -493,6 +551,7 @@ export async function approveAction(
   try {
     execution = await runner.run();
   } catch (error) {
+    forgetListsAfterChange(userId, action);
     const { classified, writeSent, partial } = runner.classify(error);
     const failure = { writeSent, ...(partial ?? {}) };
 
@@ -501,8 +560,9 @@ export async function approveAction(
     }
 
     const failed = await prisma.$transaction(async (tx) => {
-      const updated = await tx.proposedAction.update({
-        where: { id: actionId },
+      // Still EXECUTING: a run so long that recoverInterruptedActions already ended it keeps that outcome.
+      const updated = await tx.proposedAction.updateMany({
+        where: { id: actionId, status: ActionStatus.EXECUTING },
         data: {
           status: ActionStatus.FAILED,
           executedAt: new Date(),
@@ -510,8 +570,12 @@ export async function approveAction(
           errorMessage: classified.message,
           result: failure as Prisma.InputJsonValue,
         },
-        select: actionSelect,
       });
+      const row = await tx.proposedAction.findUniqueOrThrow({ where: { id: actionId }, select: actionSelect });
+
+      if (updated.count === 0) {
+        return row;
+      }
 
       await recordAudit(tx, {
         userId,
@@ -521,22 +585,29 @@ export async function approveAction(
         context,
       });
 
-      return updated;
+      return row;
     });
 
     throw new ActionExecutionError(classified.status, classified.code, classified.message, failed);
   }
 
+  forgetListsAfterChange(userId, action);
+
   const succeeded = await prisma.$transaction(async (tx) => {
-    const updated = await tx.proposedAction.update({
-      where: { id: actionId },
+    // Still EXECUTING (see the failure path): the change did run, so it is recorded as succeeded unless already ended.
+    const updated = await tx.proposedAction.updateMany({
+      where: { id: actionId, status: ActionStatus.EXECUTING },
       data: {
         status: ActionStatus.SUCCEEDED,
         executedAt: new Date(),
         result: { ...execution.result, verification: execution.verification } as Prisma.InputJsonValue,
       },
-      select: actionSelect,
     });
+    const row = await tx.proposedAction.findUniqueOrThrow({ where: { id: actionId }, select: actionSelect });
+
+    if (updated.count === 0) {
+      return row;
+    }
 
     await recordAudit(tx, {
       userId,
@@ -546,7 +617,7 @@ export async function approveAction(
       context,
     });
 
-    return updated;
+    return row;
   });
 
   return { action: succeeded, verification: execution.verification };

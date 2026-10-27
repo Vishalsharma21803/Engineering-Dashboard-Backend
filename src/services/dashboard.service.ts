@@ -132,7 +132,7 @@ export async function getDashboard(
       workItems: allWorkItems,
       compliance: sectionData(compliance, []),
       recommendations,
-    });
+    }, now.getTime());
   }
 
   // The paged dashboard lists (actions, pull requests, pipeline runs) read these.
@@ -140,7 +140,7 @@ export async function getDashboard(
     recommendations,
     pullRequests: pullRequests.data,
     builds: pipelines.data,
-  });
+  }, now.getTime());
 
   return {
     identity,
