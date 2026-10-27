@@ -34,7 +34,10 @@ describe("platform registry", () => {
       expect.objectContaining({ name: "patToken", type: "secret", required: true }),
     ]);
     expect(platforms.find((platform: { id: string }) => platform.id === "claude")).toMatchObject({ aiProvider: "CLAUDE", fields: [expect.objectContaining({ name: "apiKey", type: "secret" })] });
-    expect(JSON.stringify(platforms)).not.toContain("connect");
+    // Only the public definition is sent: exactly these keys, nothing that runs on the server.
+    for (const platform of platforms) {
+      expect(Object.keys(platform).every((key) => ["id", "category", "label", "description", "fields", "helpUrl", "aiProvider"].includes(key))).toBe(true);
+    }
   });
 
   it("adds an Azure DevOps credential through the platform's own rules, into the same list as before", async () => {
