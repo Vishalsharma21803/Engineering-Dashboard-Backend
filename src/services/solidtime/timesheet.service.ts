@@ -80,7 +80,7 @@ export async function getTimesheet(
   client: SolidtimeClient,
   connection: Connection,
   azure: AzureClient | null,
-  input: { from: string; to: string; page: number; ticketPage: number; now?: Date }
+  input: { from: string; to: string; day?: string | undefined; page: number; ticketPage: number; now?: Date }
 ): Promise<Timesheet> {
   const now = input.now ?? new Date();
   const { rows, timeZone, truncated, checked } = await myEntries(client, connection, azure, input.from, input.to, now);
@@ -115,7 +115,8 @@ export async function getTimesheet(
     days: [...days.entries()].filter(([day]) => day >= input.from && day <= input.to).map(([day, seconds]) => ({ day, seconds })),
     byTicket: paginate([...tickets.values()].sort((a, b) => b.seconds - a.seconds), input.ticketPage),
     unlinkedSeconds,
-    entries: paginate(rows, input.page),
+    // The list can be one day of the period; totals above always cover all of it.
+    entries: paginate(input.day ? rows.filter((row) => zonedDay(new Date(row.start), timeZone) === input.day) : rows, input.page),
     ticketsChecked: checked,
     truncated,
   };

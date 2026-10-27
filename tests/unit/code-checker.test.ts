@@ -249,7 +249,7 @@ describe("links and pull requests", () => {
   it("pr-reviewer, pr-target-branch and pr-approved-before-merge", () => {
     expect(run("pr-reviewer", dossier({ pullRequests: [pr()] })).status).toBe("pass");
     expect(run("pr-reviewer", dossier({ pullRequests: [pr({ reviewers: [{ id: "me", displayName: "Me", vote: 10 }] })] })).status).toBe("fail");
-    expect(run("pr-target-branch", dossier({ pullRequests: [pr({ targetBranch: "main" })] }))).toMatchObject({ status: "fail", evidence: ["PR !7 → main"] });
+    expect(run("pr-target-branch", dossier({ pullRequests: [pr({ targetBranch: "main" })] }))).toMatchObject({ status: "fail", evidence: ["PR 7 → main"] });
     expect(run("pr-target-branch", dossier({ pullRequests: [pr({ targetBranch: "main", status: "abandoned" })] })).status).toBe("pass");
 
     const merged = pr({ status: "completed", closedDate: new Date("2025-10-10T05:00:00Z"), unresolvedThreads: 0 });

@@ -438,7 +438,7 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
       }
 
       const lonely = open.filter((pr) => !pr.reviewers.some((reviewer) => !sameActor(reviewer, pr.createdBy)));
-      return lonely.length === 0 ? PASS : fail("Pull request has no reviewer besides its author.", lonely.map((pr) => `PR !${pr.pullRequestId}`));
+      return lonely.length === 0 ? PASS : fail("Pull request has no reviewer besides its author.", lonely.map((pr) => `PR ${pr.pullRequestId}`));
     },
   },
 
@@ -458,7 +458,7 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
       const wrong = activePrs(dossier).filter((pr) => pr.targetBranch !== target);
       return wrong.length === 0
         ? PASS
-        : fail(`Pull request targets the wrong branch; it should target ${target}.`, wrong.map((pr) => `PR !${pr.pullRequestId} → ${pr.targetBranch}`));
+        : fail(`Pull request targets the wrong branch; it should target ${target}.`, wrong.map((pr) => `PR ${pr.pullRequestId} → ${pr.targetBranch}`));
     },
   },
 
@@ -483,8 +483,8 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
       }
 
       const problems = reviewed.flatMap((pr) => [
-        ...(pr.reviewers.some((reviewer) => reviewer.vote >= 5 && !sameActor(reviewer, pr.createdBy)) ? [] : [`PR !${pr.pullRequestId} merged without an approval`]),
-        ...(pr.unresolvedThreads ? [`PR !${pr.pullRequestId} merged with ${pr.unresolvedThreads} open comment thread(s)`] : []),
+        ...(pr.reviewers.some((reviewer) => reviewer.vote >= 5 && !sameActor(reviewer, pr.createdBy)) ? [] : [`PR ${pr.pullRequestId} merged without an approval`]),
+        ...(pr.unresolvedThreads ? [`PR ${pr.pullRequestId} merged with ${pr.unresolvedThreads} open comment thread${pr.unresolvedThreads === 1 ? "" : "s"}`] : []),
       ]);
 
       return problems.length === 0 ? PASS : fail("Pull request merged without approval or with open comments.", problems);
@@ -616,7 +616,7 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
         ? PASS
         : fail(
             `Moved to ${stage} before every pull request was merged.`,
-            late.map((pr) => (pr.status === "completed" ? `PR !${pr.pullRequestId} merged after the move` : `PR !${pr.pullRequestId} is ${pr.status}`))
+            late.map((pr) => (pr.status === "completed" ? `PR ${pr.pullRequestId} merged after the move` : `PR ${pr.pullRequestId} is ${pr.status}`))
           );
     },
   },
@@ -636,7 +636,7 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
       }
 
       const open = considered.filter((pr) => pr.status !== "completed");
-      return open.length === 0 ? PASS : fail("A linked pull request is not merged.", open.map((pr) => `PR !${pr.pullRequestId} is ${pr.status}`));
+      return open.length === 0 ? PASS : fail("A linked pull request is not merged.", open.map((pr) => `PR ${pr.pullRequestId} is ${pr.status}`));
     },
   },
 

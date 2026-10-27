@@ -38,6 +38,7 @@ const CLIENT_WORK = "dddddddd-0000-4000-8000-0000000000c1";
 const SUPPORT = "dddddddd-0000-4000-8000-0000000000c2";
 const BETA_ONE = "dddddddd-0000-4000-8000-0000000000c3";
 const BETA_TWO = "dddddddd-0000-4000-8000-0000000000c4";
+const shiftUtcDay = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 const hoursAgo = (hours: number) => `${new Date(Date.now() - hours * 3_600_000).toISOString().slice(0, 19)}Z`;
 const st = (connection: string, path: string) => `/api/solidtime/${connection}${path}`;
 
@@ -296,6 +297,13 @@ describe("time on tickets", () => {
 
     const unlinked = (await agent.get(st(connection, `/unlinked?from=${today}`)).expect(200)).body.entries;
     expect(unlinked.items.map((entry: { description: string }) => entry.description).sort()).toEqual(["#999999 not a ticket", "Standup"]);
+    // One day's entries within a longer period: the totals still cover the period.
+    const yesterday = shiftUtcDay(today, -1);
+    addEntry(solidtime, { start: `${yesterday}T09:00:00Z`, end: `${yesterday}T10:00:00Z`, description: "#101 Implement login" });
+    const oneDay = (await agent.get(st(connection, `/timesheet?from=${yesterday}&to=${today}&day=${yesterday}`)).expect(200)).body.timesheet;
+    expect(oneDay.totalSeconds).toBe(3 * 3600);
+    expect(oneDay.entries.items.map((entry: { description: string }) => entry.description)).toEqual(["#101 Implement login"]);
+    await agent.get(st(connection, `/timesheet?from=${today}&day=${yesterday}`)).expect(400);
     await agent.get(st(connection, "/timesheet?from=2026-01-01&to=2026-03-01")).expect(400);
     await agent.get(st(connection, "/timesheet?from=2026-02-31")).expect(400);
   });
@@ -514,6 +522,8 @@ describe("nudges and reports", () => {
 
     const accuracy = (await agent.get(st(connection, `/reports/accuracy?from=${weekAgo}&to=${today}`)).expect(200)).body.accuracy;
     expect(accuracy.byType.items).toEqual([expect.objectContaining({ label: "Task", tickets: 1, trackedHours: 3, estimateHours: 2, ratio: 1.5, overEstimate: 1 })]);
+    expect(accuracy.totals).toEqual({ tickets: 1, trackedHours: 3, estimateHours: 2, ratio: 1.5, overEstimate: 1 });
+    expect(accuracy.byTicket.items).toEqual([expect.objectContaining({ trackedHours: 3, estimateHours: 2, ratio: 1.5, type: "Task" })]);
 
     const csv = await agent.get(st(connection, `/reports/weekly.csv?week=${weekAgo}`)).expect(200);
     expect(csv.headers["content-type"]).toContain("text/csv");

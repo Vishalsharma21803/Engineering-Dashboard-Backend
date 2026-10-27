@@ -287,10 +287,10 @@ export async function prepareAction(
           {
             field: "Linked pull request",
             before: null,
-            after: `!${pr.pullRequestId} ${pr.title} (${pr.repository.name})`,
+            after: `PR ${pr.pullRequestId} ${pr.title} (${pr.repository.name})`,
           },
         ],
-        summary: `Link PR !${pr.pullRequestId} to #${workItem.id} ${title(workItem)}`,
+        summary: `Link PR ${pr.pullRequestId} to #${workItem.id} ${title(workItem)}`,
         baseRev: workItem.rev,
       };
     }

@@ -38,7 +38,7 @@ function reviewState(pr: PullRequestSummary): ReviewState {
 export function matchesPullRequest(pr: PullRequestSummary, filters: PullRequestFilters, team: boolean): boolean {
   const search = filters.search.toLowerCase();
 
-  if (search && !`!${pr.pullRequestId} ${pr.title} ${pr.sourceBranch}`.toLowerCase().includes(search)) return false;
+  if (search && !`!${pr.pullRequestId} PR ${pr.pullRequestId} ${pr.title} ${pr.sourceBranch}`.toLowerCase().includes(search)) return false;
   if (filters.repository && pr.repositoryName !== filters.repository) return false;
   if (filters.review === "unresolved" ? !pr.unresolvedThreads : filters.review && reviewState(pr) !== filters.review) return false;
   if (filters.person && (team ? pr.createdBy.displayName !== filters.person : pr.myRole !== filters.person)) return false;

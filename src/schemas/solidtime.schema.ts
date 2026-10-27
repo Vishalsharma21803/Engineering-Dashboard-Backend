@@ -67,9 +67,11 @@ export const daySchema = z
 
 /** At most 31 days; to defaults to from. */
 export const dayRangeQuerySchema = z
-  .object({ from: daySchema, to: daySchema.optional(), page: pageQuery, ticketPage: pageQuery })
+  /** `day`: list only that day's entries (totals still cover from–to). */
+  .object({ from: daySchema, to: daySchema.optional(), day: daySchema.optional(), page: pageQuery, ticketPage: pageQuery })
   .transform((value) => ({ ...value, to: value.to ?? value.from }))
   .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
+  .refine((value) => value.day === undefined || (value.day >= value.from && value.day <= value.to), { message: "The day is outside the period", path: ["day"] })
   .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 31, { message: "Choose at most 31 days", path: ["to"] });
 
 export const ticketIdParamSchema = z.coerce.number().int().positive().max(2_147_483_647);
@@ -97,7 +99,7 @@ export const draftEstimateBodySchema = z.object({
 });
 
 export const accuracyQuerySchema = z
-  .object({ from: daySchema, to: daySchema, personPage: pageQuery, typePage: pageQuery })
+  .object({ from: daySchema, to: daySchema, personPage: pageQuery, typePage: pageQuery, ticketPage: pageQuery })
   .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
   .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 366, { message: "Choose at most a year", path: ["to"] });
 

@@ -177,7 +177,7 @@ function pullRequestRecommendation(pr: PullRequestSummary, now: Date): Recommend
     id: `pr:${pr.repositoryId}:${pr.pullRequestId}`,
     score,
     category: "REVIEW",
-    title: `PR !${pr.pullRequestId} ${pr.title}`,
+    title: `PR ${pr.pullRequestId} ${pr.title}`,
     reasons,
     signals,
     target: {

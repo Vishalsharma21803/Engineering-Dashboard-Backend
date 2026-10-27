@@ -55,6 +55,12 @@ function timeNudge(credentialId: string, key: string, score: number, title: stri
  * user's Solidtime connection linked to it. Never fails the dashboard: any
  * Solidtime problem means no nudges.
  */
+/** "Mon, Oct 26" for a YYYY-MM-DD day (the day itself, not shifted by any time zone). */
+function readableDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, date)));
+}
+
 export async function timeNudges(userId: string, azureCredentialId: string, identity: AzureIdentity, records: WorkItemRecord[], now = new Date()): Promise<Recommendation[]> {
   try {
     const linked = await linkedSolidtimeFor(userId, azureCredentialId, { background: true });
@@ -130,7 +136,7 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
     const previousTotal = hours(total(previousEntries.entries));
 
     if (previousTotal < target) {
-      nudges.push(timeNudge(link.credentialId, `time:day:${previous}`, 8, `Only ${previousTotal} h tracked on ${previous}`, `Your target is ${target} h a working day`, `TIME:DAY:${previous}`));
+      nudges.push(timeNudge(link.credentialId, `time:day:${previous}`, 8, `Only ${previousTotal} h tracked on ${readableDay(previous)}`, `Your target is ${target} h a working day`, `TIME:DAY:${previous}`));
     }
 
     if (isWorkingDay(today) && localHour(now, timeZone) >= END_OF_DAY_HOUR) {

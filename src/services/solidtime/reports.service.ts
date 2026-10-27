@@ -31,10 +31,25 @@ export interface AccuracyRow {
   overEstimate: number;
 }
 
+export interface AccuracyTicket {
+  ticketId: number;
+  title: string;
+  type: string;
+  projectName: string;
+  trackedHours: number;
+  estimateHours: number;
+  /** Tracked ÷ estimate (1 = on estimate). */
+  ratio: number;
+}
+
 export interface AccuracyReport {
   from: string;
   to: string;
   team: boolean;
+  /** All tickets compared together. */
+  totals: { tickets: number; trackedHours: number; estimateHours: number; ratio: number | null; overEstimate: number };
+  /** Each ticket, furthest over its estimate first. */
+  byTicket: Page<AccuracyTicket>;
   byPerson: Page<AccuracyRow>;
   byType: Page<AccuracyRow>;
   ticketsWithoutEstimate: number;
@@ -66,7 +81,7 @@ export async function estimateAccuracy(
   client: SolidtimeClient,
   connection: Connection,
   azure: AzureClient | null,
-  input: { from: string; to: string; personPage: number; typePage: number }
+  input: { from: string; to: string; personPage: number; typePage: number; ticketPage?: number }
 ): Promise<AccuracyReport> {
   if (!azure) {
     throw new AppError(409, "AZURE_NOT_LINKED", "Link this Solidtime connection to an Azure DevOps organization first");
@@ -109,6 +124,7 @@ export async function estimateAccuracy(
   const byPerson = new Map<string, { label: string; items: Array<{ tracked: number; estimate: number }> }>();
   const byType = new Map<string, { label: string; items: Array<{ tracked: number; estimate: number }> }>();
   let withoutEstimate = 0;
+  const compared: AccuracyTicket[] = [];
 
   for (const [id, seconds] of perTicket) {
     const ticket: TicketInfo | undefined = tickets.get(id);
@@ -120,6 +136,15 @@ export async function estimateAccuracy(
     }
 
     const tracked = seconds / 3600;
+    compared.push({
+      ticketId: id,
+      title: ticket.title,
+      type: ticket.type,
+      projectName: ticket.projectName,
+      trackedHours: Math.round(tracked * 100) / 100,
+      estimateHours: ticket.originalEstimate,
+      ratio: Math.round((tracked / ticket.originalEstimate) * 100) / 100,
+    });
     const typeGroup = byType.get(ticket.type) ?? { label: ticket.type, items: [] };
     typeGroup.items.push({ tracked, estimate: ticket.originalEstimate });
     byType.set(ticket.type, typeGroup);
@@ -132,10 +157,24 @@ export async function estimateAccuracy(
     byPerson.set(ownerKey, personGroup);
   }
 
+  const trackedTotal = compared.reduce((sum, item) => sum + item.trackedHours, 0);
+  const estimateTotal = compared.reduce((sum, item) => sum + item.estimateHours, 0);
+
   return {
     from: input.from,
     to: input.to,
     team,
+    totals: {
+      tickets: compared.length,
+      trackedHours: Math.round(trackedTotal * 100) / 100,
+      estimateHours: Math.round(estimateTotal * 100) / 100,
+      ratio: estimateTotal > 0 ? Math.round((trackedTotal / estimateTotal) * 100) / 100 : null,
+      overEstimate: compared.filter((item) => item.trackedHours > item.estimateHours).length,
+    },
+    byTicket: paginate(
+      compared.sort((a, b) => b.ratio - a.ratio || a.ticketId - b.ticketId),
+      input.ticketPage ?? 1
+    ),
     byPerson: paginate(accuracyRows(byPerson), input.personPage),
     byType: paginate(accuracyRows(byType), input.typePage),
     ticketsWithoutEstimate: withoutEstimate,
