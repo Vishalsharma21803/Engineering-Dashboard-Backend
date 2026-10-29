@@ -87,6 +87,7 @@ const TRACKED_FIELDS = [
   WORK_ITEM_FIELDS.storyPoints,
   WORK_ITEM_FIELDS.effort,
   WORK_ITEM_FIELDS.dueDate,
+  WORK_ITEM_FIELDS.assignedTo,
 ];
 
 export function kindOf(profile: ProjectProfile, type: string): ItemKind | null {

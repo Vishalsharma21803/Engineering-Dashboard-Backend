@@ -59,7 +59,7 @@ export function createApp(options: AppOptions = {}) {
   }
 
   const allowedOrigins = (
-    process.env.FRONTEND_ORIGIN ?? "http://localhost:5173"
+    process.env.FRONTEND_ORIGIN ?? "http://localhost:5180"
   )
     .split(",")
     .map((origin) => origin.trim())

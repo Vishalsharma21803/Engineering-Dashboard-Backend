@@ -3,6 +3,7 @@ import { AzureApiError } from "../lib/azure/errors.js";
 import { createLimiter, mapWithLimit } from "../lib/azure/limiter.js";
 import type { BuildSummary, Dashboard, Section } from "../types/azure.types.js";
 import { checkCompliance } from "./compliance/compliance.service.js";
+import { applyAiReviews } from "./sop/ai/sop-ai-review.js";
 import { getIdentity } from "./azure/identity.service.js";
 import { listMyLatestBuilds } from "./azure/pipelines.service.js";
 import { getProject, listProjects } from "./azure/projects.service.js";
@@ -105,6 +106,12 @@ export async function getDashboard(
       : Promise.resolve(unavailable<never>(projectsSection.reason)),
   ]);
 
+  // The user's saved AI reviews (no AI call here): clears and AI-only rules count everywhere on the dashboard.
+  const reviewed: typeof compliance =
+    compliance.status === "ok" && compliance.data
+      ? { ...compliance, data: await applyAiReviews(userId, client.credentialId, compliance.data, new Map(allWorkItems.map((item) => [item.id, item.rev]))) }
+      : compliance;
+
   const openWorkItems = allWorkItems.filter(
     (item) => item.stateCategory !== "Completed" && item.stateCategory !== "Removed"
   );
@@ -117,7 +124,7 @@ export async function getDashboard(
   const recommendations = [
     ...buildRecommendations({
       workItems: allWorkItems,
-      compliance: sectionData(compliance, []),
+      compliance: sectionData(reviewed, []),
       pullRequests: sectionData(pullRequests, []),
       builds: sectionData(pipelines, []),
       now,
@@ -151,7 +158,7 @@ export async function getDashboard(
       workItems,
       pullRequests,
       pipelines,
-      compliance,
+      compliance: reviewed,
     },
     recommendations,
   };

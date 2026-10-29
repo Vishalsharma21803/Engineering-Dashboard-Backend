@@ -39,15 +39,32 @@ describe("starter rulebook", () => {
     const parsed = parseRulebook(STARTER_RULEBOOK, "default");
     expect(parsed.errors).toEqual([]);
     expect(parsed.projects).toEqual([]);
-    expect(parsed.cards.length).toBe(28);
+    expect(parsed.cards.length).toBe(32);
+    // Every starter rule is decided by code; the AI only reviews on the ticket page.
+    expect(parsed.cards.filter((card) => card.checker === "ai")).toEqual([]);
     expect(new Set(parsed.cards.map((card) => card.id)).size).toBe(parsed.cards.length);
   });
 
-  it("checks estimate, time and due-date rules at Estimations, the rest once work starts", () => {
+  it("checks estimate and due-date rules at Estimations, the WI-002 pre-work items before Active", () => {
     const cards = parseRulebook(STARTER_RULEBOOK, "default").cards;
-    const when = (id: string) => cards.find((card) => card.id === id)?.when;
-    expect(["STR-04", "STR-05", "STR-14"].map(when)).toEqual(["at-estimation", "at-estimation", "at-estimation"]);
-    expect(when("STR-08")).toBe("before-active");
+    const card = (id: string) => cards.find((candidate) => candidate.id === id);
+    expect(["STR-04", "STR-05"].map((id) => card(id)?.when)).toEqual(["at-estimation", "at-estimation"]);
+    expect(["STR-08", "STR-09", "STR-15", "STR-16"].map((id) => card(id)?.when)).toEqual(["before-active", "before-active", "before-active", "before-active"]);
+    // STR-14 asked for completed work at Estimations; daily time is TIME-01 now.
+    expect(card("STR-14")).toBeUndefined();
+    expect(card("TIME-01")).toMatchObject({ uses: "daily-time-update", when: "always" });
+  });
+
+  it("starts the new WI-002 rules as notices", () => {
+    const cards = parseRulebook(STARTER_RULEBOOK, "default").cards;
+    expect(["STR-09", "STR-16", "TIME-01", "TRN-01", "REV-01", "DONE-10"].map((id) => cards.find((card) => card.id === id)?.severity)).toEqual([
+      "notice",
+      "notice",
+      "notice",
+      "notice",
+      "notice",
+      "notice",
+    ]);
   });
 
   it("keeps the old starter projects for the one-time move, with Estimations as its own stage", () => {
@@ -146,7 +163,8 @@ describe("parseRulebook", () => {
 
     expect(parseRulebook(personalCard, "default").errors[0]?.message).toContain("reserved for personal rules");
     expect(parseRulebook("---\nkind: project\nproject: x\n---\n", "personal").errors[0]?.message).toContain("Projects tab");
-    expect(parseRulebook(CODE_CARD.replace("DEV-01", "MY-02"), "personal").errors[0]?.message).toContain("must use checker: ai");
+    // Personal rules may use a built-in check too.
+    expect(parseRulebook(CODE_CARD.replace("DEV-01", "MY-02"), "personal")).toMatchObject({ errors: [], cards: [{ id: "MY-02", checker: "code" }] });
     expect(parseRulebook(personalCard, "personal").cards[0]).toMatchObject({ id: "MY-01", origin: "personal" });
   });
 

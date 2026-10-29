@@ -242,7 +242,8 @@ export const PROJECT_BLOCK_MOVED =
   "Projects are set up on the SOP rules → Projects tab now, not in the rulebook. Remove this block (its settings were moved there).";
 
 /**
- * Parses and validates a rulebook. `personal` files may only override or add MY- AI rules.
+ * Parses and validates a rulebook. `personal` files may only override default rules or add MY- rules
+ * (a built-in check with its params, or an AI rule).
  * `legacyProjects` reads old `kind: project` blocks (only for moving them to the Projects screen).
  */
 export function parseRulebook(
@@ -381,11 +382,6 @@ export function parseRulebook(
     } as const;
 
     if (headerData.checker === "code") {
-      if (scope === "personal") {
-        result.errors.push({ line: block.headerLine, message: `${id}: personal rules must use checker: ai (code checks are built in)` });
-        continue;
-      }
-
       if (!headerData.uses) {
         result.errors.push({ line: block.headerLine, message: `${id}: code rules need uses: <built-in check>` });
         continue;

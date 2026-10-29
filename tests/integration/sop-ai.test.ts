@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearAzureCache } from "../../src/lib/azure/cache.js";
 import { clearOpenCodeModelsCache } from "../../src/lib/ai/opencode.js";
 import { clearOpenRouterModelsCache } from "../../src/lib/ai/openrouter.js";
 import { prisma } from "../../src/lib/prisma.js";
@@ -8,7 +9,7 @@ import { server } from "../setup.js";
 import { VALID_CLAUDE_KEY, VALID_OPENCODE_KEY, VALID_OPENROUTER_KEY, createFakeAi, fakeAiHandlers, type FakeAi } from "../support/fake-ai.js";
 import { writeRequests, type FakeAzure } from "../support/fake-azure.js";
 import { installFakeAzure, resetDatabase, setupUser, type Agent } from "../support/harness.js";
-import { useAlphaRulebook } from "../support/test-rulebook.js";
+import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
 
 let ai: FakeAi;
 let azure: FakeAzure;
@@ -68,11 +69,9 @@ describe("AI SOP checks", () => {
 
     const queued = await check([101, 102, 103, 104, 106]);
 
-    expect(queued.queued).toEqual([101, 102, 106]);
-    expect(queued.skipped).toEqual([
-      { workItemId: 103, reason: "NO_AI_RULES" },
-      { workItemId: 104, reason: "PROJECT_NOT_CONFIGURED" },
-    ]);
+    // 103 has no AI-only rule, but code rules the AI may draft for (here: nothing failing, so no AI call).
+    expect(queued.queued).toEqual([101, 102, 103, 106]);
+    expect(queued.skipped).toEqual([{ workItemId: 104, reason: "PROJECT_NOT_CONFIGURED" }]);
 
     const byId = await results([101, 102, 106]);
     const first = byId.get(101);
@@ -82,6 +81,7 @@ describe("AI SOP checks", () => {
         ruleId: "T-05",
         ruleTitle: "Approach is described",
         severity: "medium",
+        review: "ai-rule",
         verdict: "fail",
         reason: "No plan is written down.",
         advice: "Write the approach as 3-5 concrete steps.",
@@ -102,7 +102,7 @@ describe("AI SOP checks", () => {
       output_config: { effort: "high", format: { type: "json_schema" } },
       system: [{ type: "text", cache_control: { type: "ephemeral" } }],
     });
-    expect(JSON.stringify(call?.body)).toContain("Judge these rules for the ticket below: T-05.");
+    expect(JSON.stringify(call?.body)).toContain("Review these rules for the ticket below: T-05.");
 
     const usage = await prisma.aiUsage.findMany();
     expect(usage).toHaveLength(3);
@@ -180,7 +180,8 @@ describe("AI SOP checks", () => {
     await agent.post("/api/ai/credentials").send({ provider: "OPENROUTER", apiKey: VALID_OPENROUTER_KEY }).expect(201);
     await agent.put("/api/ai/preferences").send({ provider: "OPENROUTER", model: "deepseek/deepseek-r1", effort: "MEDIUM", dailyLimitUsd: 2, acceptDataCollection: false }).expect(200);
     ai.rateLimitNext = 1;
-    await check([101, 102]);
+    // The newest request runs first: 101 is queued last, so it meets the rate limit.
+    await check([102, 101]);
 
     const paused = await results([101, 102]);
     // The provider's own words are kept, so people can see which limit was hit.
@@ -331,5 +332,70 @@ describe("AI SOP checks", () => {
   it("validates requests", async () => {
     await agent.post(`/api/sop/ai/${credentialId}/check`).send({ workItemIds: [] }).expect(400);
     await agent.get(`/api/sop/ai/${credentialId}/results?ids=abc`).expect(400);
+  });
+});
+
+describe("AI review of code gaps", () => {
+  const APPROACH_RULE = `
+---
+id: T-07
+title: Approach before starting
+checker: code
+uses: approach-present
+params: { min_steps: 3 }
+applies_to: [task]
+when: before-active
+---
+**Rule:** A technical approach with 3 steps.
+`;
+
+  const detail = async () => (await agent.get(`/api/azure/${credentialId}/projects/Alpha/work-items/101`).expect(200)).body.workItem.compliance;
+
+  it("clears a gap the AI shows is met (with a real quote), everywhere, until the ticket changes", async () => {
+    await prisma.rulebook.update({ where: { version: 1 }, data: { content: `${ALPHA_RULEBOOK}${APPROACH_RULE}` } });
+    await useClaude();
+    // #101's only approach is one line, so code finds a gap.
+    expect((await detail()).violations).toEqual([expect.objectContaining({ ruleId: "T-07", phase: "earlier" })]);
+
+    ai.verdicts = (rules) =>
+      rules.map((ruleId) => ({
+        ruleId,
+        verdict: "pass",
+        reason: "The approach is written as one sentence but covers the steps.",
+        advice: "",
+        quotes: ruleId === "T-07" ? ["use JWT in httpOnly cookie"] : [],
+        fix: { target: "none", text: "" },
+      }));
+    await check([101]);
+    const prompt = JSON.stringify(judgeCalls()[0]?.body);
+    expect(prompt).toContain("RULE T-07 (GAP)");
+    expect(prompt).toContain("Code found: The approach has 1 step; it needs at least 3.");
+
+    const cleared = await detail();
+    expect(cleared.violations).toEqual([]);
+    expect(cleared.cleared).toEqual([{ ruleId: "T-07", ruleTitle: "Approach before starting", reason: expect.stringContaining("covers the steps"), quotes: ["use JWT in httpOnly cookie"] }]);
+    expect(cleared.aiReview).toMatchObject({ status: "DONE", outdated: false });
+
+    // The dashboard shows the saved review without calling the AI.
+    const calls = judgeCalls().length;
+    const dashboard = (await agent.get(`/api/azure/${credentialId}/dashboard`).expect(200)).body.dashboard;
+    const fromDashboard = dashboard.sections.compliance.data.find((result: { workItemId: number }) => result.workItemId === 101);
+    expect(fromDashboard).toMatchObject({ violations: [], cleared: [expect.objectContaining({ ruleId: "T-07" })] });
+    expect(judgeCalls()).toHaveLength(calls);
+
+    // The ticket changed: the clear no longer applies until it is reviewed again.
+    azure.workItems.get(101)!.rev += 1;
+    clearAzureCache();
+    const changed = await detail();
+    expect(changed).toMatchObject({ cleared: [], aiReview: { outdated: true } });
+    expect(changed.violations).toEqual([expect.objectContaining({ ruleId: "T-07" })]);
+  });
+
+  it("reports how long the user's checks take per model", async () => {
+    await useClaude();
+    ai.verdicts = (rules) => rules.map((ruleId) => ({ ruleId, verdict: "pass", reason: "ok", advice: "", quotes: [], fix: { target: "none", text: "" } }));
+    await check([101, 102]);
+    const timing = (await agent.get("/api/ai/sop-check-timing").expect(200)).body.timing;
+    expect(timing).toMatchObject({ days: 30, models: [{ provider: "CLAUDE", model: "claude-sonnet-5-5", checks: 2, averageSeconds: expect.any(Number), rateLimited: 0, failed: 0 }] });
   });
 });

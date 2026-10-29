@@ -1,11 +1,17 @@
-import { findingSeverity, type AiRuleCard, type ProjectProfile } from "../rulebook.types.js";
-import type { FixTarget, Verdict, VerdictOutput } from "./sop-ai-prompt.js";
+import { findingSeverity, type ProjectProfile } from "../rulebook.types.js";
+import type { FixTarget, ReviewItem, ReviewMode, Verdict, VerdictOutput } from "./sop-ai-prompt.js";
 
 export interface AiRuleResult {
   ruleId: string;
   ruleTitle: string;
   /** "fail" rules are high, "warn" rules medium, "notice" rules low (same as code rules). */
   severity: "high" | "medium" | "low";
+  /**
+   * How the verdict reads (see ReviewMode): on a "gap", "pass" clears the code finding;
+   * on "quality", "fail" is advice only; "draft" only offers a fix; "ai-rule" is the rule's own verdict.
+   * Missing on results saved before the AI became a reviewer (those are not applied).
+   */
+  review?: ReviewMode;
   verdict: Verdict;
   reason: string;
   /** What to do, for the developer to read; never posted. */
@@ -76,13 +82,14 @@ function checkFix(fix: VerdictOutput["results"][number]["fix"], profile: Project
 /**
  * Trust nothing the model says without checking it against the ticket:
  * every requested rule answered once, quotes really in the ticket, fixes
- * applicable. Unverifiable verdicts become "unsure".
+ * applicable. Unverifiable verdicts become "unsure"; clearing a code gap
+ * needs at least one verified quote, and a plain-fact gap is never cleared.
  */
-export function verifyVerdicts(output: VerdictOutput, cards: AiRuleCard[], ticketText: string, profile: ProjectProfile): AiRuleResult[] {
+export function verifyVerdicts(output: VerdictOutput, items: ReviewItem[], ticketText: string, profile: ProjectProfile): AiRuleResult[] {
   const haystack = normalize(ticketText);
 
-  return cards.map((card) => {
-    const base = { ruleId: card.id, ruleTitle: card.title, severity: findingSeverity(card.severity) };
+  return items.map(({ card, mode }) => {
+    const base = { ruleId: card.id, ruleTitle: card.title, severity: findingSeverity(card.severity), review: mode };
     const answers = output.results.filter((result) => result.ruleId.trim().toUpperCase() === card.id.toUpperCase());
     const answer = answers[0];
 
@@ -102,6 +109,16 @@ export function verifyVerdicts(output: VerdictOutput, cards: AiRuleCard[], ticke
     if (verdict !== "unsure" && quotes.length > 0 && verified.length === 0) {
       verdict = "unsure";
       notes.push("None of the quoted text is in the ticket, so the verdict was changed to unsure.");
+    }
+
+    if (mode === "gap" && verdict === "pass" && verified.length === 0) {
+      verdict = "unsure";
+      notes.push("The model did not quote the text that meets the rule, so the gap stays.");
+    }
+
+    if (mode === "draft" && verdict === "pass") {
+      verdict = "unsure";
+      notes.push("This gap is a plain fact the AI cannot overrule.");
     }
 
     const fix = verdict === "fail" ? checkFix(answer.fix, profile, card.id) : { fix: null, note: null };

@@ -31,9 +31,9 @@ export interface FakeVerdict {
   fix: { target: string; text: string };
 }
 
-/** The rule ids a judge request asks about ("Judge these rules for the ticket below: A, B."). */
+/** The rule ids a judge request asks about ("Review these rules for the ticket below: A, B."). */
 export function requestedRules(userText: string): string[] {
-  const match = /Judge these rules for the ticket below: ([^\n]+)\./.exec(userText);
+  const match = /Review these rules for the ticket below: ([^\n]+)\./.exec(userText);
   return match?.[1] ? match[1].split(", ") : [];
 }
 

@@ -39,14 +39,17 @@ when: always
 `;
     await prisma.rulebook.create({ data: { version: 1, content: old, note: "old" } });
 
+    // Each update that changes something saves one version: the first (levels) and the fourth (new WI-002 rules).
     const rulebook = (await agent.get("/api/sop/rulebook").expect(200)).body.rulebook;
-    expect(rulebook).toMatchObject({ version: 2, note: expect.stringContaining("Rule levels updated") });
+    expect(rulebook).toMatchObject({ version: 3, note: expect.stringContaining("TRN-01 comment on every state change") });
+    expect((await prisma.rulebook.findUnique({ where: { version: 2 } }))?.note).toContain("Rule levels updated");
     expect(rulebook.content).toContain("severity: notice");
     expect(rulebook.content).not.toContain("ALW-01");
+    expect(rulebook.content).toContain("id: TRN-01");
 
     // Runs once; the old version stays restorable.
     await agent.get("/api/sop/rulebook").expect(200);
-    expect(await prisma.rulebook.count()).toBe(2);
+    expect(await prisma.rulebook.count()).toBe(3);
     expect((await prisma.rulebook.findUnique({ where: { version: 1 } }))?.content).toBe(old);
   });
 });

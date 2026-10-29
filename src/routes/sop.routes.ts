@@ -13,7 +13,10 @@ import {
   listDefaultVersionsController,
   listPersonalVersionsController,
   saveDefaultRulebookController,
+  editDefaultRulesController,
+  editPersonalRulesController,
   enqueueAiChecksController,
+  getRulesListController,
   listAiChecksController,
   listAzureProjectsForSopController,
   listProjectChangesController,
@@ -46,6 +49,9 @@ router.get("/my-rules/versions/:version", getPersonalVersionController);
 router.put("/my-rules", requireJson, savePersonalRulebookController);
 router.post("/validate", requireJson, validateRulebookController);
 router.get("/effective", getEffectiveRulebookController);
+router.get("/rules", getRulesListController);
+router.post("/my-rules/edits", requireJson, editPersonalRulesController);
+router.post("/rulebook/edits", requireJson, requireSopAdmin, editDefaultRulesController);
 // Projects: anyone may set one up (changes are recorded); each user chooses which are checked for them.
 router.get("/projects", listProjectSetUpsController);
 router.put("/projects/:projectName", requireJson, saveProjectSetUpController);

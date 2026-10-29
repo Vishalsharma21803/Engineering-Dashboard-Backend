@@ -366,6 +366,8 @@ export interface ComplianceViolation {
   /** Specific facts behind the message (dates, PR ids, branch names). */
   evidence: string[];
   suggestedAction: SuggestedAction | null;
+  /** "earlier": the rule belongs to a stage the ticket has already moved past. */
+  phase: "now" | "earlier";
 }
 
 export interface ComplianceRuleRef {
@@ -385,17 +387,28 @@ export interface ComplianceResult {
   /** Why a project is or is not checked. */
   sopProject: "checked" | "not-set-up" | "switched-off";
   rulebook: { defaultVersion: number; personalVersion: number };
-  /** SOP gaps: counted in badges, filters, scores and reports. */
+  /** SOP gaps: missed in a stage the ticket has moved past (or due now). Counted in badges, filters, scores and reports. */
   violations: ComplianceViolation[];
   /** Shown on the ticket only; never counted as gaps. */
   notices: ComplianceViolation[];
+  /** Needed in the ticket's current stage; not gaps yet. */
+  todos: ComplianceViolation[];
   passedRules: ComplianceRuleRef[];
-  /** Not decidable yet (a time window is still open). */
-  pendingRules: Array<ComplianceRuleRef & { message: string }>;
   /** Could not be checked (data unavailable or not applicable to this setup). */
   skippedRules: Array<ComplianceRuleRef & { reason: string }>;
-  /** AI-judged rules that apply; they are checked separately. */
-  aiRules: ComplianceRuleRef[];
+  /** Rules only AI can judge (personal AI rules); judged on the ticket page. `due`: a fail counts as a gap. */
+  aiRules: Array<ComplianceRuleRef & { due: boolean; phase: "now" | "earlier" }>;
+  /** Code findings the user's AI review showed to be met (with its reason and verified quotes). */
+  cleared: Array<ComplianceRuleRef & { reason: string; quotes: string[] }>;
+  /** The user's last AI review of this ticket; null when there is none. */
+  aiReview: ComplianceAiReview | null;
+}
+
+export interface ComplianceAiReview {
+  status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+  checkedAt: string | null;
+  /** The ticket changed since the review: its clears no longer apply. */
+  outdated: boolean;
 }
 
 export type RecommendationCategory =

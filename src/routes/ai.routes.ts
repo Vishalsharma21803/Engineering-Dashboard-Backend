@@ -5,6 +5,7 @@ import {
   deleteAiCredentialController,
   getAiPreferenceController,
   getAiUsageController,
+  getSopCheckTimingController,
   getOpenRouterAllowlistController,
   listAiCredentialsController,
   listModelsController,
@@ -32,6 +33,7 @@ router.get("/models", listModelsController);
 router.get("/preferences", getAiPreferenceController);
 router.put("/preferences", requireJson, updateAiPreferenceController);
 router.get("/usage", getAiUsageController);
+router.get("/sop-check-timing", getSopCheckTimingController);
 router.get("/settings/openrouter-models", getOpenRouterAllowlistController);
 router.put("/settings/openrouter-models", requireJson, requireSopAdmin, setOpenRouterAllowlistController);
 

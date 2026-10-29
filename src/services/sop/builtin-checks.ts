@@ -10,6 +10,22 @@ import { SOP_STAGES } from "./rulebook.types.js";
 const hours = z.number().positive().max(24 * 30);
 const stage = z.enum(SOP_STAGES);
 
+/** What a stage comment may be required to mention. */
+export const STAGE_COMMENT_DETAILS = [
+  "eta-date",
+  "ac-dod",
+  "approver",
+  "branch",
+  "target-branch",
+  "pr-number",
+  "reviewer",
+  "tests",
+  "merge",
+  "build-number",
+  "done",
+] as const;
+export type StageCommentDetail = (typeof STAGE_COMMENT_DETAILS)[number];
+
 export const BUILTIN_CHECKS = {
   "title-length": {
     description: "Title length is within limits and does not end with a period.",
@@ -113,7 +129,50 @@ export const BUILTIN_CHECKS = {
     description: "At least one attachment is added before the given stage.",
     params: z.object({ before: stage.default("uat") }).strict(),
   },
+  "approach-present": {
+    description:
+      "A technical approach with enough steps is in the description or a comment. Its heading may be Approach, Technical approach, Pseudocode, Pseudo code, Plan, Implementation plan, Steps or Solution, in any case; steps may be numbered, bulleted or one per line.",
+    params: z.object({ min_steps: z.number().int().min(1).max(20).default(3) }).strict(),
+  },
+  "tl-approval": {
+    description:
+      "A team lead listed in the project set-up (not the ticket's developer) approves in a comment written after the approach (approved, LGTM, looks good, go ahead, good to go...; \"not approved yet\" and questions do not count).",
+    params: z.object({}).strict(),
+  },
+  "dod-present": {
+    description: "The description, acceptance criteria or a comment has a Definition of Done (or DoD) section with items, or says the acceptance criteria are the DoD.",
+    params: z.object({ min_items: z.number().int().min(1).max(20).default(1) }).strict(),
+  },
+  "stage-comment": {
+    description:
+      "Around the latest move into a stage, the person who moved it (or the assignee) comments with the listed details. Branch, PR number and reviewer are only required when one is linked.",
+    params: z
+      .object({
+        stage,
+        requires: z.array(z.enum(STAGE_COMMENT_DETAILS)).max(STAGE_COMMENT_DETAILS.length).default([]),
+        hours_after: hours.default(24),
+        minutes_before: z.number().int().min(0).max(24 * 60).default(60),
+      })
+      .strict(),
+  },
+  "assigned-to-reviewer": {
+    description: "While in Review the ticket is assigned to a reviewer of its pull request or a team lead (without either, to someone other than the person who moved it to Review).",
+    params: z.object({}).strict(),
+  },
 } as const;
+
+/** Which checks the AI review may clear (the code looks for wording) or only draft a fix for (the gap is a plain fact). */
+export const AI_REVIEW: Partial<Record<BuiltinCheckName, "judge" | "draft">> = {
+  "approach-present": "judge",
+  "tl-approval": "judge",
+  "dod-present": "judge",
+  "stage-comment": "judge",
+  "field-present": "draft",
+  "tags-present": "draft",
+  "transition-comment": "draft",
+  "estimate-change-comment": "draft",
+  "due-date-change-comment": "draft",
+};
 
 export type BuiltinCheckName = keyof typeof BUILTIN_CHECKS;
 

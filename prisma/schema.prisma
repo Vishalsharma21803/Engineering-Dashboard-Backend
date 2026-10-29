@@ -369,8 +369,10 @@ model SopAiCheck {
   inputHash    String
   /// Solidtime hours the check was made with (null: none linked); reused when Solidtime cannot be read.
   trackedHours Float?
+  /// Ticket revision the results were judged on; a newer ticket makes them outdated (clears stop applying).
+  ticketRev    Int?
   status       SopAiStatus @default(QUEUED)
-  /// Verified verdicts: [{ ruleId, ruleTitle, verdict, reason, quotes, fix }].
+  /// Verified verdicts: [{ ruleId, ruleTitle, review, verdict, reason, quotes, fix }].
   results      Json?
   /// Why the check failed or was skipped (AI_KEY_INVALID, DAILY_LIMIT_REACHED, ...).
   errorReason  String?

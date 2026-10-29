@@ -11,6 +11,8 @@ export interface RuleLevelUpdate {
   removed: Set<string>;
   /** Cards replaced by the starter's (their checker changed). */
   replaced: Set<string>;
+  /** New starter cards added at the end, unless the rulebook already has a rule with that id. */
+  added?: string[];
   note: string;
 }
 
@@ -44,6 +46,18 @@ export const RULE_LEVEL_UPDATES: RuleLevelUpdate[] = [
     note:
       "PR-01 (no pull request linked) and STR-09 (TL approval) are notices; ALW-02 removed; STR-14 no longer asks for the due date; " +
       "PR-05 and ACT-06 only ask for the PR or branch when one is linked.",
+  },
+  {
+    key: "sop.ruleLevelsUpdated.4",
+    notices: new Set(),
+    removed: new Set(["STR-14"]),
+    // Code now decides whether these exist (wording-tolerant); the AI review on the ticket page can clear or improve them.
+    replaced: new Set(["STR-08", "STR-09", "STR-15", "ACT-06", "PR-05", "TST-02"]),
+    added: ["STR-16", "TIME-01", "TRN-01", "REV-01", "DONE-10"],
+    note:
+      "STR-08, STR-09, STR-15, ACT-06, PR-05 and TST-02 are code checks (the AI review on the ticket page can clear or improve them); " +
+      "STR-14 removed (estimate is STR-05, daily time is TIME-01); new notices: STR-16 target completion, TIME-01 daily time, " +
+      "TRN-01 comment on every state change, REV-01 assigned to the reviewer, DONE-10 final comment.",
   },
 ];
 
@@ -82,9 +96,19 @@ export function applyRuleLevels(content: string, update: RuleLevelUpdate): { con
       const replacement = [...(starter.get(id) ?? [])];
       const at = replacement.findIndex((line) => SEVERITY_LINE.test(line));
 
-      // Keep the level the SOP owner chose for this rule.
-      if (at !== -1 && severity !== "warn") {
+      // Keep the level the SOP owner chose for this rule (no severity line means they never chose one).
+      if (at !== -1 && severityAt !== -1) {
         replacement[at] = `severity: ${severity}`;
+      }
+
+      // And which tickets and when it applies (the check itself changes, so its settings do not carry over).
+      for (const key of ["applies_to", "when"]) {
+        const owner = block.findIndex((line, index) => index > 0 && index < headerEnd && line.startsWith(`${key}:`));
+        const starterAt = replacement.findIndex((line) => line.startsWith(`${key}:`));
+
+        if (owner !== -1 && starterAt !== -1) {
+          replacement[starterAt] = block[owner] as string;
+        }
       }
 
       output.push(...replacement);
@@ -98,6 +122,17 @@ export function applyRuleLevels(content: string, update: RuleLevelUpdate): { con
       output.push(...block);
     } else {
       output.push(...block);
+    }
+  }
+
+  const present = new Set(spans.flatMap((span) => (typeof span.header?.id === "string" ? [span.header.id] : [])));
+
+  for (const id of update.added ?? []) {
+    const block = starter.get(id);
+
+    if (block && !present.has(id)) {
+      // Each block runs up to the next "---", so a trailing blank line keeps the file readable.
+      output.push(...(output.at(-1)?.trim() === "" ? [] : [""]), ...block);
     }
   }
 

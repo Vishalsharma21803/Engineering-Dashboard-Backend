@@ -1,10 +1,22 @@
 import type { SuggestedAction } from "../../types/azure.types.js";
 import { WORK_ITEM_FIELDS } from "../azure/work-items.service.js";
-import type { BuiltinCheckName } from "./builtin-checks.js";
+import { toIdentityRef } from "../azure/mappers.js";
+import type { BuiltinCheckName, StageCommentDetail } from "./builtin-checks.js";
 import type { DossierNeed, StageEntry, TicketDossier } from "./dossier.js";
 import { numberField, stageOf } from "./dossier.js";
 import type { CodeRuleCard, ItemKind, SopStage } from "./rulebook.types.js";
 import { SOP_STAGES } from "./rulebook.types.js";
+import {
+  MENTIONS,
+  findApproachSection,
+  findDodSection,
+  isApproval,
+  isListedPerson,
+  mentionsAnyDate,
+  mentionsPerson,
+  mentionsPullRequest,
+  mentionsWord,
+} from "./sop-text.js";
 
 export type CheckOutcome =
   | { status: "pass" }
@@ -27,6 +39,8 @@ interface CheckDefinition {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+/** Only the start of a long comment is searched for a stage comment's details. */
+const MAX_COMMENT_CHARS = 5_000;
 const MAX_LISTED = 5;
 const PASS: CheckOutcome = { status: "pass" };
 
@@ -75,6 +89,29 @@ export function enteredAt(dossier: TicketDossier, stage: SopStage): Date | null 
 
   // History unavailable or truncated: the current stage still proves the ticket got there.
   if (dossier.stage !== null && stageIndex(dossier.stage) >= target) {
+    const { stateChangeDate, changedDate, createdDate } = dossier.workItem;
+    return new Date(stateChangeDate ?? changedDate ?? createdDate ?? 0);
+  }
+
+  return null;
+}
+
+/** The ticket moved to a stage after `stage` at some point (moving back later does not undo it). */
+export function movedPast(dossier: TicketDossier, stage: SopStage): boolean {
+  const target = stageIndex(stage);
+  const later = (stage: SopStage | null) => stage !== null && stageIndex(stage) > target;
+  return (dossier.stageHistory ?? []).some((entry) => later(entry.stage)) || later(dossier.stage);
+}
+
+/** The latest move into exactly `stage`; null if the ticket never got there. */
+export function lastEnteredAt(dossier: TicketDossier, stage: SopStage): Date | null {
+  const entry = (dossier.stageHistory ?? []).filter((item) => item.stage === stage).at(-1);
+
+  if (entry) {
+    return entry.at;
+  }
+
+  if (dossier.stage === stage) {
     const { stateChangeDate, changedDate, createdDate } = dossier.workItem;
     return new Date(stateChangeDate ?? changedDate ?? createdDate ?? 0);
   }
@@ -155,6 +192,111 @@ function positive(value: number | null): boolean {
 
 function activePrs(dossier: TicketDossier) {
   return (dossier.pullRequests ?? []).filter((pr) => pr.status !== "abandoned");
+}
+
+/* ------------------------------------------------------- text-based checks */
+
+/** Comments oldest first (the API returns newest first). */
+function commentsInOrder(dossier: TicketDossier) {
+  return [...(dossier.comments ?? [])].sort((a, b) => new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime());
+}
+
+export interface FoundApproach {
+  steps: number;
+  /** When it was written: a comment's date; null for the description (it may have been edited any time). */
+  at: Date | null;
+  where: string;
+}
+
+/** The approach with the most steps that meets `minSteps`, else the best one found (or null). */
+export function findApproach(dossier: TicketDossier, minSteps: number): FoundApproach | null {
+  const candidates: FoundApproach[] = [];
+  // In a bug's description a plain "Steps" list is usually how to reproduce it.
+  const description = findApproachSection(dossier.description, { bareSteps: dossier.kind !== "bug" });
+
+  if (description) {
+    candidates.push({ steps: description.items, at: null, where: `Description: "${description.heading}"` });
+  }
+
+  for (const comment of commentsInOrder(dossier)) {
+    const found = findApproachSection(comment.text);
+
+    if (found) {
+      candidates.push({ steps: found.items, at: new Date(comment.createdDate), where: `Comment by ${comment.createdBy.displayName}: "${found.heading}"` });
+    }
+  }
+
+  return candidates.find((candidate) => candidate.steps >= minSteps) ?? candidates.sort((a, b) => b.steps - a.steps)[0] ?? null;
+}
+
+const DETAIL_LABELS: Record<StageCommentDetail, string> = {
+  "eta-date": "an ETA date",
+  "ac-dod": "that AC/DoD were reviewed",
+  approver: "who approved the approach",
+  branch: "the branch name",
+  "target-branch": "the base/target branch",
+  "pr-number": "the PR number",
+  reviewer: "the reviewer",
+  tests: "the test status",
+  merge: "that it was merged",
+  "build-number": "the build or deployment number",
+  done: "that the work is done",
+};
+
+/** Whether `text` covers one required detail; null when the detail does not apply to this ticket (nothing linked). */
+function coversDetail(dossier: TicketDossier, detail: StageCommentDetail, fullText: string): boolean | null {
+  const text = fullText.slice(0, MAX_COMMENT_CHARS);
+  const prIds = dossier.workItem.links.pullRequests.map((link) => link.pullRequestId);
+
+  switch (detail) {
+    case "eta-date":
+      return MENTIONS.eta.test(text) || mentionsAnyDate(text);
+    case "ac-dod":
+      return MENTIONS.acDod.test(text);
+    case "approver":
+      return MENTIONS.approval.test(text) || dossier.profile.roles.tl.some((name) => mentionsPerson(text, { displayName: name }));
+    case "branch": {
+      if (dossier.branches.length === 0) return null;
+      const id = String(dossier.workItem.id);
+      return dossier.branches.some(
+        (branch) => mentionsWord(text, branch.refName) || mentionsWord(text, branch.refName.split("/").at(-1) ?? "") || (/\bbranch\b/i.test(text) && text.includes(id))
+      );
+    }
+    case "target-branch": {
+      // Only asked for when something was branched or merged ("from develop", "merged into develop").
+      if (dossier.branches.length === 0 && prIds.length === 0) return null;
+      const targets = [dossier.profile.prTargetBranch, ...(dossier.pullRequests ?? []).map((pr) => pr.targetBranch)].filter((name): name is string => Boolean(name));
+      return targets.length === 0 ? null : targets.some((name) => mentionsWord(text, name));
+    }
+    case "pr-number":
+      return prIds.length === 0 ? null : prIds.some((id) => mentionsPullRequest(text, id));
+    case "reviewer": {
+      if (prIds.length === 0) return null;
+      const reviewers = (dossier.pullRequests ?? []).flatMap((pr) => pr.reviewers.filter((reviewer) => !sameActor(reviewer, pr.createdBy)));
+      return MENTIONS.reviewer.test(text) || reviewers.some((reviewer) => mentionsPerson(text, reviewer));
+    }
+    case "tests":
+      return MENTIONS.tests.test(text);
+    case "merge":
+      return MENTIONS.merge.test(text);
+    case "build-number":
+      return MENTIONS.build.test(text);
+    case "done":
+      return MENTIONS.done.test(text);
+  }
+}
+
+/** The assignee at `at`, from the assignment history (the current one when it never changed after). */
+function assigneeAt(dossier: TicketDossier, at: Date) {
+  const changes = (dossier.fieldChanges ?? []).filter((change) => change.field === WORK_ITEM_FIELDS.assignedTo);
+  const before = changes.filter((change) => change.at <= at).at(-1);
+
+  if (before) {
+    return toIdentityRef(before.newValue);
+  }
+
+  const after = changes.find((change) => change.at > at);
+  return after ? toIdentityRef(after.oldValue) : dossier.workItem.assignedTo;
 }
 
 /* ----------------------------------------------------------------- checks */
@@ -697,6 +839,178 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
       return dossier.attachments.some((attachment) => attachment.addedAt === null || attachment.addedAt <= entered)
         ? PASS
         : fail(`No attachment (evidence) before moving to ${stage}.`);
+    },
+  },
+
+  "approach-present": {
+    needs: ["comments"],
+    run: ({ dossier, params }) => {
+      const minSteps = params.min_steps as number;
+      const found = findApproach(dossier, minSteps);
+
+      if (found && found.steps >= minSteps) {
+        return PASS;
+      }
+
+      return found
+        ? fail(`The approach has ${found.steps} step${found.steps === 1 ? "" : "s"}; it needs at least ${minSteps}.`, [found.where], action(dossier, "WORK_ITEM_COMMENT", { text: "" }))
+        : fail(
+            `No technical approach found: a heading such as Approach, Pseudocode, Plan or Steps followed by at least ${minSteps} steps, in the description or a comment.`,
+            [],
+            action(dossier, "WORK_ITEM_COMMENT", { text: "" })
+          );
+    },
+  },
+
+  "tl-approval": {
+    needs: ["comments", "updates"],
+    run: ({ dossier }) => {
+      const leads = dossier.profile.roles.tl;
+
+      if (leads.length === 0) {
+        return skip("The project has no team lead listed (SOP rules → Projects)");
+      }
+
+      if (dossier.comments === null) {
+        return skip("Comments unavailable");
+      }
+
+      const approach = findApproach(dossier, 1);
+      // The developer is whoever had the ticket when the lead commented (it may move to the lead later, e.g. for review).
+      const byLead = commentsInOrder(dossier).filter((comment) => {
+        const developer = assigneeAt(dossier, new Date(comment.createdDate));
+        return isListedPerson(comment.createdBy, leads) && !(developer && sameActor(comment.createdBy, developer));
+      });
+      const approvals = byLead.filter((comment) => isApproval(comment.text));
+      // An approval only counts after the approach (a description approach may be edited any time, so it has no date).
+      const valid = approvals.filter((comment) => !approach?.at || new Date(comment.createdDate) >= approach.at);
+      const quoted = (comments: typeof byLead) => comments.map((comment) => `${comment.createdBy.displayName}: ${comment.text.slice(0, 120)}`);
+
+      if (valid.length > 0) {
+        return PASS;
+      }
+
+      if (approvals.length > 0) {
+        return fail("The team lead's approval was written before the approach.", quoted(approvals));
+      }
+
+      return fail(
+        byLead.length > 0 ? "A team lead commented but did not approve the approach." : `No approval from a team lead (${leads.join(", ")}).`,
+        quoted(byLead),
+        action(dossier, "WORK_ITEM_COMMENT", { text: "" })
+      );
+    },
+  },
+
+  "dod-present": {
+    needs: ["comments"],
+    run: ({ dossier, params }) => {
+      const minItems = params.min_items as number;
+      const sources = [dossier.description, dossier.acceptanceCriteria, ...commentsInOrder(dossier).map((comment) => comment.text)];
+      const found = sources.map(findDodSection).filter((section) => section !== null);
+
+      if (found.some((section) => section.items >= minItems)) {
+        return PASS;
+      }
+
+      return fail(
+        found.length > 0
+          ? `The Definition of Done has too few items; it needs at least ${minItems}.`
+          : 'No Definition of Done (a "Definition of Done" or "DoD" section with items) in the description, acceptance criteria or comments.',
+        found.map((section) => section.heading),
+        action(dossier, "WORK_ITEM_COMMENT", { text: "" })
+      );
+    },
+  },
+
+  "stage-comment": {
+    needs: ["updates", "comments", "pullRequests"],
+    run: ({ dossier, params, now }) => {
+      const stage = params.stage as SopStage;
+      const requires = params.requires as StageCommentDetail[];
+
+      if (dossier.comments === null) {
+        return skip("Comments unavailable");
+      }
+
+      const entry = (dossier.stageHistory ?? []).filter((item) => item.stage === stage).at(-1);
+
+      if (!entry) {
+        return skip(`Never moved to ${stage}`);
+      }
+
+      const from = new Date(entry.at.getTime() - (params.minutes_before as number) * 60_000);
+      const windowEnd = new Date(entry.at.getTime() + (params.hours_after as number) * HOUR_MS);
+      // An automatic move (PR completion, pipeline) has no person to comment; anyone's comment counts then.
+      const anyone = isServiceIdentity(entry);
+      const candidates = dossier.comments.filter((comment) => {
+        const at = new Date(comment.createdDate);
+        return at >= from && at <= windowEnd && (anyone || sameActor(comment.createdBy, entry.by) || sameActor(comment.createdBy, dossier.workItem.assignedTo));
+      });
+      // Details that apply to this ticket (no branch linked: the branch is not required, and so on).
+      const applicable = requires.filter((detail) => coversDetail(dossier, detail, "") !== null);
+      const wanted = applicable.map((detail) => DETAIL_LABELS[detail]).join(", ");
+      const best = candidates
+        .map((comment) => ({ comment, missing: applicable.filter((detail) => !coversDetail(dossier, detail, comment.text)) }))
+        .sort((a, b) => a.missing.length - b.missing.length)[0];
+      const when = formatDate(entry.at, dossier.profile.timeZone);
+
+      if (best && best.missing.length === 0) {
+        return PASS;
+      }
+
+      if (now < windowEnd) {
+        return { status: "pending", message: `Comment on the move to ${entry.value}${wanted ? ` with ${wanted}` : ""}.` };
+      }
+
+      if (best) {
+        return fail(
+          `The comment on the move to ${entry.value} (${when}) does not mention ${best.missing.map((detail) => DETAIL_LABELS[detail]).join(", ")}.`,
+          [`${best.comment.createdBy.displayName}: ${best.comment.text.slice(0, 160)}`],
+          action(dossier, "WORK_ITEM_COMMENT", { text: "" })
+        );
+      }
+
+      return fail(
+        `No comment when the ticket moved to ${entry.value} (${when}${entry.by ? ` by ${entry.by.displayName}` : ""}).`,
+        wanted ? [`It should mention ${wanted}.`] : [],
+        action(dossier, "WORK_ITEM_COMMENT", { text: "" })
+      );
+    },
+  },
+
+  "assigned-to-reviewer": {
+    needs: ["updates", "pullRequests"],
+    run: ({ dossier }) => {
+      const history = dossier.stageHistory ?? [];
+      const entered = history.filter((item) => item.stage === "review").at(-1);
+
+      if (!entered) {
+        return skip("Never in Review");
+      }
+
+      const left = history.find((item) => item.at > entered.at && item.stage !== "review");
+      const assignee = left ? assigneeAt(dossier, left.at) : dossier.workItem.assignedTo;
+      const reviewers = (dossier.pullRequests ?? []).flatMap((pr) => pr.reviewers.filter((reviewer) => !sameActor(reviewer, pr.createdBy)));
+      const leads = dossier.profile.roles.tl;
+
+      if (!assignee) {
+        return fail("The ticket was unassigned while in Review.");
+      }
+
+      if (reviewers.some((reviewer) => sameActor(reviewer, assignee)) || isListedPerson(assignee, leads)) {
+        return PASS;
+      }
+
+      // Nobody to compare with: it should at least have moved on from the developer.
+      if (reviewers.length === 0 && leads.length === 0) {
+        return sameActor(assignee, entered.by) ? fail(`In Review the ticket stayed with ${assignee.displayName}, who moved it there.`) : PASS;
+      }
+
+      return fail(
+        `In Review the ticket was assigned to ${assignee.displayName}, not to a reviewer or team lead.`,
+        [...new Set([...reviewers.map((reviewer) => reviewer.displayName), ...leads])].map((name) => `Could be: ${name}`)
+      );
     },
   },
 };

@@ -4,6 +4,7 @@ import { mergeRulebooks, type EffectiveRulebook } from "./rulebook.merge.js";
 import { ensureProjectsMoved, getProjectProfiles, getSharedProjectProfile } from "./sop-projects.service.js";
 import { parseRulebook } from "./rulebook.parser.js";
 import { ensureRuleLevelsUpdated } from "./rule-levels.js";
+import { applyRuleEdits, type RuleEdit } from "./rulebook.edits.js";
 import type { ParsedRulebook, ProjectProfile, RulebookError } from "./rulebook.types.js";
 import { STARTER_RULEBOOK } from "./starter-rulebook.js";
 
@@ -165,6 +166,45 @@ export async function savePersonalRulebook(userId: string, content: string) {
   await prisma.userRulebook.create({ data: { userId, version: (latest?.version ?? 0) + 1, content } });
 
   return getPersonalRulebook(userId);
+}
+
+function versionConflict(): AppError {
+  return new AppError(409, "RULEBOOK_CHANGED", "The rules were changed elsewhere since you opened them. Reload and try again.");
+}
+
+/** Two saves at once both take the next version number; the later one is a conflict, not a server error. */
+async function savingNewVersion<T>(save: () => Promise<T>): Promise<T> {
+  try {
+    return await save();
+  } catch (error) {
+    if ((error as { code?: unknown }).code === "P2002") {
+      throw versionConflict();
+    }
+
+    throw error;
+  }
+}
+
+/** Changes from the rules list, saved as a new version of the user's own rules. */
+export async function editPersonalRules(userId: string, baseVersion: number, edits: RuleEdit[]) {
+  const current = await getPersonalRulebook(userId);
+
+  if (current.version !== baseVersion) {
+    throw versionConflict();
+  }
+
+  return savingNewVersion(() => savePersonalRulebook(userId, applyRuleEdits(current.content, "personal", edits)));
+}
+
+/** Changes from the rules list to the default rules (SOP owners), saved as a new version. */
+export async function editDefaultRules(userId: string, baseVersion: number, edits: RuleEdit[], note: string | undefined) {
+  const current = await getDefaultRulebook();
+
+  if (current.version !== baseVersion) {
+    throw versionConflict();
+  }
+
+  return savingNewVersion(() => saveDefaultRulebook(applyRuleEdits(current.content, "default", edits), userId, note ?? "Changed from the rules list"));
 }
 
 export interface EffectiveRulebookInfo extends EffectiveRulebook {

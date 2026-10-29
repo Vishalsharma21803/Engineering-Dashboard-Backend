@@ -304,6 +304,7 @@ export const SopAiCheckScalarFieldEnum = {
   projectName: 'projectName',
   inputHash: 'inputHash',
   trackedHours: 'trackedHours',
+  ticketRev: 'ticketRev',
   status: 'status',
   results: 'results',
   errorReason: 'errorReason',

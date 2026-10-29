@@ -13,7 +13,7 @@ assertServerConfig();
 
 const app = createApp();
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 4000;
 /** How long a deploy waits for in-flight AI checks before exiting. */
 const SHUTDOWN_GRACE_MS = 30_000;
 /** How often interrupted actions and expired sign-out records are cleaned up. */

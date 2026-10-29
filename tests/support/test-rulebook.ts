@@ -1,3 +1,4 @@
+import { RULE_LEVEL_UPDATES } from "../../src/services/sop/rule-levels.js";
 import { prisma } from "../../src/lib/prisma.js";
 
 /** The fake "Alpha" project's SOP set-up (Beta stays not set up). */
@@ -73,9 +74,14 @@ severity: off
 **Rule:** Not checked.
 `;
 
-/** Saves the rulebook as version 1 and sets Alpha up (projects already live on the Projects screen). */
+/**
+ * Saves the rulebook as version 1 and sets Alpha up (projects already live on the Projects screen).
+ * The one-time rule updates count as done: the test rulebook is exactly what the test wants checked.
+ */
 export async function useAlphaRulebook(content = ALPHA_RULEBOOK, settings: object = ALPHA_SETTINGS) {
-  await prisma.appSetting.create({ data: { key: "sop.projectsMovedFromRulebook", value: { test: true } } });
+  await prisma.appSetting.createMany({
+    data: [{ key: "sop.projectsMovedFromRulebook", value: { test: true } }, ...RULE_LEVEL_UPDATES.map((update) => ({ key: update.key, value: { test: true } }))],
+  });
   await prisma.rulebook.create({ data: { version: 1, content, note: "test" } });
   await prisma.sopProject.create({ data: { nameKey: "alpha", projectName: "Alpha", settings } });
 }

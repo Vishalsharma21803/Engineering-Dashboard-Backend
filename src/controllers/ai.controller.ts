@@ -21,6 +21,7 @@ import { listOpenRouterModels } from "../lib/ai/openrouter.js";
 import { getOpenRouterAllowlist, listModels, setOpenRouterAllowlist } from "../services/ai/ai-models.service.js";
 import { getAiPreference, updateAiPreference } from "../services/ai/ai-preference.service.js";
 import { getUsageSummary } from "../services/ai/ai-usage.service.js";
+import { getSopCheckTiming } from "../services/sop/ai/sop-ai.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
 class RequestValidationError extends Error {
@@ -104,6 +105,10 @@ export const updateAiPreferenceController = aiRoute("Saving AI settings failed",
 
 export const getAiUsageController = aiRoute("Loading AI usage failed", 200, async (_req, userId) => ({
   usage: await getUsageSummary(userId),
+}));
+
+export const getSopCheckTimingController = aiRoute("Loading AI check timing failed", 200, async (_req, userId) => ({
+  timing: await getSopCheckTiming(userId),
 }));
 
 /** The allowlist plus the full JSON-capable catalog, so owners can add models that are not yet allowed. */

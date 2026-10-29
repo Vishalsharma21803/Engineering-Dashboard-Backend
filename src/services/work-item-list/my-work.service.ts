@@ -6,7 +6,7 @@ import { getIdentity } from "../azure/identity.service.js";
 import { listAssignedWorkItemRecords } from "../azure/work-items.service.js";
 import { checkCompliance } from "../compliance/compliance.service.js";
 import { buildRecommendations } from "../recommendation.service.js";
-import type { AiRuleResult } from "../sop/ai/sop-ai-verifier.js";
+import { applyAiReviews } from "../sop/ai/sop-ai-review.js";
 import { isHiddenState, resolveWorkItemTriage, type TriageMarkLike } from "./triage-resolve.js";
 import { matchesWorkItem, workItemFacets, type FilterOption, type WorkItemFilters } from "./work-item-filters.js";
 
@@ -102,45 +102,18 @@ async function loadSnapshot(client: AzureClient, userId: string, projectName: st
   const records = await listAssignedWorkItemRecords(client, { projectName, scope: "compliance" });
   const compliance = await checkCompliance(client, userId, records, now);
   const workItems = records.map((record) => record.summary);
-  // Ticket signals depend only on the ticket and its SOP results.
-  const recommendations = buildRecommendations({ workItems, compliance, pullRequests: [], builds: [], now });
+  // Ticket signals depend only on the ticket and its SOP results (with the user's AI reviews; the snapshot keeps code results).
+  const reviewed = await applyAiReviews(userId, client.credentialId, compliance, new Map(workItems.map((item) => [item.id, item.rev])));
+  const recommendations = buildRecommendations({ workItems, compliance: reviewed, pullRequests: [], builds: [], now });
 
   return rememberMyWork(userId, client.credentialId, projectName, { workItems, compliance, recommendations }, now.getTime());
 }
 
-/** The user's own AI "fail" verdicts become violations (notice rules: notices), like on the dashboard. */
-async function withAiViolations(userId: string, credentialId: string, compliance: Map<number, ComplianceResult>, ids: number[]) {
-  const checks = await prisma.sopAiCheck.findMany({
-    where: { userId, credentialId, workItemId: { in: ids } },
-    select: { workItemId: true, results: true },
-  });
-  const merged = new Map(compliance);
-
-  for (const check of checks) {
-    const base = merged.get(check.workItemId);
-    const results = Array.isArray(check.results) ? (check.results as unknown as AiRuleResult[]) : [];
-    const found: ComplianceViolation[] = results
-      .filter((result) => result.verdict === "fail")
-      .map((result) => ({
-        ruleId: result.ruleId,
-        ruleTitle: result.ruleTitle,
-        checker: "ai",
-        severity: result.severity,
-        message: result.reason,
-        evidence: result.quotes,
-        suggestedAction: null,
-      }));
-
-    if (base && found.length > 0) {
-      merged.set(check.workItemId, {
-        ...base,
-        violations: [...base.violations, ...found.filter((finding) => finding.severity !== "low")],
-        notices: [...base.notices, ...found.filter((finding) => finding.severity === "low")],
-      });
-    }
-  }
-
-  return merged;
+/** The user's saved AI reviews (clears, AI-only rules) applied to the cached code results. */
+async function withAiReviews(userId: string, credentialId: string, snapshot: MyWorkSnapshot): Promise<Map<number, ComplianceResult>> {
+  const revs = new Map(snapshot.items.map((item) => [item.id, item.rev]));
+  const applied = await applyAiReviews(userId, credentialId, [...snapshot.compliance.values()], revs);
+  return new Map(applied.map((result) => [result.workItemId, result]));
 }
 
 export interface MyWorkPage extends Page<{ workItem: WorkItemSummary; compliance: ComplianceResult | null }> {
@@ -163,7 +136,7 @@ export async function getMyWorkPage(
       where: { userId, credentialId: client.credentialId },
       select: { itemKey: true, status: true, snoozedUntil: true, signals: true },
     }),
-    withAiViolations(userId, client.credentialId, snapshot.compliance, snapshot.items.map((item) => item.id)),
+    withAiReviews(userId, client.credentialId, snapshot),
   ]);
   const marksByKey = new Map<string, TriageMarkLike>(marks.map((mark) => [mark.itemKey, mark]));
   const now = Date.now();

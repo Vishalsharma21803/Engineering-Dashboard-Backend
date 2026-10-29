@@ -7,8 +7,9 @@ export const STARTER_RULEBOOK = `# Engineer Cockpit SOP rulebook (WI-002 v1.3 st
 
 Each block between --- lines is one rule card. Projects (their states, fields and categories)
 are set up on the SOP rules → Projects tab. Rule cards: checker "code" = a fixed built-in check; checker "ai" = judged by the user's AI model
-from the plain-English sections below the header. Severity: "fail" and "warn" are SOP gaps; "notice" is
-shown on the ticket but never counted as a gap; "off" is not checked.
+from the plain-English sections below the header (only on the ticket page). Severity: "fail" and "warn" are SOP gaps; "notice" is
+shown on the ticket but never counted as a gap; "off" is not checked. A rule is a to-do while the ticket is in its stage
+and a gap once the ticket moves past that stage without it.
 A line containing only --- always starts or ends a header, so do not use one inside text.
 
 ---
@@ -73,40 +74,25 @@ severity: warn
 ---
 id: STR-08
 title: Technical approach (pseudocode) before starting
-checker: ai
+checker: code
+uses: approach-present
+params: { min_steps: 3 }
 applies_to: [task, bug]
 when: before-active
 severity: warn
 ---
-**Rule:** Before work starts, the ticket contains a technical approach with 3-10 concrete steps. It may be called anything (pseudocode, approach, plan, steps) and may be in the description or in a comment.
-
-**Passes when:** The description or a comment lists 3-10 specific steps describing how the work will be done.
-
-**Fails when:** There is no plan, it has fewer than 3 steps, or it is one vague line such as "will check and fix".
-
-**Pass example:** "Plan: 1) add token table 2) issue JWT on login 3) add refresh endpoint 4) expire tokens after 24h."
-
-**Fail example:** "Will do it using JWT."
-
-**Suggested fix:** Draft 3-10 steps from the description, acceptance criteria and parent story, posted as a comment for the developer to review.
+**Rule:** Before work starts, the ticket contains a technical approach with 3-10 concrete steps, in the description or a comment. Its heading may be Approach, Technical approach, Pseudocode, Pseudo code, Plan, Implementation plan, Steps or Solution (any capitals); steps may be numbered, bulleted or one per line. On the ticket page the AI review can clear an approach written another way, and flags vague steps.
 
 ---
 id: STR-09
 title: TL approved the approach
-checker: ai
+checker: code
+uses: tl-approval
 applies_to: [task, bug]
 when: before-active
 severity: notice
 ---
-**Rule:** A team lead approves the technical approach in a comment before work starts. The approver must be listed as a TL in the project's set-up (SOP rules → Projects) and must not be the ticket's developer.
-
-**Passes when:** A comment by a TL, written after the approach, clearly approves it (for example "approved", "looks good, go ahead", "LGTM").
-
-**Fails when:** No TL comment exists, the TL comment does not approve (for example "will check later"), or it was written before the approach.
-
-**Fail example:** "Can you add more detail?"
-
-**Suggested fix:** Post a comment asking the TL to review and approve the approach.
+**Rule:** A team lead approves the technical approach in a comment before work starts ("approved", "LGTM", "looks good", "go ahead"...). The approver must be listed as a TL in the project's set-up (SOP rules → Projects), must not be the ticket's developer, and must comment after the approach.
 
 ---
 id: STR-10
@@ -154,31 +140,28 @@ severity: notice
 **Rule:** Stories and features link to the relevant standards, designs, HLD/LLD or API contracts.
 
 ---
-id: STR-14
-title: Time fields are filled in
-checker: code
-uses: time-fields-present
-applies_to: [task, bug]
-when: at-estimation
-severity: warn
----
-**Rule:** Once the ticket is estimated, original estimate, remaining work and completed work are filled in (the due date is STR-04).
-
----
 id: STR-15
 title: Ticket-level Definition of Done exists
-checker: ai
+checker: code
+uses: dod-present
+params: { min_items: 1 }
 applies_to: [story, task, bug]
 when: before-active
 severity: warn
 ---
-**Rule:** The ticket states its own Definition of Done.
+**Rule:** The description, acceptance criteria or a comment has a section marked Definition of Done (or DoD) with at least one item, or the acceptance criteria say they are the definition of done.
 
-**Passes when:** The description, acceptance criteria or a comment has a section clearly marked as Definition of Done (or DoD) with at least one item, or the acceptance criteria explicitly say they are the definition of done.
-
-**Fails when:** Nothing describes when the ticket counts as done.
-
-**Suggested fix:** Draft a short Definition of Done (for example: code merged, tests green, deployed to dev, acceptance criteria verified) as a comment.
+---
+id: STR-16
+title: Target completion is set
+checker: code
+uses: field-present
+params: { field: target-completion }
+applies_to: [story, task, bug]
+when: before-active
+severity: notice
+---
+**Rule:** The project's target completion field is set before work starts. Skipped when the project set-up names no such field.
 
 ---
 id: ACT-03
@@ -206,20 +189,14 @@ severity: warn
 ---
 id: ACT-06
 title: Starting-work comment
-checker: ai
+checker: code
+uses: stage-comment
+params: { stage: active, requires: [eta-date, ac-dod, approver, branch, target-branch] }
 applies_to: [task, bug]
 when: while-active
 severity: warn
 ---
-**Rule:** When work starts, the developer comments with the branch name, that it was branched from develop, that AC/DoD were reviewed, who approved the approach, and an ETA. When the ticket has no linked branch, the branch name and "from develop" are not required.
-
-**Passes when:** A comment by the developer, around the move to Active, mentions AC or DoD, the approving TL and an ETA date, plus the branch and develop if a branch is linked. Wording may vary.
-
-**Fails when:** There is no such comment, or it is missing any of: AC/DoD reviewed, approver, ETA, or (only when a branch is linked) the branch or develop.
-
-**Pass example:** "Starting work; branch feature/2187-otp-login from develop; AC/DoD reviewed; approach approved by Ravi; ETA 28 Oct."
-
-**Suggested fix:** Draft the starting-work comment from the ticket's linked branch, approver comment and due date.
+**Rule:** When work starts, the developer comments with the branch name, that it was branched from develop, that AC/DoD were reviewed, who approved the approach, and an ETA. When the ticket has no linked branch, the branch name and "from develop" are not required. Example: "Starting work; branch feature/2187-otp-login from develop; AC/DoD reviewed; approach approved by Ravi; ETA 28 Oct."
 
 ---
 id: DEV-02
@@ -231,6 +208,30 @@ when: while-active
 severity: warn
 ---
 **Rule:** If the original estimate changes or remaining work goes up after work starts, a comment the same day explains why.
+
+---
+id: TIME-01
+title: Time is updated every working day
+checker: code
+uses: daily-time-update
+params: { stages: [active, testing] }
+applies_to: [task, bug]
+when: always
+severity: notice
+---
+**Rule:** Completed or remaining work is updated on every working day the ticket is in Active or Testing (the day it moved there and today are not counted).
+
+---
+id: TRN-01
+title: Every state change has a comment
+checker: code
+uses: transition-comment
+params: { hours_after: 24, minutes_before: 60 }
+applies_to: [story, task, bug]
+when: always
+severity: notice
+---
+**Rule:** Whoever changes the ticket's state comments on it within 24 hours (automatic moves by pipelines or pull requests are not counted).
 
 ---
 id: PR-01
@@ -257,20 +258,25 @@ severity: warn
 ---
 id: PR-05
 title: Moving-to-review comment
-checker: ai
+checker: code
+uses: stage-comment
+params: { stage: review, requires: [pr-number, tests, reviewer] }
 applies_to: [task, bug]
 when: at-review
 severity: warn
 ---
-**Rule:** When moving to Review, the developer comments with the PR number, that unit tests are green, and who reviews it. When the ticket has no linked pull request, the PR number and reviewer are not required.
+**Rule:** When moving to Review, the developer comments with the PR number, that unit tests are green, and who reviews it. When the ticket has no linked pull request, the PR number and reviewer are not required. Example: "PR #551 opened; unit tests green; assigned to @Ravi; moving to Review."
 
-**Passes when:** A comment around the move to Review mentions passing tests, plus a linked PR number and the reviewer if a pull request is linked.
-
-**Fails when:** There is no such comment, or it is missing the test status or (only when a pull request is linked) the PR number or the reviewer.
-
-**Pass example:** "PR #551 opened; unit tests green; assigned to @Ravi; moving to Review."
-
-**Suggested fix:** Draft the comment from the linked pull request and its reviewers.
+---
+id: REV-01
+title: Assigned to the reviewer in Review
+checker: code
+uses: assigned-to-reviewer
+applies_to: [task, bug]
+when: at-review
+severity: notice
+---
+**Rule:** While in Review the ticket is assigned to its reviewer (a reviewer of the pull request, or a team lead), not left with the developer.
 
 ---
 id: MRG-01
@@ -298,20 +304,14 @@ severity: notice
 ---
 id: TST-02
 title: Moving-to-testing comment
-checker: ai
+checker: code
+uses: stage-comment
+params: { stage: testing, requires: [merge, target-branch, build-number] }
 applies_to: [task, bug]
 when: at-testing
 severity: notice
 ---
-**Rule:** When moving to Testing, the developer comments that the work was merged (and into which branch) and gives the dev build or deployment number.
-
-**Passes when:** A comment around the move to Testing mentions the merge, the target branch and a build or deployment number.
-
-**Fails when:** There is no such comment, or it is missing the merge, the branch or the build number.
-
-**Pass example:** "Merged to develop; dev build #2026.51; starting developer testing on dev."
-
-**Suggested fix:** Draft the comment from the merged pull request and the latest build.
+**Rule:** When moving to Testing, the developer comments that the work was merged (and into which branch) and gives the dev build or deployment number. Example: "Merged to develop; dev build #2026.51; starting developer testing on dev."
 
 ---
 id: QA-02
@@ -357,6 +357,18 @@ when: at-done
 severity: warn
 ---
 **Rule:** When the ticket is closed, completed work is above 0 and remaining work is 0.
+
+---
+id: DONE-10
+title: Final comment at Done
+checker: code
+uses: stage-comment
+params: { stage: done, requires: [done] }
+applies_to: [story, task, bug]
+when: at-done
+severity: notice
+---
+**Rule:** When closing the ticket, a final comment confirms the work is done (DoD met, what was delivered).
 
 ---
 id: FLG-01

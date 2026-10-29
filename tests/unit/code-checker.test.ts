@@ -332,7 +332,7 @@ when: always
   );
   const effective = { projects: [PROFILE], cards: rulebook.cards as RuleCard[], issues: [], switchedOff: [], defaultVersion: 3, personalVersion: 1 };
 
-  it("checks estimate rules at Estimation, or once work starts when the project has no Estimation stage", () => {
+  it("checks estimate rules at Estimation (a to-do there, a gap once moved on), or before work starts without an Estimation stage", () => {
     const estimate = parseRulebook(
       "---\nid: E-01\ntitle: Estimate exists\nchecker: code\nuses: estimate-present\napplies_to: [task]\nwhen: at-estimation\n---\n**Rule:** x\n",
       "default"
@@ -341,14 +341,64 @@ when: always
     const noEstimate = workItem({ originalEstimate: null });
     const newTicket = { workItem: noEstimate, stage: "ready" as const, stageHistory: [] };
 
-    // PROFILE has no Estimation stage: a New ticket is not checked, an Active one is.
-    expect(evaluateDossier(dossier(newTicket), rules, NOW).violations).toEqual([]);
-    expect(evaluateDossier(dossier({ workItem: noEstimate }), rules, NOW).violations).toHaveLength(1);
+    // PROFILE has no Estimation stage: a New ticket has it as a to-do, an Active one as a gap.
+    expect(evaluateDossier(dossier(newTicket), rules, NOW)).toMatchObject({ violations: [], todos: [expect.objectContaining({ ruleId: "E-01", phase: "now" })] });
+    expect(evaluateDossier(dossier({ workItem: noEstimate }), rules, NOW).violations).toEqual([expect.objectContaining({ ruleId: "E-01", phase: "earlier" })]);
 
     const withEstimation = { ...PROFILE, stages: { ...PROFILE.stages, estimation: ["Estimations"] } };
-    const estimating = dossier({ ...newTicket, profile: withEstimation, stage: "estimation", stageHistory: [{ value: "Estimations", stage: "estimation", at: new Date("2025-10-05T05:00:00Z"), by: ME, initial: false }] });
-    expect(evaluateDossier(estimating, rules, NOW).violations).toHaveLength(1);
-    expect(evaluateDossier(dossier({ ...newTicket, profile: withEstimation }), rules, NOW).violations).toEqual([]);
+    const inEstimation = [{ value: "Estimations", stage: "estimation" as const, at: new Date("2025-10-05T05:00:00Z"), by: ME, initial: false }];
+    const estimating = dossier({ ...newTicket, profile: withEstimation, stage: "estimation", stageHistory: inEstimation });
+    expect(evaluateDossier(estimating, rules, NOW)).toMatchObject({ violations: [], todos: [expect.objectContaining({ ruleId: "E-01" })] });
+    // A New ticket in a project with Estimations shows nothing yet.
+    expect(evaluateDossier(dossier({ ...newTicket, profile: withEstimation }), rules, NOW)).toMatchObject({ violations: [], todos: [] });
+    const started = dossier({ workItem: noEstimate, profile: withEstimation, stageHistory: [...inEstimation, { value: "Active", stage: "active", at: new Date("2025-10-06T05:00:00Z"), by: ME, initial: false }] });
+    expect(evaluateDossier(started, rules, NOW).violations).toEqual([expect.objectContaining({ ruleId: "E-01", phase: "earlier" })]);
+  });
+
+  it("makes a stage's rule a to-do while in that stage and a gap once the ticket moves past it, even if it moves back", () => {
+    const review = parseRulebook(
+      "---\nid: R-01\ntitle: PR linked\nchecker: code\nuses: pr-linked\napplies_to: [task]\nwhen: at-review\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const rules = { ...effective, cards: review };
+    const at = (day: number) => new Date(`2025-10-${String(day).padStart(2, "0")}T05:00:00Z`);
+    const moves = [
+      { value: "Active", stage: "active" as const, at: at(6), by: ME, initial: false },
+      { value: "Review", stage: "review" as const, at: at(8), by: ME, initial: false },
+    ];
+
+    expect(evaluateDossier(dossier(), rules, NOW)).toMatchObject({ violations: [], todos: [] });
+    expect(evaluateDossier(dossier({ stage: "review", stageHistory: moves }), rules, NOW)).toMatchObject({ violations: [], todos: [expect.objectContaining({ ruleId: "R-01" })] });
+    const testing = [...moves, { value: "Testing", stage: "testing" as const, at: at(9), by: ME, initial: false }];
+    expect(evaluateDossier(dossier({ stage: "testing", stageHistory: testing }), rules, NOW).violations).toEqual([expect.objectContaining({ ruleId: "R-01", phase: "earlier" })]);
+    const backToActive = [...testing, { value: "Active", stage: "active" as const, at: at(10), by: ME, initial: false }];
+    expect(evaluateDossier(dossier({ stageHistory: backToActive }), rules, NOW).violations).toHaveLength(1);
+  });
+
+  it("gives Done items 24 hours, and waits while a closed ticket is reopened", () => {
+    const done = parseRulebook(
+      "---\nid: D-02\ntitle: Time logged\nchecker: code\nuses: time-logged-at-done\napplies_to: [task]\nwhen: at-done\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const rules = { ...effective, cards: done };
+    const closedAt = (at: string) => ({
+      workItem: workItem({ state: "Closed", stateCategory: "Completed", remainingWork: 2 }),
+      stage: "done" as const,
+      stageHistory: [{ value: "Closed", stage: "done" as const, at: new Date(at), by: ME, initial: false }],
+    });
+
+    expect(evaluateDossier(dossier(closedAt("2025-10-15T02:00:00Z")), rules, NOW)).toMatchObject({ violations: [], todos: [expect.objectContaining({ ruleId: "D-02" })] });
+    expect(evaluateDossier(dossier(closedAt("2025-10-14T02:00:00Z")), rules, NOW).violations).toEqual([expect.objectContaining({ ruleId: "D-02", phase: "now" })]);
+    const reopened = { ...closedAt("2025-10-14T02:00:00Z"), stage: "active" as const };
+    expect(evaluateDossier(dossier(reopened), rules, NOW)).toMatchObject({ violations: [], todos: [] });
+  });
+
+  it("shows nothing for a ticket in a state the project does not map, and applies Always rules at once", () => {
+    const rules = { ...effective, cards: parseRulebook("---\nid: F-01\ntitle: Flags\nchecker: code\nuses: title-flag-format\napplies_to: all\nwhen: always\n---\n**Rule:** x\n---\nid: T-01\ntitle: Tags\nchecker: code\nuses: tags-present\napplies_to: all\nwhen: before-active\n---\n**Rule:** x\n", "default").cards as RuleCard[] };
+    const flagged = workItem({ title: "BLOCKED: waiting", state: "Proposed" });
+    const result = evaluateDossier(dossier({ workItem: flagged, stage: null, stageHistory: [] }), rules, NOW);
+    expect(result.violations).toEqual([expect.objectContaining({ ruleId: "F-01", phase: "now" })]);
+    expect(result.todos).toEqual([]);
   });
 
   it("only runs rules for this kind once their stage is reached, and explains missing stages", () => {
@@ -361,7 +411,7 @@ when: always
     expect(result.rulebook).toEqual({ defaultVersion: 3, personalVersion: 1 });
   });
 
-  it("does not list a notice rule that is not due yet", () => {
+  it("lists a check whose own window is still open as a to-do, whatever its level", () => {
     const rules = parseRulebook(
       "---\nid: N-02\ntitle: Branch linked\nchecker: code\nuses: branch-linked\nparams: { within_hours: 24 }\napplies_to: [task]\nwhen: while-active\nseverity: notice\n---\n**Rule:** x\n",
       "default"
@@ -369,9 +419,9 @@ when: always
     const justStarted = dossier({ stageHistory: [{ value: "Active", stage: "active", at: new Date("2025-10-15T06:00:00Z"), by: ME, initial: false }] });
     const result = evaluateDossier(justStarted, { ...effective, cards: rules }, NOW);
 
-    expect(result.pendingRules).toEqual([]);
+    expect(result.todos).toEqual([expect.objectContaining({ ruleId: "N-02", severity: "low", message: expect.stringContaining("Link a branch by") })]);
     expect(result.notices).toEqual([]);
-    expect(evaluateDossier(justStarted, { ...effective, cards: rules.map((rule) => ({ ...rule, severity: "warn" as const })) }, NOW).pendingRules).toHaveLength(1);
+    expect(result.violations).toEqual([]);
   });
 
   it("lists notice rules as notices, never as gaps", () => {
@@ -404,5 +454,125 @@ when: always
     const unmerged = evaluateDossier(dossier({ ...closed, pullRequests: [openPr] as TicketDossier["pullRequests"] }), { ...effective, cards: rules }, NOW);
     expect(unmerged.notices).toEqual([]);
     expect(unmerged.violations).toEqual([expect.objectContaining({ ruleId: "D-01", severity: "medium" })]);
+  });
+});
+
+describe("WI-002 text checks", () => {
+  const LEAD = { id: "lead", displayName: "Ravi Kumar", uniqueName: "ravi@example.com" };
+  const withLead = { ...PROFILE, roles: { tl: ["Ravi Kumar"], qa: [], po: [] } };
+
+  it("approach-present finds the approach in the description or a comment, in any wording", () => {
+    expect(run("approach-present", dossier({ description: "PSEUDO CODE:\n1. a b\n2. c d\n3. e f" }), { min_steps: 3 }).status).toBe("pass");
+    expect(run("approach-present", dossier({ comments: [comment("plan - \n- add table\n- issue jwt\n- refresh", "2025-10-05T05:00:00Z")] }), { min_steps: 3 }).status).toBe("pass");
+    expect(run("approach-present", dossier({ description: "Approach: will do it using JWT." }), { min_steps: 3 })).toMatchObject({ status: "fail", message: "The approach has 1 step; it needs at least 3." });
+    expect(run("approach-present", dossier(), { min_steps: 3 })).toMatchObject({ status: "fail", message: expect.stringContaining("No technical approach found") });
+    // A bug's "Steps:" in its description are how to reproduce it.
+    expect(run("approach-present", dossier({ kind: "bug", description: "Steps:\n1. open the app\n2. click save\n3. see the error" }), { min_steps: 3 }).status).toBe("fail");
+  });
+
+  it("tl-approval needs a listed lead's approval after the approach, not the developer's", () => {
+    const approach = comment("Approach:\n1. a b\n2. c d\n3. e f", "2025-10-05T05:00:00Z");
+    const approve = (text: string, at: string, by = LEAD) => comment(text, at, by);
+
+    expect(run("tl-approval", dossier({ comments: [approach] })).status).toBe("skip");
+    expect(run("tl-approval", dossier({ profile: withLead, comments: [approach, approve("LGTM, go ahead", "2025-10-05T07:00:00Z")] })).status).toBe("pass");
+    expect(run("tl-approval", dossier({ profile: withLead, comments: [approve("Approved", "2025-10-04T07:00:00Z"), approach] }))).toMatchObject({
+      status: "fail",
+      message: "The team lead's approval was written before the approach.",
+    });
+    expect(run("tl-approval", dossier({ profile: withLead, comments: [approach, approve("Can you add more detail?", "2025-10-05T07:00:00Z")] }))).toMatchObject({
+      status: "fail",
+      message: "A team lead commented but did not approve the approach.",
+    });
+    // The lead approving their own ticket does not count.
+    const ownTicket = dossier({ profile: withLead, workItem: workItem({ assignedTo: LEAD }), comments: [approach, approve("approved", "2025-10-05T07:00:00Z")] });
+    expect(run("tl-approval", ownTicket).status).toBe("fail");
+    // Moving the ticket to the lead later (e.g. for review) does not undo their earlier approval.
+    const reassigned = dossier({
+      profile: withLead,
+      workItem: workItem({ assignedTo: LEAD }),
+      comments: [approach, approve("approved", "2025-10-05T07:00:00Z")],
+      fieldChanges: [{ field: WORK_ITEM_FIELDS.assignedTo, at: new Date("2025-10-09T05:00:00Z"), by: ME, oldValue: ME, newValue: LEAD }],
+    });
+    expect(run("tl-approval", reassigned).status).toBe("pass");
+    // An approach in the description has no date, so any later approval counts.
+    expect(run("tl-approval", dossier({ profile: withLead, description: "Plan:\n- a b\n- c d\n- e f", comments: [approve("looks good", "2025-10-01T07:00:00Z")] })).status).toBe("pass");
+  });
+
+  it("dod-present looks in the description, acceptance criteria and comments", () => {
+    expect(run("dod-present", dossier({ acceptanceCriteria: "1. Export works\n\nDefinition of Done:\n- merged\n- deployed" }), { min_items: 1 }).status).toBe("pass");
+    expect(run("dod-present", dossier({ comments: [comment("DoD: merged, tests green", "2025-10-05T05:00:00Z")] }), { min_items: 2 }).status).toBe("pass");
+    expect(run("dod-present", dossier({ description: "AC/DoD reviewed" }), { min_items: 1 })).toMatchObject({ status: "fail", message: expect.stringContaining("No Definition of Done") });
+  });
+
+  describe("stage-comment", () => {
+    const active = { value: "Active", stage: "active" as const, at: new Date("2025-10-06T05:00:00Z"), by: ME, initial: false };
+    const starting = (text: string, at = "2025-10-06T06:00:00Z", by = ME) => comment(text, at, by);
+    const params = { stage: "active", requires: ["eta-date", "ac-dod", "approver", "branch", "target-branch"] };
+
+    it("passes when one comment by the mover covers every detail, in any wording", () => {
+      const branch = [{ refName: "feature/42-export", linkedAt: null }];
+      const text = "Starting work; branch feature/42-export from DEVELOP; ac/dod reviewed; approach approved by Ravi; eta 28 Oct";
+      expect(run("stage-comment", dossier({ branches: branch, comments: [starting(text)] }), params).status).toBe("pass");
+    });
+
+    it("does not ask for the branch or the base branch when no branch is linked", () => {
+      const text = "Starting work; AC/DoD reviewed; approach approved by Ravi; ETA 28 Oct";
+      expect(run("stage-comment", dossier({ comments: [starting(text)] }), params).status).toBe("pass");
+    });
+
+    it("does not ask for the branch when none is linked, and names what is missing", () => {
+      const outcome = run("stage-comment", dossier({ comments: [starting("Starting work from develop, ETA Friday")] }), params);
+      expect(outcome).toMatchObject({ status: "fail", message: expect.stringContaining("does not mention that AC/DoD were reviewed, who approved the approach") });
+      expect(outcome.status === "fail" && outcome.message).not.toContain("branch name");
+    });
+
+    it("is a to-do while its window is open and a gap without any comment after it", () => {
+      const fresh = { ...active, at: new Date("2025-10-15T06:00:00Z") };
+      expect(run("stage-comment", dossier({ stageHistory: [fresh] }), params)).toMatchObject({ status: "pending", message: expect.stringContaining("Comment on the move to Active with an ETA date") });
+      expect(run("stage-comment", dossier({ stageHistory: [active] }), params)).toMatchObject({ status: "fail", message: expect.stringContaining("No comment when the ticket moved to Active") });
+      // Someone else's comment does not count.
+      expect(run("stage-comment", dossier({ stageHistory: [active], comments: [starting("ETA Friday, AC reviewed, approved by Ravi, develop", undefined, OTHER)] }), params).status).toBe("fail");
+    });
+
+    it("accepts anyone's comment after an automatic move, and checks PR number, tests and reviewer for review", () => {
+      const pr = { pullRequestId: 551, title: "x", status: "active", createdBy: ME, closedDate: null, targetBranch: "develop", reviewers: [{ id: "lead", displayName: "Ravi Kumar", vote: 0 }], unresolvedThreads: null };
+      const review = { value: "Review", stage: "review" as const, at: new Date("2025-10-08T05:00:00Z"), by: { id: null, displayName: "Project Collection Build Service", uniqueName: null }, initial: false };
+      const ticket = (text: string) =>
+        dossier({
+          workItem: workItem({ links: { pullRequests: [{ projectId: "p", repositoryId: "r", pullRequestId: 551 }], commits: [], branches: [], builds: [], parentId: null, childIds: [] } as WorkItemSummary["links"] }),
+          stageHistory: [active, review],
+          pullRequests: [pr] as TicketDossier["pullRequests"],
+          comments: [comment(text, "2025-10-08T06:00:00Z", OTHER)],
+        });
+      const reviewParams = { stage: "review", requires: ["pr-number", "tests", "reviewer"] };
+      expect(run("stage-comment", ticket("PR !551 up, unit tests green, ravi please review"), reviewParams).status).toBe("pass");
+      expect(run("stage-comment", ticket("PR 551 up"), reviewParams)).toMatchObject({ status: "fail", message: expect.stringContaining("the test status, the reviewer") });
+    });
+  });
+
+  it("assigned-to-reviewer wants a PR reviewer or a lead while in Review", () => {
+    const review = [{ value: "Review", stage: "review" as const, at: new Date("2025-10-08T05:00:00Z"), by: ME, initial: false }];
+    const pr = { pullRequestId: 7, title: "x", status: "active", createdBy: ME, closedDate: null, targetBranch: "develop", reviewers: [{ id: "lead", displayName: "Ravi Kumar", vote: 0 }], unresolvedThreads: null };
+    const inReview = (assignedTo: typeof ME | null, extra: Partial<TicketDossier> = {}) =>
+      dossier({ workItem: workItem({ state: "Review", assignedTo }), stage: "review", stageHistory: review, pullRequests: [pr] as TicketDossier["pullRequests"], ...extra });
+
+    expect(run("assigned-to-reviewer", inReview(LEAD)).status).toBe("pass");
+    expect(run("assigned-to-reviewer", inReview(ME))).toMatchObject({ status: "fail", evidence: ["Could be: Ravi Kumar"] });
+    expect(run("assigned-to-reviewer", inReview(null)).status).toBe("fail");
+    // Without reviewers or leads it only has to move on from the developer.
+    expect(run("assigned-to-reviewer", inReview(OTHER, { pullRequests: [] })).status).toBe("pass");
+    // After Review, the assignee at the time counts (from the assignment history).
+    const moved = dossier({
+      workItem: workItem({ assignedTo: ME }),
+      stage: "testing",
+      stageHistory: [...review, { value: "Testing", stage: "testing", at: new Date("2025-10-09T05:00:00Z"), by: LEAD, initial: false }],
+      pullRequests: [pr] as TicketDossier["pullRequests"],
+      fieldChanges: [
+        { field: WORK_ITEM_FIELDS.assignedTo, at: new Date("2025-10-08T05:05:00Z"), by: ME, oldValue: ME, newValue: LEAD },
+        { field: WORK_ITEM_FIELDS.assignedTo, at: new Date("2025-10-09T05:05:00Z"), by: LEAD, oldValue: LEAD, newValue: ME },
+      ],
+    });
+    expect(run("assigned-to-reviewer", moved).status).toBe("pass");
   });
 });

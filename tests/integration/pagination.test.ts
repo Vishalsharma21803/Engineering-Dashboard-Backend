@@ -95,13 +95,24 @@ describe("My work pagination", () => {
         projectName: "Alpha",
         inputHash: "x",
         status: "DONE",
-        results: [{ ruleId: "T-05", ruleTitle: "Approach is described", severity: "medium", verdict: "fail", reason: "No plan.", advice: null, quotes: [], fix: null, note: null }],
+        // Judged on the ticket as it is now (a newer ticket makes the review outdated).
+        ticketRev: fake.workItems.get(101)!.rev,
+        finishedAt: new Date(),
+        results: [{ ruleId: "T-05", ruleTitle: "Approach is described", severity: "medium", review: "ai-rule", verdict: "fail", reason: "No plan.", advice: null, quotes: [], fix: null, note: null }],
       },
     });
 
     const result = await myWork("?sop=T-05");
     expect(ids(result)).toEqual([101]);
     expect(result.items[0].compliance.violations).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "T-05", checker: "ai" })]));
+    expect(result.items[0].compliance.aiReview).toMatchObject({ status: "DONE", outdated: false });
+
+    // Once the ticket changes, the review no longer counts (it is shown as outdated).
+    fake.workItems.get(101)!.rev += 1;
+    const changed = await myWork("?refresh=true");
+    const item = changed.items.find((row: { workItem: { id: number } }) => row.workItem.id === 101);
+    expect(item.compliance.aiReview).toMatchObject({ outdated: true });
+    expect(item.compliance.violations).not.toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "T-05" })]));
   });
 
   it("reuses the dashboard's results, so changing page does not re-run the SOP checks", async () => {

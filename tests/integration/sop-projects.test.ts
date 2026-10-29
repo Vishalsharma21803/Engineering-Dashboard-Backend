@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
+import { RULE_LEVEL_UPDATES } from "../../src/services/sop/rule-levels.js";
 import { writeRequests, type FakeAzure } from "../support/fake-azure.js";
 import { azurePath, installFakeAzure, resetDatabase, runSopReport, setupUser, type Agent } from "../support/harness.js";
 import { ALPHA_RULEBOOK, useAlphaRulebook } from "../support/test-rulebook.js";
@@ -16,7 +17,7 @@ beforeEach(async () => {
 });
 
 const compliance = async (as: Agent, cred: string, refresh = false) =>
-  new Map<number, { configured: boolean; sopProject: string; violations: unknown[] }>(
+  new Map<number, { configured: boolean; sopProject: string; violations: unknown[]; todos: Array<{ ruleId: string }> }>(
     (await as.get(azurePath(cred, `/compliance${refresh ? "?refresh=true" : ""}`)).expect(200)).body.items.map((item: { workItemId: number }) => [item.workItemId, item])
   );
 
@@ -43,6 +44,8 @@ when: before-active
 **Rule:** Estimate.
 `;
     await prisma.rulebook.create({ data: { version: 1, content: legacy, note: "old" } });
+    // Only the project move is under test here (the rule updates have their own tests).
+    await prisma.appSetting.createMany({ data: RULE_LEVEL_UPDATES.map((update) => ({ key: update.key, value: { test: true } })) });
 
     const projects = (await agent.get("/api/sop/projects").expect(200)).body.projects;
     expect(projects).toEqual([
@@ -88,15 +91,17 @@ describe("rule timing", () => {
     });
     const byId = await compliance(agent, credentialId);
 
-    // #106 is New: nothing applies yet. #102 is Active without an estimate: flagged.
+    // #106 is New: no gaps, and the estimate is not asked for yet (before-work items are only to-dos).
     expect(byId.get(106)).toMatchObject({ configured: true, violations: [] });
-    expect((byId.get(106) as unknown as { passedRules: unknown[] }).passedRules).toEqual([]);
-    expect(byId.get(102)?.violations).toEqual([expect.objectContaining({ ruleId: "T-01" })]);
+    expect(byId.get(106)?.todos.map((todo) => todo.ruleId)).not.toContain("T-01");
+    // #102 is Active without an estimate: a gap from an earlier stage.
+    expect(byId.get(102)?.violations).toEqual([expect.objectContaining({ ruleId: "T-01", phase: "earlier" })]);
 
-    // Moved to Estimations: the estimate rule now applies, the before-work rules still wait.
+    // Moved to Estimations: the estimate is a to-do there, not a gap yet.
     fake.workItems.get(106)!.fields["System.State"] = "Estimations";
     const later = await compliance(agent, credentialId, true);
-    expect(later.get(106)?.violations).toEqual([expect.objectContaining({ ruleId: "T-01" })]);
+    expect(later.get(106)?.violations).toEqual([]);
+    expect(later.get(106)?.todos).toEqual([expect.objectContaining({ ruleId: "T-01", phase: "now" })]);
   });
 });
 

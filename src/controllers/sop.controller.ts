@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { AppError } from "../lib/app-error.js";
 import { projectSettingsSchema } from "../services/sop/project-settings.js";
@@ -43,9 +43,16 @@ import {
   listPersonalVersions,
   saveDefaultRulebook,
   savePersonalRulebook,
+  editDefaultRules,
+  editPersonalRules,
   validateDefaultContent,
   validatePersonalContent,
 } from "../services/sop/rulebook.service.js";
+import { AI_REVIEW, BUILTIN_CHECKS, type BuiltinCheckName } from "../services/sop/builtin-checks.js";
+import { ruleEditsSchema } from "../services/sop/rulebook.edits.js";
+import { parseRulebook } from "../services/sop/rulebook.parser.js";
+import { STARTER_RULEBOOK } from "../services/sop/starter-rulebook.js";
+import type { RuleCard } from "../services/sop/rulebook.types.js";
 import type { ParsedRulebook, RulebookError } from "../services/sop/rulebook.types.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -167,6 +174,64 @@ export const getEffectiveRulebookController = sopRoute("Loading effective rules 
     issues: toFieldErrors(effective.issues),
     ...summarize({ projects: effective.projects, cards: effective.cards, overrides: [] }),
   };
+});
+
+/** One rule as the rules list shows and edits it. `defaults`: the default rule's level and settings, when the user changed them. */
+function describeCard(card: RuleCard, defaults: RuleCard | undefined) {
+  return {
+    id: card.id,
+    title: card.title,
+    checker: card.checker,
+    uses: card.checker === "code" ? card.uses : null,
+    params: card.checker === "code" ? card.params : null,
+    appliesTo: card.appliesTo,
+    when: card.when,
+    severity: card.severity,
+    rule: card.rule,
+    passesWhen: card.checker === "ai" ? card.passesWhen : null,
+    failsWhen: card.checker === "ai" ? card.failsWhen : null,
+    origin: card.origin,
+    custom: card.id.startsWith("MY-"),
+    /** A default rule the built-in starter also has, so "reset" can bring its version back. */
+    inStarter: STARTER_IDS.has(card.id),
+    defaults: card.origin === "personal" && defaults ? { severity: defaults.severity, params: defaults.checker === "code" ? defaults.params : null } : null,
+  };
+}
+
+const STARTER_IDS = new Set(parseRulebook(STARTER_RULEBOOK, "default").cards.map((card) => card.id));
+
+/** The built-in checks a rule can use, with their settings as JSON Schema (the rules list builds inputs from it). */
+const CHECK_CATALOG = Object.entries(BUILTIN_CHECKS).map(([name, check]) => ({
+  name,
+  description: check.description,
+  aiReview: AI_REVIEW[name as BuiltinCheckName] ?? null,
+  params: z.toJSONSchema(check.params, { io: "input", unrepresentable: "any" }),
+}));
+
+export const getRulesListController = sopRoute("Loading the rules failed", async (_req, userId) => {
+  const [effective, defaults, canEditDefaults] = await Promise.all([getEffectiveRulebook(userId), getDefaultRulebook(), isUserSopAdmin(userId)]);
+  const defaultCards = validateDefaultContent(defaults.content).cards;
+  const byId = new Map(defaultCards.map((card) => [card.id, card]));
+
+  return {
+    defaultVersion: effective.defaultVersion,
+    personalVersion: effective.personalVersion,
+    canEditDefaults,
+    issues: toFieldErrors(effective.issues),
+    rules: effective.cards.map((card) => describeCard(card, byId.get(card.id))),
+    defaultRules: defaultCards.map((card) => describeCard(card, undefined)),
+    checks: CHECK_CATALOG,
+  };
+});
+
+export const editPersonalRulesController = sopRoute("Saving your rules failed", async (req, userId) => {
+  const input = parse(ruleEditsSchema, req.body);
+  return { message: "Your rules were saved", rulebook: await editPersonalRules(userId, input.baseVersion, input.edits) };
+});
+
+export const editDefaultRulesController = sopRoute("Saving the default rules failed", async (req, userId) => {
+  const input = parse(ruleEditsSchema, req.body);
+  return { message: "Default rules saved", rulebook: await editDefaultRules(userId, input.baseVersion, input.edits, input.note) };
 });
 
 type AzureSopHandler = (req: Request, client: NonNullable<Request["azure"]>, userId: string) => Promise<unknown>;

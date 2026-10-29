@@ -14,14 +14,16 @@ import { getAiPreference } from "../../ai/ai-preference.service.js";
 import { recordAiUsage, spentSince, startOfUtcDay } from "../../ai/ai-usage.service.js";
 import { createAzureClientForCredential } from "../../azure/azure-context.service.js";
 import { getWorkItem, getWorkItemsByIds, toWorkItemSummaries, workItemProjectName, workItemType } from "../../azure/work-items.service.js";
+import { AI_REVIEW, type BuiltinCheckName } from "../builtin-checks.js";
 import { buildDossier, kindOf } from "../dossier.js";
 import { linkedSolidtimeFor } from "../../solidtime/connection.service.js";
 import { trackedHoursByTicket } from "../../solidtime/reports.service.js";
 import { findProjectProfile } from "../rulebook.merge.js";
 import { getEffectiveRulebook } from "../rulebook.service.js";
-import type { AiRuleCard, ProjectProfile } from "../rulebook.types.js";
-import { cardApplies, type RulebookForChecks } from "../sop-evaluator.js";
-import { VERDICT_JSON_SCHEMA, buildSystemPrompt, buildUserPrompt, quotableText, verdictSchema } from "./sop-ai-prompt.js";
+import type { ComplianceResult } from "../../../types/azure.types.js";
+import type { ProjectProfile, RuleCard } from "../rulebook.types.js";
+import { evaluateDossier, type RulebookForChecks } from "../sop-evaluator.js";
+import { VERDICT_JSON_SCHEMA, buildSystemPrompt, buildUserPrompt, quotableText, verdictSchema, type ReviewItem } from "./sop-ai-prompt.js";
 import { verifyVerdicts } from "./sop-ai-verifier.js";
 
 export const MAX_CHECKS_PER_REQUEST = 200;
@@ -41,21 +43,46 @@ export interface EnqueueResult {
   skipped: Array<{ workItemId: number; reason: EnqueueSkipReason }>;
 }
 
-function aiCardsFor(rulebook: RulebookForChecks, profile: ProjectProfile, type: string): AiRuleCard[] {
-  const kind = kindOf(profile, type);
-  return kind === null
-    ? []
-    : rulebook.cards.filter((card): card is AiRuleCard => card.checker === "ai" && card.severity !== "off" && card.appliesTo.includes(kind));
+/** Whether the AI review looks at this rule: AI-only rules, and code rules whose check it can clear or draft for. */
+function reviewable(card: RuleCard): boolean {
+  return card.checker === "ai" || AI_REVIEW[card.uses as BuiltinCheckName] !== undefined;
 }
 
-function allAiCards(rulebook: RulebookForChecks): AiRuleCard[] {
-  return rulebook.cards.filter((card): card is AiRuleCard => card.checker === "ai" && card.severity !== "off");
+function reviewCardsFor(rulebook: RulebookForChecks, profile: ProjectProfile, type: string): RuleCard[] {
+  const kind = kindOf(profile, type);
+  return kind === null ? [] : rulebook.cards.filter((card) => card.severity !== "off" && card.appliesTo.includes(kind) && reviewable(card));
+}
+
+/**
+ * What the AI reviews for this ticket, from the code result: gaps (and to-dos
+ * and notices) of rules it can clear or draft for, found items whose quality
+ * it judges, and AI-only rules that apply now.
+ */
+export function reviewItems(result: ComplianceResult, cards: RuleCard[]): ReviewItem[] {
+  const findings = new Map([...result.violations, ...result.todos, ...result.notices].map((finding) => [finding.ruleId, finding]));
+  const passed = new Set(result.passedRules.map((rule) => rule.ruleId));
+  const aiRules = new Set(result.aiRules.map((rule) => rule.ruleId));
+
+  return cards.flatMap((card): ReviewItem[] => {
+    if (card.checker === "ai") {
+      return aiRules.has(card.id) ? [{ card, mode: "ai-rule", codeMessage: null }] : [];
+    }
+
+    const kind = AI_REVIEW[card.uses as BuiltinCheckName];
+    const found = findings.get(card.id);
+
+    if (found) {
+      return [{ card, mode: kind === "judge" ? "gap" : "draft", codeMessage: found.message }];
+    }
+
+    return kind === "judge" && passed.has(card.id) ? [{ card, mode: "quality", codeMessage: null }] : [];
+  });
 }
 
 /** Anything that changes the answer: the ticket revision, the rules and the model settings. */
 function inputHash(
   rev: number,
-  cards: AiRuleCard[],
+  cards: RuleCard[],
   profile: ProjectProfile,
   settings: { provider: string; model: string; effort: string },
   trackedHours: number | null = null
@@ -68,7 +95,11 @@ function inputHash(
         rev,
         settings,
         project,
-        cards: cards.map((card) => [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]),
+        cards: cards.map((card) =>
+          card.checker === "ai"
+            ? [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]
+            : [card.id, card.severity, card.when, card.rule, card.uses, card.params]
+        ),
         // Tracked time is part of what the AI sees; a change (to the quarter hour) re-checks.
         ...(trackedHours === null ? {} : { trackedHours }),
       })
@@ -170,7 +201,7 @@ export async function enqueueAiChecks(
       continue;
     }
 
-    const cards = aiCardsFor(rulebook, profile, workItemType(raw));
+    const cards = reviewCardsFor(rulebook, profile, workItemType(raw));
 
     if (cards.length === 0) {
       result.skipped.push({ workItemId: id, reason: "NO_AI_RULES" });
@@ -234,6 +265,7 @@ export async function listAiChecks(userId: string, credentialId: string, workIte
       workItemId: true,
       status: true,
       results: true,
+      ticketRev: true,
       errorReason: true,
       errorDetail: true,
       provider: true,
@@ -252,6 +284,50 @@ export async function listAiChecks(userId: string, credentialId: string, workIte
     notBefore: row.notBefore?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   }));
+}
+
+const TIMING_WINDOW_DAYS = 30;
+
+/**
+ * How long this user's AI reviews took per model over the last 30 days (time
+ * running, not waiting in the queue), and how many waited on a rate limit, so
+ * the AI settings can say whether the chosen model is slow.
+ */
+export async function getSopCheckTiming(userId: string, now = new Date()) {
+  const since = new Date(now.getTime() - TIMING_WINDOW_DAYS * 24 * 60 * 60_000);
+  const rows = await prisma.sopAiCheck.findMany({
+    where: { userId, updatedAt: { gte: since }, model: { not: null } },
+    select: { provider: true, model: true, status: true, errorReason: true, startedAt: true, finishedAt: true, results: true },
+  });
+  const byModel = new Map<string, { provider: string | null; model: string; durations: number[]; rateLimited: number; failed: number }>();
+
+  for (const row of rows) {
+    const key = `${row.provider ?? ""}|${row.model ?? ""}`;
+    const entry = byModel.get(key) ?? { provider: row.provider, model: row.model ?? "", durations: [], rateLimited: 0, failed: 0 };
+
+    // A review with nothing to ask the AI finishes at once; it would make the model look faster than it is.
+    const askedAi = Array.isArray(row.results) && row.results.length > 0;
+
+    if (row.status === "DONE" && askedAi && row.startedAt && row.finishedAt) {
+      entry.durations.push((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000);
+    }
+
+    if (row.errorReason === "AI_RATE_LIMITED") entry.rateLimited += 1;
+    if (row.status === "FAILED") entry.failed += 1;
+    byModel.set(key, entry);
+  }
+
+  return {
+    days: TIMING_WINDOW_DAYS,
+    models: [...byModel.values()]
+      .map(({ durations, ...entry }) => ({
+        ...entry,
+        checks: durations.length,
+        averageSeconds: durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : null,
+        maxSeconds: durations.length ? Math.round(Math.max(...durations)) : null,
+      }))
+      .sort((a, b) => b.checks - a.checks),
+  };
 }
 
 /* ------------------------------------------------------------------ worker */
@@ -366,11 +442,13 @@ async function runCheck(id: string): Promise<void> {
       return await done({ status: "SKIPPED", errorReason: "PROJECT_NOT_CONFIGURED", results: [] });
     }
 
-    const dossier = await buildDossier(client, summary, raw, profile, new Set(["updates", "comments", "pullRequests", "relatedItems"]));
-    const cards = aiCardsFor(rulebook, profile, summary.type).filter((card) => cardApplies(card, dossier).applies);
+    const dossier = await buildDossier(client, summary, raw, profile, new Set(["updates", "comments", "pullRequests", "prThreads", "relatedItems"]));
+    // The AI reviews what code found on the ticket as it is now.
+    const items = reviewItems(evaluateDossier(dossier, rulebook, new Date()), reviewCardsFor(rulebook, profile, summary.type));
+    const judged = { ticketRev: raw.rev };
 
-    if (cards.length === 0) {
-      return await done({ status: "DONE", errorDetail: null, results: [], errorReason: null, provider: preference.provider, model: model.id, costUsd: 0 });
+    if (items.length === 0) {
+      return await done({ status: "DONE", errorDetail: null, results: [], errorReason: null, provider: preference.provider, model: model.id, costUsd: 0, ...judged });
     }
 
     const response = await judge({
@@ -378,9 +456,9 @@ async function runCheck(id: string): Promise<void> {
       apiKey,
       model: model.id,
       effort: model.efforts.includes(preference.effort) ? preference.effort : null,
-      system: buildSystemPrompt(allAiCards(rulebook)),
+      system: buildSystemPrompt(),
       // The hours the check was queued with (part of its input hash).
-      user: buildUserPrompt(dossier, cards, { trackedHours: row.trackedHours }),
+      user: buildUserPrompt(dossier, items, { trackedHours: row.trackedHours }),
       schema: verdictSchema,
       jsonSchema: VERDICT_JSON_SCHEMA,
       allowDataCollection: preference.dataCollectionAcceptedAt !== null,
@@ -389,8 +467,8 @@ async function runCheck(id: string): Promise<void> {
 
     await recordAiUsage({ userId: row.userId, provider: preference.provider, model: response.servedBy, purpose: USAGE_PURPOSE, usage: response.usage, costUsd });
 
-    const results = verifyVerdicts(response.data, cards, quotableText(dossier), profile);
-    await done({ status: "DONE", errorDetail: null, results: results as object[], errorReason: null, provider: preference.provider, model: response.servedBy, costUsd });
+    const results = verifyVerdicts(response.data, items, quotableText(dossier), profile);
+    await done({ status: "DONE", errorDetail: null, results: results as object[], errorReason: null, provider: preference.provider, model: response.servedBy, costUsd, ...judged });
   } catch (error) {
     if (error instanceof AiProviderError && error.billed) {
       // Failed answers (refusals, cut-off or invalid JSON) are still billed; count them against the limit.
@@ -470,7 +548,8 @@ async function drain(): Promise<void> {
     const now = new Date();
     const candidates = await prisma.sopAiCheck.findMany({
       where: { status: "QUEUED", OR: [{ notBefore: null }, { notBefore: { lte: now } }] },
-      orderBy: { updatedAt: "asc" },
+      // Newest first: the ticket someone just opened is the one they are waiting for.
+      orderBy: { updatedAt: "desc" },
       take: 50,
       select: { id: true, userId: true },
     });

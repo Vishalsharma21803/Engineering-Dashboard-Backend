@@ -74,7 +74,7 @@ describe("default rulebook", () => {
     expect(response.body.valid).toBe(true);
     // Projects are set up on the Projects screen, not in the rulebook text.
     expect(response.body.summary.projects).toEqual([]);
-    expect(response.body.summary.cards.find((card: { id: string }) => card.id === "STR-08")).toMatchObject({ checker: "ai", severity: "warn" });
+    expect(response.body.summary.cards.find((card: { id: string }) => card.id === "STR-08")).toMatchObject({ checker: "code", uses: "approach-present", severity: "warn" });
   });
 });
 
@@ -158,11 +158,11 @@ describe("team SOP report", () => {
 
     const report = await runSopReport(agent, credentialId, "Alpha");
 
-    // #106 is still New: "before work starts" rules are only checked once work starts.
+    // #106 is still New: "before work starts" rules are to-dos there, never gaps (its priority already passes).
     expect(report).toMatchObject({ run: { projectName: "Alpha", defaultVersion: 1, itemsChecked: 5, itemsWithGaps: 3 }, itemsChecked: 5, itemsWithGaps: 3, compliantShare: 0.4 });
     expect(report.byRule.items).toEqual([
       { ruleId: "T-01", ruleTitle: "Estimate exists", severity: "high", failing: 3, checked: 4 },
-      { ruleId: "T-03", ruleTitle: "Priority is set", severity: "medium", failing: 1, checked: 4 },
+      { ruleId: "T-03", ruleTitle: "Priority is set", severity: "medium", failing: 1, checked: 5 },
       { ruleId: "T-02", ruleTitle: "Pull request linked at review", severity: "medium", failing: 0, checked: 1 },
     ]);
     expect(report.byPerson.items.map((person: { assignee: { displayName: string }; items: number; gaps: number }) => [person.assignee.displayName, person.items, person.gaps])).toEqual([
@@ -225,5 +225,75 @@ describe("team SOP report", () => {
     await agent.delete(`/api/sop/reports/${credentialId}/Alpha/${first.id}`).expect(200);
     await agent.get(`/api/sop/reports/${credentialId}/Alpha/${first.id}`).expect(404);
     expect((await agent.get(`/api/sop/reports/${credentialId}/Alpha?page=9`).expect(200)).body.runs).toMatchObject({ page: 1, total: 1 });
+  });
+});
+
+describe("rules list", () => {
+  const rule = (body: { rules: Array<{ id: string }> }, id: string) => body.rules.find((candidate) => candidate.id === id) as Record<string, any>;
+
+  it("lists every rule with its settings and the built-in checks with their settings schema", async () => {
+    const body = (await developer.get("/api/sop/rules").expect(200)).body;
+
+    expect(body).toMatchObject({ defaultVersion: 0, personalVersion: 0, canEditDefaults: false });
+    expect(rule(body, "STR-08")).toMatchObject({ checker: "code", uses: "approach-present", params: { min_steps: 3 }, when: "before-active", origin: "default", defaults: null, inStarter: true });
+    const approach = body.checks.find((check: { name: string }) => check.name === "approach-present");
+    expect(approach).toMatchObject({ aiReview: "judge", params: { type: "object", properties: { min_steps: { type: "integer", default: 3 } } } });
+    expect(body.checks.find((check: { name: string }) => check.name === "stage-comment").params.properties.requires.items.enum).toContain("eta-date");
+  });
+
+  it("saves level and settings changes, resets them and adds or removes my own rules, as versions", async () => {
+    const set = await developer
+      .post("/api/sop/my-rules/edits")
+      .send({ baseVersion: 0, edits: [{ op: "set", id: "STR-08", severity: "fail", params: { min_steps: 5 } }, { op: "set", id: "TRN-01", severity: "off" }] })
+      .expect(200);
+    expect(set.body.rulebook.version).toBe(1);
+
+    let body = (await developer.get("/api/sop/rules").expect(200)).body;
+    expect(rule(body, "STR-08")).toMatchObject({ severity: "fail", params: { min_steps: 5 }, origin: "personal", defaults: { severity: "warn", params: { min_steps: 3 } } });
+    expect(rule(body, "TRN-01").severity).toBe("off");
+
+    await developer
+      .post("/api/sop/my-rules/edits")
+      .send({
+        baseVersion: 1,
+        edits: [
+          { op: "reset", id: "STR-08" },
+          { op: "add", card: { title: "Bugs: approach in 2 steps", checker: "code", uses: "approach-present", params: { min_steps: 2 }, appliesTo: ["bug"], when: "before-active", severity: "warn", rule: "Bugs have a short plan." } },
+          { op: "add", card: { title: "Bugs name the browser", checker: "ai", appliesTo: ["bug"], when: "always", severity: "notice", rule: "Browser named.", passesWhen: "A browser is named.", failsWhen: "None is." } },
+        ],
+      })
+      .expect(200);
+    body = (await developer.get("/api/sop/rules").expect(200)).body;
+    expect(rule(body, "STR-08")).toMatchObject({ severity: "warn", origin: "default" });
+    expect(rule(body, "MY-01")).toMatchObject({ checker: "code", params: { min_steps: 2 }, custom: true });
+    expect(rule(body, "MY-02")).toMatchObject({ checker: "ai", passesWhen: "A browser is named.", failsWhen: "None is." });
+
+    await developer.post("/api/sop/my-rules/edits").send({ baseVersion: 2, edits: [{ op: "remove", id: "MY-01" }] }).expect(200);
+    expect(rule((await developer.get("/api/sop/rules").expect(200)).body, "MY-01")).toBeUndefined();
+
+    // Default rules cannot be removed from my rules (switch them off instead), and stale edits are refused.
+    expect((await developer.post("/api/sop/my-rules/edits").send({ baseVersion: 3, edits: [{ op: "remove", id: "STR-08" }] }).expect(422)).body.reason).toBe("RULE_NOT_REMOVABLE");
+    expect((await developer.post("/api/sop/my-rules/edits").send({ baseVersion: 1, edits: [{ op: "set", id: "STR-08", severity: "off" }] }).expect(409)).body.reason).toBe("RULEBOOK_CHANGED");
+    // Settings are validated like Markdown edits.
+    const invalid = await developer.post("/api/sop/my-rules/edits").send({ baseVersion: 3, edits: [{ op: "set", id: "STR-08", params: { min_steps: 0 } }] }).expect(422);
+    expect(invalid.body.errors[0].message).toContain("min_steps");
+  });
+
+  it("lets only SOP owners change the default rules, and reset brings back the starter's rule", async () => {
+    await developer.post("/api/sop/rulebook/edits").send({ baseVersion: 0, edits: [{ op: "set", id: "STR-08", severity: "off" }] }).expect(403);
+
+    await owner.post("/api/sop/rulebook/edits").send({ baseVersion: 0, edits: [{ op: "set", id: "STR-08", severity: "off" }, { op: "remove", id: "FLG-01" }] }).expect(200);
+    let body = (await owner.get("/api/sop/rules").expect(200)).body;
+    expect(body).toMatchObject({ canEditDefaults: true, defaultVersion: 1 });
+    expect(rule({ rules: body.defaultRules }, "STR-08").severity).toBe("off");
+    expect(rule({ rules: body.defaultRules }, "FLG-01")).toBeUndefined();
+    // Everyone's checks follow the default rules.
+    expect(rule((await developer.get("/api/sop/rules").expect(200)).body, "STR-08").severity).toBe("off");
+
+    await owner.post("/api/sop/rulebook/edits").send({ baseVersion: 1, edits: [{ op: "reset", id: "STR-08" }, { op: "reset", id: "FLG-01" }] }).expect(200);
+    body = (await owner.get("/api/sop/rules").expect(200)).body;
+    expect(rule({ rules: body.defaultRules }, "STR-08").severity).toBe("warn");
+    expect(rule({ rules: body.defaultRules }, "FLG-01")).toBeDefined();
+    expect((await owner.get("/api/sop/rulebook").expect(200)).body.rulebook.note).toBe("Changed from the rules list");
   });
 });

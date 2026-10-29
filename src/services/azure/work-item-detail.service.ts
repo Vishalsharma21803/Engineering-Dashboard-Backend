@@ -3,6 +3,7 @@ import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText } from "../../lib/html-to-text.js";
 import type { SupportedWorkFields, WorkItemDetail } from "../../types/azure.types.js";
 import { getEffectiveRulebook, isCloseAfterMergeAllowed } from "../sop/rulebook.service.js";
+import { applyAiReviews } from "../sop/ai/sop-ai-review.js";
 import { evaluateTicket } from "../sop/sop-evaluator.js";
 import { asString } from "./mappers.js";
 import { sectionData, toSection } from "./section.js";
@@ -61,7 +62,9 @@ export async function getWorkItemDetail(
     toSection(() => getWorkItemComments(client, projectName, workItemId)),
     toSection(() => getWorkFieldHistory(client, projectName, workItemId)),
     toSection(() => getLinkedPullRequests(client, summary.links.pullRequests)),
-    getEffectiveRulebook(userId).then((rulebook) => evaluateTicket(client, rulebook, summary, raw, new Date())),
+    getEffectiveRulebook(userId)
+      .then((rulebook) => evaluateTicket(client, rulebook, summary, raw, new Date()))
+      .then(async (result) => (await applyAiReviews(userId, client.credentialId, [result], new Map([[summary.id, summary.rev]])))[0] ?? result),
     isCloseAfterMergeAllowed(projectName),
   ]);
 
