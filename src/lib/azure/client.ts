@@ -53,8 +53,12 @@ export interface AzureClientConfig {
   credentialId: string;
   organizationUrl: string;
   patToken: string;
-  /** Bypass cached reads (results are still cached for later requests). */
-  refresh?: boolean;
+  /**
+   * Bypass cached reads (results are still cached for later requests).
+   * "data": bypass only short-lived data reads (work items, comments, history,
+   * pull requests); long-lived metadata (state lists, fields, identity) stays cached.
+   */
+  refresh?: boolean | "data";
 }
 
 const limiters = new Map<string, Limiter>();
@@ -110,8 +114,9 @@ export class AzureClient {
   readonly credentialId: string;
   readonly organizationUrl: string;
   readonly #authorization: string;
-  readonly #refresh: boolean;
+  readonly #refresh: boolean | "data";
   readonly #limit: Limiter;
+  readonly #config: AzureClientConfig;
 
   constructor(config: AzureClientConfig) {
     this.credentialId = config.credentialId;
@@ -122,6 +127,15 @@ export class AzureClient {
     ).toString("base64")}`;
     this.#refresh = config.refresh ?? false;
     this.#limit = limiterFor(config.credentialId);
+    this.#config = config;
+  }
+
+  /**
+   * The same connection reading the ticket data as it is now (for a page about
+   * one ticket, which must never show a minute-old state). Metadata stays cached.
+   */
+  withFreshData(): AzureClient {
+    return this.#refresh === true ? this : new AzureClient({ ...this.#config, refresh: "data" });
   }
 
   buildUrl(segments: readonly string[], options: RequestOptions = {}): URL {
@@ -255,7 +269,9 @@ export class AzureClient {
     const ttl = cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     const cacheKey = `${method} ${url.toString()} ${body ?? ""}`;
 
-    if (ttl > 0 && !this.#refresh) {
+    const bypass = this.#refresh === true || (this.#refresh === "data" && ttl <= DEFAULT_CACHE_TTL_MS);
+
+    if (ttl > 0 && !bypass) {
       const cached = getCached<AzurePage<T>>(this.credentialId, cacheKey);
 
       if (cached) {

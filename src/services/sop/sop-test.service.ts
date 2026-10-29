@@ -59,7 +59,9 @@ async function draftRulebook(
 }
 
 /** Runs the code rules on one real ticket, read-only, without saving anything. */
-export async function testRulesOnTicket(client: AzureClient, userId: string, input: SopTestInput): Promise<SopTestResult> {
+export async function testRulesOnTicket(cachedClient: AzureClient, userId: string, input: SopTestInput): Promise<SopTestResult> {
+  // Rules are tried on the ticket as it is now.
+  const client = cachedClient.withFreshData();
   let rulebook: RulebookForChecks;
 
   if (input.draft) {

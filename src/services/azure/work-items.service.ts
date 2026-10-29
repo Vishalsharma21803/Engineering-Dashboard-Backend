@@ -389,6 +389,8 @@ export async function toWorkItemSummaries(
           throw error;
         }
 
+        // The tickets still show with their state name; only the state's category (open/closed) is unknown.
+        console.warn(`Could not read the states of ${pair.type} in ${pair.projectName}:`, error instanceof AzureApiError ? error.reason : error);
         return [key, []];
       }
     }

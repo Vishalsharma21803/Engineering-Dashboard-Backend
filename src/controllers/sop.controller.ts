@@ -50,6 +50,8 @@ import {
 } from "../services/sop/rulebook.service.js";
 import { AI_REVIEW, BUILTIN_CHECKS, type BuiltinCheckName } from "../services/sop/builtin-checks.js";
 import { ruleEditsSchema } from "../services/sop/rulebook.edits.js";
+import { forgetDashboardLists } from "../services/work-item-list/dashboard-lists.service.js";
+import { forgetMyWorkSnapshots } from "../services/work-item-list/my-work.service.js";
 import { parseRulebook } from "../services/sop/rulebook.parser.js";
 import { STARTER_RULEBOOK } from "../services/sop/starter-rulebook.js";
 import type { RuleCard } from "../services/sop/rulebook.types.js";
@@ -131,9 +133,20 @@ export const getDefaultVersionController = sopRoute("Loading rulebook version fa
   rulebook: await getDefaultVersion(parse(versionParamSchema, req.params.version)),
 }));
 
+/**
+ * SOP results in My work and the dashboard lists were computed with the old
+ * rules or set-ups: rebuild them on the next read. No user = everyone's (shared rules).
+ */
+function sopChanged(userId?: string): void {
+  forgetMyWorkSnapshots(userId);
+  forgetDashboardLists(userId);
+}
+
 export const saveDefaultRulebookController = sopRoute("Saving rulebook failed", async (req, userId) => {
   const input = parse(saveDefaultRulebookSchema, req.body);
-  return { message: "Rulebook saved", rulebook: await saveDefaultRulebook(input.content, userId, input.note) };
+  const rulebook = await saveDefaultRulebook(input.content, userId, input.note);
+  sopChanged();
+  return { message: "Rulebook saved", rulebook };
 });
 
 export const getPersonalRulebookController = sopRoute("Loading your rules failed", async (_req, userId) => ({
@@ -148,10 +161,11 @@ export const getPersonalVersionController = sopRoute("Loading your rule version 
   rulebook: await getPersonalVersion(userId, parse(versionParamSchema, req.params.version)),
 }));
 
-export const savePersonalRulebookController = sopRoute("Saving your rules failed", async (req, userId) => ({
-  message: "Your rules were saved",
-  rulebook: await savePersonalRulebook(userId, parse(savePersonalRulebookSchema, req.body).content),
-}));
+export const savePersonalRulebookController = sopRoute("Saving your rules failed", async (req, userId) => {
+  const rulebook = await savePersonalRulebook(userId, parse(savePersonalRulebookSchema, req.body).content);
+  sopChanged(userId);
+  return { message: "Your rules were saved", rulebook };
+});
 
 /** Dry run for the editor: parse + validate without saving. */
 export const validateRulebookController = sopRoute("Validating rulebook failed", async (req) => {
@@ -226,12 +240,16 @@ export const getRulesListController = sopRoute("Loading the rules failed", async
 
 export const editPersonalRulesController = sopRoute("Saving your rules failed", async (req, userId) => {
   const input = parse(ruleEditsSchema, req.body);
-  return { message: "Your rules were saved", rulebook: await editPersonalRules(userId, input.baseVersion, input.edits) };
+  const rulebook = await editPersonalRules(userId, input.baseVersion, input.edits);
+  sopChanged(userId);
+  return { message: "Your rules were saved", rulebook };
 });
 
 export const editDefaultRulesController = sopRoute("Saving the default rules failed", async (req, userId) => {
   const input = parse(ruleEditsSchema, req.body);
-  return { message: "Default rules saved", rulebook: await editDefaultRules(userId, input.baseVersion, input.edits, input.note) };
+  const rulebook = await editDefaultRules(userId, input.baseVersion, input.edits, input.note);
+  sopChanged();
+  return { message: "Default rules saved", rulebook };
 });
 
 type AzureSopHandler = (req: Request, client: NonNullable<Request["azure"]>, userId: string) => Promise<unknown>;
@@ -295,15 +313,16 @@ export const saveProjectSetUpController = sopRoute("Saving the project set-up fa
   const projectName = parse(projectNameParamSchema, req.params.projectName);
   const { settings } = parse(saveProjectSetUpSchema, req.body);
   // Invalid settings come back as field errors ({ field: "settings.stages", message }) like other forms.
-  return {
-    project: await saveProjectSetUp(userId, projectName, parse(projectSettingsSchema, settings), {
-      canSetBranchPattern: await isUserSopAdmin(userId),
-    }),
-  };
+  const project = await saveProjectSetUp(userId, projectName, parse(projectSettingsSchema, settings), {
+    canSetBranchPattern: await isUserSopAdmin(userId),
+  });
+  sopChanged();
+  return { project };
 });
 
 export const removeProjectSetUpController = sopRoute("Removing the project set-up failed", async (req, userId) => {
   await removeProjectSetUp(userId, parse(projectNameParamSchema, req.params.projectName));
+  sopChanged();
   return { message: "Project removed from SOP checks" };
 });
 
@@ -316,6 +335,7 @@ export const setProjectCheckedController = sopRoute("Saving your project choice 
   const projectName = parse(projectNameParamSchema, req.params.projectName);
   const { checked } = parse(projectCheckedSchema, req.body);
   await setProjectIncluded(userId, projectName, checked);
+  sopChanged(userId);
   return { projectName, checked };
 });
 

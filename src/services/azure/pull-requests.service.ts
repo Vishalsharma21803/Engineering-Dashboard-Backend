@@ -226,13 +226,15 @@ export async function getPullRequest(
   ]);
 }
 
+/** One pull request as it is now (its status, votes and threads are read fresh; metadata stays cached). */
 export async function getPullRequestDetail(
-  client: AzureClient,
+  cachedClient: AzureClient,
   identity: AzureIdentity,
   projectId: string,
   repositoryId: string,
   pullRequestId: number
 ): Promise<PullRequestDetail> {
+  const client = cachedClient.withFreshData();
   const raw = await getPullRequest(client, projectId, repositoryId, pullRequestId);
   const projectGuid = raw.repository.project.id;
 

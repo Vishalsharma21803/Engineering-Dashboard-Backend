@@ -3,7 +3,10 @@ import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText } from "../../lib/html-to-text.js";
 import type { SupportedWorkFields, WorkItemDetail } from "../../types/azure.types.js";
 import { getEffectiveRulebook, isCloseAfterMergeAllowed } from "../sop/rulebook.service.js";
+import { clearAzureCache } from "../../lib/azure/cache.js";
 import { applyAiReviews } from "../sop/ai/sop-ai-review.js";
+import { forgetDashboardLists } from "../work-item-list/dashboard-lists.service.js";
+import { forgetMyWorkSnapshots, myWorkIsBehind } from "../work-item-list/my-work.service.js";
 import { evaluateTicket } from "../sop/sop-evaluator.js";
 import { asString } from "./mappers.js";
 import { sectionData, toSection } from "./section.js";
@@ -36,12 +39,18 @@ export function belongsToProject(projectId: string, projectName: string): boolea
   return GUID_PATTERN.test(projectId) || projectId.toLowerCase() === projectName.toLowerCase();
 }
 
+/**
+ * One ticket as it is in Azure now. Its data (fields, comments, history, pull
+ * requests) is always read fresh, never from the minute-long list cache, so a
+ * change made in Azure shows on the next load; type metadata stays cached.
+ */
 export async function getWorkItemDetail(
-  client: AzureClient,
+  cachedClient: AzureClient,
   userId: string,
   projectId: string,
   workItemId: number
 ): Promise<WorkItemDetail> {
+  const client = cachedClient.withFreshData();
   const raw = await getWorkItem(client, workItemId);
   const projectName = workItemProjectName(raw);
 
@@ -57,6 +66,13 @@ export async function getWorkItemDetail(
   ]);
 
   const summary = toWorkItemSummary(raw, sectionData(states, []), client.organizationUrl);
+
+  // Changed in Azure since the lists were built: drop them, so My work and the dashboard show it too.
+  if (myWorkIsBehind(userId, client.credentialId, summary.id, summary.rev)) {
+    forgetMyWorkSnapshots(userId, client.credentialId);
+    forgetDashboardLists(userId, client.credentialId);
+    clearAzureCache(client.credentialId);
+  }
 
   const [comments, history, linkedPullRequests, compliance, closeAfterMergeAllowed] = await Promise.all([
     toSection(() => getWorkItemComments(client, projectName, workItemId)),

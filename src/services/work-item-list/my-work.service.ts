@@ -29,6 +29,11 @@ const snapshots = new Map<string, { expiresAt: number; snapshot: MyWorkSnapshot 
 /** When each user's lists for a credential were last forgotten (userId|credentialId|): older reads are not cached. */
 const forgottenAt = new Map<string, number>();
 
+/** The latest "forget" covering this user's lists for this organization ("" = everyone, "user|" = all their organizations). */
+function forgottenSince(userId: string, credentialId: string): number {
+  return Math.max(forgottenAt.get("") ?? 0, forgottenAt.get(`${userId}|`) ?? 0, forgottenAt.get(`${userId}|${credentialId}|`) ?? 0);
+}
+
 function snapshotKey(userId: string, credentialId: string, projectName: string | undefined): string {
   return `${userId}|${credentialId}|${projectName ?? "*"}`;
 }
@@ -55,7 +60,7 @@ export function rememberMyWork(
 
   const snapshot: MyWorkSnapshot = { items: open, compliance: new Map(input.compliance.map((result) => [result.workItemId, result])), signals };
 
-  if ((forgottenAt.get(`${userId}|${credentialId}|`) ?? 0) > readStartedAt) {
+  if (forgottenSince(userId, credentialId) > readStartedAt) {
     return snapshot;
   }
 
@@ -74,14 +79,32 @@ export function rememberMyWork(
   return snapshot;
 }
 
-/** After an approved change: My work is rebuilt from Azure on the next read instead of up to a minute later. */
-export function forgetMyWorkSnapshots(userId: string, credentialId: string): void {
+/** Whether a cached My work list holds an older revision of this ticket than Azure has now. */
+export function myWorkIsBehind(userId: string, credentialId: string, workItemId: number, rev: number): boolean {
   const prefix = `${userId}|${credentialId}|`;
+
+  return [...snapshots.entries()].some(
+    ([key, entry]) => key.startsWith(prefix) && entry.snapshot.items.some((item) => item.id === workItemId && item.rev < rev)
+  );
+}
+
+/**
+ * Rebuild from Azure on the next read instead of up to a minute later: after an
+ * approved change (one organization), a change to the user's own rules (no
+ * credential), or to the shared rules and project set-ups (nobody named: everyone).
+ */
+export function forgetMyWorkSnapshots(userId?: string, credentialId?: string): void {
+  const prefix = userId === undefined ? "" : credentialId === undefined ? `${userId}|` : `${userId}|${credentialId}|`;
   forgottenAt.set(prefix, Date.now());
 
   for (const key of [...snapshots.keys()]) {
     if (key.startsWith(prefix)) snapshots.delete(key);
   }
+}
+
+/** Exposed for tests. */
+export function getMyWorkSnapshotForTests(userId: string, credentialId: string, projectName?: string): MyWorkSnapshot | undefined {
+  return snapshots.get(snapshotKey(userId, credentialId, projectName))?.snapshot;
 }
 
 /** Exposed for tests. */

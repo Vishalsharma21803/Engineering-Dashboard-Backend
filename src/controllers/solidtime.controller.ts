@@ -221,10 +221,14 @@ export const ticketTimesController = solidtimeRoute("Reading time for tickets fa
   return { times: [...times.values()] };
 });
 
-/** A suggested day of entries from my Azure DevOps activity. Read-only; approving it is a separate action. */
+/**
+ * A suggested day of entries from my Azure DevOps activity. Read-only; approving it is a separate action.
+ * ?refresh=true (Rebuild) reads Azure fresh too, not only Solidtime.
+ */
 export const draftController = solidtimeRoute("Drafting the day from Azure DevOps failed", async (req, { client, connection }, userId) => {
   const { day } = parse(draftQuerySchema, req.query);
-  return { draft: await draftDayFromAzure(client, connection, await linkedAzureClient(userId, connection.azureCredentialId), day) };
+  const { refresh } = parse(refreshQuerySchema, req.query);
+  return { draft: await draftDayFromAzure(client, connection, await linkedAzureClient(userId, connection.azureCredentialId, { refresh }), day) };
 });
 
 /** AI hours for drafted rows. Calls the user's AI provider (counted against their spend limit); writes nothing to Solidtime or Azure. */

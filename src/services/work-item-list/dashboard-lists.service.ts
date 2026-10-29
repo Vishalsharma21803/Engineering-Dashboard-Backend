@@ -39,12 +39,17 @@ const keyOf = (userId: string, credentialId: string, projectName: string | undef
 /** When each user's lists for a credential were last forgotten (userId|credentialId|): older reads are not cached. */
 const forgottenAt = new Map<string, number>();
 
+/** The latest "forget" covering this user's lists for this organization ("" = everyone, "user|" = all their organizations). */
+function forgottenSince(userId: string, credentialId: string): number {
+  return Math.max(forgottenAt.get("") ?? 0, forgottenAt.get(`${userId}|`) ?? 0, forgottenAt.get(`${userId}|${credentialId}|`) ?? 0);
+}
+
 /**
  * Called by the dashboard with what it computed. `readStartedAt`: when its
  * Azure reads began; a result read before an approved change is not cached.
  */
 export function rememberDashboardLists(userId: string, credentialId: string, projectName: string | undefined, lists: DashboardLists, readStartedAt = Date.now()): void {
-  if ((forgottenAt.get(`${userId}|${credentialId}|`) ?? 0) > readStartedAt) {
+  if (forgottenSince(userId, credentialId) > readStartedAt) {
     return;
   }
 
@@ -61,9 +66,13 @@ export function rememberDashboardLists(userId: string, credentialId: string, pro
   snapshots.set(key, { expiresAt: Date.now() + SNAPSHOT_TTL_MS, lists });
 }
 
-/** After an approved change: the dashboard lists are rebuilt on the next read instead of up to a minute later. */
-export function forgetDashboardLists(userId: string, credentialId: string): void {
-  const prefix = `${userId}|${credentialId}|`;
+/**
+ * Rebuild from Azure on the next read instead of up to a minute later: after an
+ * approved change (one organization), a change to the user's own rules (no
+ * credential), or to the shared rules and project set-ups (nobody named: everyone).
+ */
+export function forgetDashboardLists(userId?: string, credentialId?: string): void {
+  const prefix = userId === undefined ? "" : credentialId === undefined ? `${userId}|` : `${userId}|${credentialId}|`;
   forgottenAt.set(prefix, Date.now());
 
   for (const key of [...snapshots.keys()]) {

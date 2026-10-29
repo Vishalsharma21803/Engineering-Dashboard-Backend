@@ -6,6 +6,9 @@ import type {
   CreateCredentialInput,
   UpdateCredentialInput,
 } from "../types/credential.types.js";
+import { clearAzureCache } from "../lib/azure/cache.js";
+import { forgetDashboardLists } from "./work-item-list/dashboard-lists.service.js";
+import { forgetMyWorkSnapshots } from "./work-item-list/my-work.service.js";
 
 const credentialSelect = {
   id: true,
@@ -51,6 +54,13 @@ export async function createCredential(
   }
 }
 
+/** A new organization or token reads differently: nothing cached under the old one may be served. */
+function forgetCredentialReads(userId: string, credentialId: string): void {
+  clearAzureCache(credentialId);
+  forgetMyWorkSnapshots(userId, credentialId);
+  forgetDashboardLists(userId, credentialId);
+}
+
 export async function updateCredential(
   userId: string,
   credentialId: string,
@@ -91,6 +101,10 @@ export async function updateCredential(
 
     if (result.count === 0) {
       return null;
+    }
+
+    if (input.organizationUrl !== undefined || input.patToken !== undefined) {
+      forgetCredentialReads(userId, credentialId);
     }
 
     return await prisma.credential.findFirst({
@@ -148,6 +162,7 @@ export async function deleteCredential(
     },
   });
 
+  forgetCredentialReads(userId, credentialId);
   return result.count > 0;
 }
 

@@ -394,3 +394,36 @@ describe("Azure read API — safety", () => {
     // 17 routes in sequence: the default 5s limit is too tight when the full suite runs in parallel.
   }, 30_000);
 });
+
+describe("fresh ticket data", () => {
+  it("shows a change made in Azure on the next ticket load, and drops My work lists that still have the old state", async () => {
+    await get("/dashboard").expect(200);
+    const myWorkState = async () =>
+      ((await get("/my-work").expect(200)).body.myWork.items as Array<{ workItem: { id: number; state: string } }>).find((row) => row.workItem.id === 101)?.workItem.state;
+    expect((await get("/projects/Alpha/work-items/101").expect(200)).body.workItem.state).toBe("Active");
+    expect(await myWorkState()).toBe("Active");
+
+    // Moved in Azure by someone else, inside the list cache's minute.
+    const item = fake.workItems.get(101)!;
+    item.fields["System.State"] = "Resolved";
+    item.rev += 1;
+
+    expect((await get("/projects/Alpha/work-items/101").expect(200)).body.workItem.state).toBe("Resolved");
+    expect(await myWorkState()).toBe("Resolved");
+  });
+});
+
+describe("lists after a rule change", () => {
+  it("rebuild My work at once when the user's rules change, instead of up to a minute later", async () => {
+    await useAlphaRulebook();
+    await get("/dashboard").expect(200);
+    const gaps = async () =>
+      ((await get("/my-work").expect(200)).body.myWork.items as Array<{ workItem: { id: number }; compliance: { violations: Array<{ ruleId: string }> } | null }>)
+        .find((row) => row.workItem.id === 102)
+        ?.compliance?.violations.map((violation) => violation.ruleId);
+    expect(await gaps()).toContain("T-01");
+
+    await agent.put("/api/sop/my-rules").send({ content: "---\nid: T-01\nseverity: off\n---\n" }).expect(200);
+    expect(await gaps()).not.toContain("T-01");
+  });
+});
