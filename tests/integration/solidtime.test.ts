@@ -708,28 +708,44 @@ describe("nudges and reports", () => {
     await agent.put("/api/triage").send({ credentialId, itemKey: "time:timer", status: "ABANDONED", signals: [] }).expect(200);
   });
 
-  it("reports estimate accuracy, a weekly CSV and team time in the SOP report", async () => {
+  it("reports estimate compliance (total time at most the estimate), a range CSV and team time in the SOP report", async () => {
     await useAlphaRulebook();
+    // #101: estimate 2 h, 3 h tracked → over by 1 h.
     azure.workItems.get(101)!.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] = 2;
     addEntry(solidtime, { start: hoursAgo(5), end: hoursAgo(2), description: "#101 Implement login" });
+    // #102: estimate 3 h; 1 h this week + 2 h a month ago = exactly the estimate → compliant.
+    azure.workItems.get(102)!.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] = 3;
+    addEntry(solidtime, { start: hoursAgo(8), end: hoursAgo(7), description: "#102 Fix flaky test" });
+    addEntry(solidtime, { start: hoursAgo(24 * 30), end: hoursAgo(24 * 30 - 2), description: "#102 Fix flaky test" });
     const connection = await connectSolidtime(agent);
     const today = new Date().toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
 
     const accuracy = (await agent.get(st(connection, `/reports/accuracy?from=${weekAgo}&to=${today}`)).expect(200)).body.accuracy;
-    expect(accuracy.byType.items).toEqual([expect.objectContaining({ label: "Task", tickets: 1, trackedHours: 3, estimateHours: 2, ratio: 1.5, overEstimate: 1 })]);
-    expect(accuracy.totals).toEqual({ tickets: 1, trackedHours: 3, estimateHours: 2, ratio: 1.5, overEstimate: 1 });
-    expect(accuracy.byTicket.items).toEqual([expect.objectContaining({ trackedHours: 3, estimateHours: 2, ratio: 1.5, type: "Task" })]);
+    expect(accuracy.totals).toEqual({ tickets: 2, trackedHours: 6, estimateHours: 5, withinEstimate: 1, compliance: 0.5, overEstimate: 1 });
+    expect(accuracy.byTicket.items).toEqual([
+      expect.objectContaining({ ticketId: 101, periodHours: 3, trackedHours: 3, estimateHours: 2, withinEstimate: false, overByHours: 1 }),
+      expect.objectContaining({ ticketId: 102, periodHours: 1, trackedHours: 3, estimateHours: 3, withinEstimate: true, overByHours: 0 }),
+    ]);
+    expect(accuracy.byType.items).toEqual([expect.objectContaining({ label: "Task", tickets: 2, withinEstimate: 1, compliance: 0.5, overEstimate: 1 })]);
 
-    const csv = await agent.get(st(connection, `/reports/weekly.csv?week=${weekAgo}`)).expect(200);
+    const csv = await agent.get(st(connection, `/reports/time.csv?from=${weekAgo}&to=${today}`)).expect(200);
     expect(csv.headers["content-type"]).toContain("text/csv");
-    expect(csv.text).toContain('"Me"');
-    expect(csv.text).toContain('"101","Implement login","Alpha","3"');
+    expect(csv.headers["content-disposition"]).toContain(`time-${weekAgo}-to-${today}.csv`);
+    expect(csv.text.split("\r\n")[0]).toBe(
+      '"Person","Day","Ticket","Title","Type","State","Azure project","Hours","Total tracked (h)","Original estimate (h)","Completed Work (h)","Remaining Work (h)","Within estimate","Over by (h)"'
+    );
+    expect(csv.text).toContain('"101","Implement login","Task","Active","Alpha","3","3","2","4","4","No","1"');
+    expect(csv.text).toContain('"102","Fix flaky test","Task","Active","Alpha","1","3","3","0","","Yes","0"');
+    // Only the chosen days are exported (the entry from a month ago is not a row).
+    expect(csv.text.split("\r\n").filter((line) => line.includes('"102"'))).toHaveLength(1);
+    await agent.get(st(connection, `/reports/time.csv?from=${today}&to=${weekAgo}`)).expect(400);
 
     const run = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
     expect(run.timeScope).toBe("mine");
     const view = (await agent.get(`/api/sop/reports/${credentialId}/Alpha/${run.id}`).expect(200)).body.report;
-    expect(view.trackedHours).toBe(3);
+    // #101 (3 h) and #102 (1 h + 2 h): the Team SOP report counts each ticket's time over the last year.
+    expect(view.trackedHours).toBe(6);
   });
 
   it("marks the connection invalid when Solidtime rejects the token", async () => {

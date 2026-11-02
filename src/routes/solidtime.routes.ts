@@ -8,7 +8,7 @@ import {
   profileController,
   draftController,
   draftEstimateController,
-  weeklyCsvController,
+  timeCsvController,
   createConnectionController,
   listClientsController,
   listConnectionsController,
@@ -55,7 +55,7 @@ read.get("/ticket-times", ticketTimesController);
 read.get("/draft", draftController);
 read.get("/verification", verificationController);
 read.get("/reports/accuracy", accuracyController);
-read.get("/reports/weekly.csv", weeklyCsvController);
+read.get("/reports/time.csv", timeCsvController);
 
 // Not a Solidtime change: asks the user's AI for hours on a draft (POST: it spends AI credit).
 router.post("/:credentialId/draft/estimate", requireJson, loadSolidtimeConnection, draftEstimateController);

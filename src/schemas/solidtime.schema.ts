@@ -109,6 +109,10 @@ export const verificationQuerySchema = z
   .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
   .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 366, { message: "Choose at most a year", path: ["to"] });
 
-export const weekQuerySchema = z.object({ week: daySchema });
+/** The time export: every day from `from` to `to` (at most a year). */
+export const timeCsvQuerySchema = z
+  .object({ from: daySchema, to: daySchema })
+  .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
+  .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 366, { message: "Choose at most a year", path: ["to"] });
 
 export const catalogPageQuerySchema = z.object({ page: pageQuery, projectId: uuid.optional().catch(undefined) });

@@ -11,7 +11,7 @@ import {
   catalogPageQuerySchema,
   draftEstimateBodySchema,
   draftQuerySchema,
-  weekQuerySchema,
+  timeCsvQuerySchema,
   createSolidtimeConnectionSchema,
   dayRangeQuerySchema,
   ticketIdParamSchema,
@@ -34,7 +34,7 @@ import { isFinished, linkedAzureClient, lookUpTickets } from "../services/solidt
 import { getTimesheet, getUnlinkedEntries } from "../services/solidtime/timesheet.service.js";
 import { draftDayFromAzure } from "../services/solidtime/draft.service.js";
 import { estimateDraftHours } from "../services/solidtime/draft-ai.service.js";
-import { estimateAccuracy, weeklyCsv } from "../services/solidtime/reports.service.js";
+import { estimateAccuracy, timeCsv } from "../services/solidtime/reports.service.js";
 import { verifyTime } from "../services/solidtime/verification.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
@@ -252,8 +252,8 @@ export const accuracyController = solidtimeRoute("Building the estimate accuracy
   return { accuracy: await estimateAccuracy(client, connection, await linkedAzureClient(userId, connection.azureCredentialId), query) };
 });
 
-/** Time per person, ticket and day for one week, as CSV. */
-export async function weeklyCsvController(req: Request, res: Response): Promise<void> {
+/** Time per person, day and ticket between two days, with each ticket's estimate figures, as CSV. */
+export async function timeCsvController(req: Request, res: Response): Promise<void> {
   const solidtime = req.solidtime;
 
   if (!solidtime || !req.userId) {
@@ -262,12 +262,12 @@ export async function weeklyCsvController(req: Request, res: Response): Promise<
   }
 
   try {
-    const { week } = parse(weekQuerySchema, req.query);
-    const csv = await weeklyCsv(solidtime.client, solidtime.connection, await linkedAzureClient(req.userId, solidtime.connection.azureCredentialId), week);
+    const { from, to } = parse(timeCsvQuerySchema, req.query);
+    const csv = await timeCsv(solidtime.client, solidtime.connection, await linkedAzureClient(req.userId, solidtime.connection.azureCredentialId), { from, to });
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="time-${week}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="time-${from}-to-${to}.csv"`);
     res.status(200).send(csv);
   } catch (error) {
-    await respondWithError(req, res, error, "Exporting the week failed", solidtime.connection.credentialId);
+    await respondWithError(req, res, error, "Exporting the time failed", solidtime.connection.credentialId);
   }
 }
