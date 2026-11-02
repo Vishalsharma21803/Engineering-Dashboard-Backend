@@ -1,3 +1,4 @@
+import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
@@ -490,6 +491,201 @@ describe("AI hours for a draft", () => {
     ai.badJson = true;
     expect((await estimate(connection, { day: day(), ticketIds: [103] }).expect(502)).body.reason).toBe("AI_BAD_OUTPUT");
     expect(await prisma.aiUsage.count({ where: { purpose: "time-draft" } })).toBe(1);
+  });
+});
+
+describe("time verification", () => {
+  const COMPLETED = "Microsoft.VSTS.Scheduling.CompletedWork";
+  const REMAINING = "Microsoft.VSTS.Scheduling.RemainingWork";
+  const today = () => new Date().toISOString().slice(0, 10);
+  const verify = async (connection: string, query = `from=${shiftUtcDay(today(), -7)}&to=${shiftUtcDay(today(), 1)}`) =>
+    (await agent.get(st(connection, `/verification?${query}`)).expect(200)).body.verification;
+  const field = (id: number, name: string) => azure.workItems.get(id)!.fields[name];
+
+  /** One ticket per status, plus an unknown number and an entry naming no ticket. */
+  function seedTicketsInEveryState() {
+    // #101: 4 h in Solidtime over all time (3 h a month ago, 1 h this week) = Azure's 4 h completed, 8 − 4 remaining.
+    addEntry(solidtime, { start: hoursAgo(24 * 30), end: hoursAgo(24 * 30 - 3), description: "#101 Implement login" });
+    addEntry(solidtime, { start: hoursAgo(6), end: hoursAgo(5), description: "#101 Implement login" });
+    // #102: Azure has 1 h, Solidtime 2 h.
+    azure.workItems.get(102)!.fields[COMPLETED] = 1;
+    addEntry(solidtime, { start: hoursAgo(9), end: hoursAgo(7), description: "#102 Fix flaky test" });
+    // #103: no Completed Work in Azure yet.
+    addEntry(solidtime, { start: hoursAgo(12), end: hoursAgo(11), description: "#103 Crash on save" });
+    // #104: a User Story, which has no Completed Work field.
+    addEntry(solidtime, { start: hoursAgo(14), end: hoursAgo(13), description: "#104 Profile page" });
+    // #106: Azure has 5 h, more than the 2 h in Solidtime.
+    azure.workItems.get(106)!.fields[COMPLETED] = 5;
+    addEntry(solidtime, { start: hoursAgo(18), end: hoursAgo(16), description: "#106 Waiting on vendor" });
+    addEntry(solidtime, { start: hoursAgo(20), end: hoursAgo(19), description: "Fix the 404 page" });
+    addEntry(solidtime, { start: hoursAgo(22), end: hoursAgo(21.5), description: "Standup" });
+  }
+
+  it("compares each ticket's all-time Solidtime total with Azure and sorts the problems first, writing nothing", async () => {
+    seedTicketsInEveryState();
+    const connection = await connectSolidtime(agent);
+    const result = await verify(connection);
+
+    expect(result.basis).toBe("mine");
+    expect(result.items.map((item: { ticketId: number; status: string }) => [item.ticketId, item.status])).toEqual([
+      [103, "missing"],
+      [102, "mismatch"],
+      [106, "azure-higher"],
+      [104, "cannot-update"],
+      [101, "matched"],
+    ]);
+    expect(result.counts).toEqual({ missing: 1, mismatch: 1, "azure-higher": 1, remaining: 0, running: 0, "cannot-update": 1, matched: 1 });
+    expect(result.items.find((item: { ticketId: number }) => item.ticketId === 101)).toMatchObject({ periodHours: 1, trackedHours: 4, azure: { completedWork: 4, remainingWork: 4 } });
+    // #103 is a Resolved bug: finished work, so its Remaining Work is not suggested.
+    expect(result.items.find((item: { ticketId: number }) => item.ticketId === 103)).toMatchObject({ trackedHours: 1, suggested: { completedWork: 1, remainingWork: null }, azure: { completedWork: null } });
+    expect(result.items.find((item: { ticketId: number }) => item.ticketId === 102)).toMatchObject({ trackedHours: 2, suggested: { completedWork: 2 } });
+    // Closed (#104) and Resolved (#103) tickets are marked finished; active ones are not.
+    const finished = (id: number) => result.items.find((item: { ticketId: number }) => item.ticketId === id).finished;
+    expect([finished(104), finished(103), finished(102)]).toEqual([true, true, false]);
+    expect(result.notFound).toEqual([{ ticketId: 404, periodHours: 1 }]);
+    expect(result.unlinkedHours).toBe(0.5);
+    expect(writeRequests(azure)).toEqual([]);
+    expect(solidtimeWrites(solidtime)).toEqual([]);
+
+    // Completed Work equal but Remaining Work out of date is its own status, not a difference in time.
+    azure.workItems.get(101)!.fields[REMAINING] = 5;
+    const remaining = await verify(connection, `from=${shiftUtcDay(today(), -7)}&to=${shiftUtcDay(today(), 1)}&refresh=true`);
+    expect(remaining.items.find((item: { ticketId: number }) => item.ticketId === 101)).toMatchObject({
+      status: "remaining",
+      azure: { completedWork: 4, remainingWork: 5 },
+      suggested: { completedWork: 4, remainingWork: 4 },
+    });
+    // Once the ticket is closed, Remaining Work is left alone: Completed Work matching is enough.
+    azure.workItems.get(101)!.fields["System.State"] = "Closed";
+    const closed = await verify(connection, `from=${shiftUtcDay(today(), -7)}&to=${shiftUtcDay(today(), 1)}&refresh=true`);
+    expect(closed.items.find((item: { ticketId: number }) => item.ticketId === 101)).toMatchObject({ status: "matched", suggested: { completedWork: 4, remainingWork: null } });
+    const box = (await agent.get(st(connection, "/tickets/101/time?refresh=true")).expect(200)).body.comparison;
+    expect(box).toMatchObject({ inSync: true, remainingInSync: true, suggested: { remainingWork: null } });
+    azure.workItems.get(101)!.fields["System.State"] = "Active";
+    azure.workItems.get(101)!.fields[REMAINING] = 4;
+
+    // A running timer keeps a ticket out of sync until it stops: its total is still moving.
+    addEntry(solidtime, { start: hoursAgo(1), end: null, description: "#103 Crash on save" });
+    const running = await verify(connection);
+    expect(running.items.find((item: { ticketId: number }) => item.ticketId === 103).status).toBe("running");
+
+    // Only tickets with time in the period are checked.
+    const lastMonth = await verify(connection, `from=${shiftUtcDay(today(), -31)}&to=${shiftUtcDay(today(), -29)}`);
+    expect(lastMonth.items.map((item: { ticketId: number }) => item.ticketId)).toEqual([101]);
+
+    await agent.get(st(connection, `/verification?from=${today()}&to=${shiftUtcDay(today(), -1)}`)).expect(400);
+    await agent.get(st(connection, `/verification?from=${shiftUtcDay(today(), -400)}&to=${today()}`)).expect(400);
+  });
+
+  it("compares exact minutes, not quarter hours: 40 min matches Azure's 0.66 h", async () => {
+    // 40 minutes is 0.67 h; rounded to a quarter it would wrongly read 0.75 h.
+    azure.workItems.get(102)!.fields[COMPLETED] = 0.66;
+    addEntry(solidtime, { start: hoursAgo(3), end: hoursAgo(3 - 40 / 60), description: "#102 Fix flaky test" });
+    const connection = await connectSolidtime(agent);
+
+    const matched = (await verify(connection)).items.find((item: { ticketId: number }) => item.ticketId === 102);
+    expect(matched).toMatchObject({ status: "matched", trackedHours: 0.67, azure: { completedWork: 0.66 } });
+    // The Ticket time box and the work item page use the same rule.
+    const box = (await agent.get(st(connection, "/tickets/102/time?refresh=true")).expect(200)).body.comparison;
+    expect(box).toMatchObject({ trackedHours: 0.67, inSync: true, completedInSync: true });
+
+    // A real difference (more than a minute) is still one, and the update writes exact hours.
+    azure.workItems.get(102)!.fields[COMPLETED] = 0.5;
+    const differs = (await verify(connection, `from=${shiftUtcDay(today(), -7)}&to=${shiftUtcDay(today(), 1)}&refresh=true`)).items.find((item: { ticketId: number }) => item.ticketId === 102);
+    expect(differs).toMatchObject({ status: "mismatch", trackedHours: 0.67, suggested: { completedWork: 0.67 } });
+  });
+
+  it("needs a linked Azure organization, and says so when Azure cannot be read", async () => {
+    const connection = await connectSolidtime(agent);
+    await agent.patch(`/api/solidtime/connections/${connection}`).send({ azureCredentialId: null }).expect(200);
+    const unlinked = await agent.get(st(connection, `/verification?from=${today()}&to=${today()}`)).expect(409);
+    expect(unlinked.body.reason).toBe("AZURE_NOT_LINKED");
+
+    // Linked again, but Azure fails: an error, not every ticket shown as "not found".
+    await agent.patch(`/api/solidtime/connections/${connection}`).send({ azureCredentialId: credentialId }).expect(200);
+    addEntry(solidtime, { start: hoursAgo(3), end: hoursAgo(2), description: "#101 Implement login" });
+    server.use(http.post(/\/_apis\/wit\/workitemsbatch/, () => HttpResponse.json({ message: "down" }, { status: 503 })));
+    const down = await agent.get(st(connection, `/verification?from=${today()}&to=${shiftUtcDay(today(), 1)}`)).expect(502);
+    expect(down.body.reason).toBe("AZURE_UNAVAILABLE");
+  });
+
+  it("updates several tickets in one approval, never lowering Completed Work", async () => {
+    seedTicketsInEveryState();
+    const connection = await connectSolidtime(agent);
+    const items = [
+      { projectId: "Alpha", workItemId: 102, completedWork: 2 },
+      { projectId: "Alpha", workItemId: 103, completedWork: 1, remainingWork: 1 },
+    ];
+
+    // Refused before anything is proposed: lowering, a type without the field, nothing to change.
+    for (const [item, reason] of [
+      [{ projectId: "Alpha", workItemId: 106, completedWork: 2 }, "WOULD_LOWER_COMPLETED_WORK"],
+      [{ projectId: "Beta", workItemId: 104, completedWork: 1 }, "FIELD_NOT_SUPPORTED"],
+      [{ projectId: "Alpha", workItemId: 101, completedWork: 4, remainingWork: 4 }, "NO_CHANGES"],
+    ] as const) {
+      const refused = await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEMS_UPDATE_TIME", params: { items: [item] } });
+      expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+      expect(refused.body.reason).toBe(reason);
+    }
+    await agent.post("/api/actions").send({ credentialId, kind: "WORK_ITEMS_UPDATE_TIME", params: { items: [items[0], items[0]] } }).expect(400);
+
+    const action = await propose(credentialId, { kind: "WORK_ITEMS_UPDATE_TIME", params: { items } });
+    expect(action.summary).toBe("Update time on 2 tickets: #102, #103");
+    expect(action.projectId).toBe("Alpha");
+    expect(action.preview).toEqual([
+      { field: "#102 Completed work (h)", before: 1, after: 2 },
+      { field: "#103 Completed work (h)", before: null, after: 1 },
+    ]);
+    expect(writeRequests(azure)).toEqual([]);
+
+    const approved = await approve(action);
+    expect(approved.verification.verified).toBe(true);
+    expect(approved.verification.checks).toEqual([
+      { check: "#102: Completed Work 2 h", passed: true },
+      { check: "#103: Completed Work 1 h", passed: true },
+    ]);
+    expect(field(102, COMPLETED)).toBe(2);
+    expect(field(103, COMPLETED)).toBe(1);
+    expect(field(103, REMAINING)).toBe(1);
+    expect(writeRequests(azure)).toHaveLength(2);
+
+    const after = await verify(connection, `from=${shiftUtcDay(today(), -7)}&to=${shiftUtcDay(today(), 1)}&refresh=true`);
+    expect(after.counts).toMatchObject({ missing: 0, mismatch: 0, matched: 3 });
+
+    // Only Remaining Work out of date: the batch writes that field alone.
+    azure.workItems.get(101)!.fields[REMAINING] = 5;
+    const remainingOnly = await propose(credentialId, { kind: "WORK_ITEMS_UPDATE_TIME", params: { items: [{ projectId: "Alpha", workItemId: 101, completedWork: 4, remainingWork: 4 }] } });
+    expect(remainingOnly.preview).toEqual([{ field: "#101 Remaining work (h)", before: 5, after: 4 }]);
+    await approve(remainingOnly);
+    expect(field(101, REMAINING)).toBe(4);
+    expect(field(101, COMPLETED)).toBe(4);
+  });
+
+  it("skips a ticket changed in Azure since the preview and writes the others; all changed is a failure", async () => {
+    seedTicketsInEveryState();
+    const items = [
+      { projectId: "Alpha", workItemId: 102, completedWork: 2 },
+      { projectId: "Alpha", workItemId: 103, completedWork: 1 },
+    ];
+
+    const partly = await propose(credentialId, { kind: "WORK_ITEMS_UPDATE_TIME", params: { items } });
+    azure.workItems.get(102)!.fields[COMPLETED] = 9;
+    const result = await approve(partly);
+    expect(result.action.status).toBe("SUCCEEDED");
+    expect(result.verification.verified).toBe(false);
+    expect(result.verification.checks).toEqual([
+      { check: "#102: changed in Azure DevOps since the check, not updated", passed: false },
+      { check: "#103: Completed Work 1 h", passed: true },
+    ]);
+    expect(field(102, COMPLETED)).toBe(9);
+    expect(field(103, COMPLETED)).toBe(1);
+
+    const allStale = await propose(credentialId, { kind: "WORK_ITEMS_UPDATE_TIME", params: { items: [{ projectId: "Alpha", workItemId: 106, completedWork: 6 }] } });
+    azure.workItems.get(106)!.fields[COMPLETED] = 7;
+    const failed = await approve(allStale, 409);
+    expect(failed.reason).toBe("ACTION_STALE");
+    expect(failed.action.status).toBe("FAILED");
+    expect(field(106, COMPLETED)).toBe(7);
   });
 });
 

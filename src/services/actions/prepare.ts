@@ -36,6 +36,14 @@ export interface PreviewChange {
  */
 export type ExpectedFields = Record<string, string | number | null>;
 
+/** One ticket of a WORK_ITEMS_UPDATE_TIME batch, as stored: the field values to write and what they were in the preview. */
+export interface TimeBatchItem {
+  projectId: string;
+  workItemId: number;
+  fields: Record<string, number>;
+  expected: ExpectedFields;
+}
+
 export interface PreparedAction {
   projectId: string;
   target: Record<string, string | number>;
@@ -206,6 +214,70 @@ export async function prepareAction(
         preview,
         summary: `Update ${preview.map((change) => change.field).join(", ")} on #${workItem.id} ${title(workItem)}`,
         baseRev: workItem.rev,
+      };
+    }
+
+    case "WORK_ITEMS_UPDATE_TIME": {
+      const items: TimeBatchItem[] = [];
+      const preview: PreviewChange[] = [];
+      const projects = new Set<string>();
+
+      for (const wanted of action.params.items) {
+        const workItem = await loadWorkItemForAction(client, wanted.projectId, wanted.workItemId);
+        const projectName = workItemProjectName(workItem);
+        const supported = await getSupportedFields(client, projectName, workItemType(workItem));
+
+        if (!supported.completedWork) {
+          throw invalid("FIELD_NOT_SUPPORTED", `#${workItem.id}: Completed work is not available on ${workItemType(workItem)} work items`);
+        }
+
+        const currentCompleted = asNumber(workItem.fields[WORK_ITEM_FIELDS.completedWork]);
+
+        // Solidtime raises Completed Work, never lowers it: more in Azure may be time logged there directly.
+        if (currentCompleted !== null && wanted.completedWork < currentCompleted) {
+          throw invalid(
+            "WOULD_LOWER_COMPLETED_WORK",
+            `#${workItem.id}: Azure has ${currentCompleted} h completed, more than the ${wanted.completedWork} h proposed. Cockpit does not lower Completed Work.`
+          );
+        }
+
+        const values: Partial<Record<"completedWork" | "remainingWork", number>> = { completedWork: wanted.completedWork };
+        if (wanted.remainingWork !== undefined && supported.remainingWork) {
+          values.remainingWork = wanted.remainingWork;
+        }
+
+        const fields: Record<string, number> = {};
+        const expected: ExpectedFields = {};
+
+        for (const [key, value] of Object.entries(values) as Array<["completedWork" | "remainingWork", number]>) {
+          const reference = WORK_FIELD_REFERENCE[key];
+          const before = asNumber(workItem.fields[reference]);
+
+          if (before !== value) {
+            fields[reference] = value;
+            expected[reference] = before;
+            preview.push({ field: `#${workItem.id} ${WORK_FIELD_LABEL[key]}`, before, after: value });
+          }
+        }
+
+        if (Object.keys(fields).length > 0) {
+          items.push({ projectId: projectName, workItemId: workItem.id, fields, expected });
+          projects.add(projectName);
+        }
+      }
+
+      if (items.length === 0) {
+        throw invalid("NO_CHANGES", "Azure already has these hours on every ticket");
+      }
+
+      return {
+        // One project when they share one; a batch across projects belongs to none of them.
+        projectId: projects.size === 1 ? [...projects][0]! : "",
+        target: {},
+        params: { items },
+        preview,
+        summary: `Update time on ${items.length} ticket${items.length === 1 ? "" : "s"}: ${items.map((item) => `#${item.workItemId}`).join(", ")}`,
+        baseRev: null,
       };
     }
 

@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
     "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
@@ -29,6 +30,7 @@
     "msw": "^3.0.3",
     "prisma": "^7.10.1",
     "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },

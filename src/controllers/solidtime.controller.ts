@@ -7,6 +7,7 @@ import { refreshQuerySchema } from "../schemas/azure.schema.js";
 import { credentialIdSchema } from "../schemas/credential.schema.js";
 import {
   accuracyQuerySchema,
+  verificationQuerySchema,
   catalogPageQuerySchema,
   draftEstimateBodySchema,
   draftQuerySchema,
@@ -29,11 +30,12 @@ import { getActiveEntry, getMe, listClients, listProjects, listTags, listTasks }
 import { isValidTimeZone } from "../lib/zoned-time.js";
 import { candidateTicketIds } from "../services/solidtime/ticket-ids.js";
 import { compareWithEstimate, getTicketTimes, TICKET_LOOKBACK_DAYS } from "../services/solidtime/ticket-time.service.js";
-import { linkedAzureClient, lookUpTickets } from "../services/solidtime/tickets.service.js";
+import { isFinished, linkedAzureClient, lookUpTickets } from "../services/solidtime/tickets.service.js";
 import { getTimesheet, getUnlinkedEntries } from "../services/solidtime/timesheet.service.js";
 import { draftDayFromAzure } from "../services/solidtime/draft.service.js";
 import { estimateDraftHours } from "../services/solidtime/draft-ai.service.js";
 import { estimateAccuracy, weeklyCsv } from "../services/solidtime/reports.service.js";
+import { verifyTime } from "../services/solidtime/verification.service.js";
 import { sendError, sendValidationError } from "./controller-helpers.js";
 
 class RequestValidationError extends Error {
@@ -205,12 +207,14 @@ export const ticketTimeController = solidtimeRoute("Reading time for the ticket 
   const ticketId = parse(ticketIdParamSchema, req.params.ticketId);
   const { refresh } = parse(refreshQuerySchema, req.query);
   const now = new Date();
-  const lookup = await lookUpTickets(await linkedAzureClient(userId, connection.azureCredentialId, { refresh }), [ticketId]);
+  const azure = await linkedAzureClient(userId, connection.azureCredentialId, { refresh });
+  const lookup = await lookUpTickets(azure, [ticketId]);
   const ticket = lookup.tickets.get(ticketId) ?? null;
   const times = await getTicketTimes(client, connection, [ticketId], { now, withPeople: true });
   const time = times.get(ticketId)!;
+  const finished = ticket && azure ? await isFinished(azure, ticket) : false;
 
-  return { time, ticket, comparison: ticket ? compareWithEstimate(time, ticket) : null };
+  return { time, ticket, comparison: ticket ? compareWithEstimate(time, ticket, { finished }) : null };
 });
 
 /** Time on several tickets at once (My work rows). */
@@ -235,6 +239,12 @@ export const draftController = solidtimeRoute("Drafting the day from Azure DevOp
 export const draftEstimateController = solidtimeRoute("Estimating hours with AI failed", async (req, { client, connection }, userId) => {
   const body = parse(draftEstimateBodySchema, req.body);
   return { estimate: await estimateDraftHours(userId, client, connection, await linkedAzureClient(userId, connection.azureCredentialId), body) };
+});
+
+/** Time → Verify: each ticket I logged time on in the period, its Solidtime total next to Azure. Read-only. */
+export const verificationController = solidtimeRoute("Checking time against Azure DevOps failed", async (req, { client, connection }, userId) => {
+  const { from, to, refresh } = parse(verificationQuerySchema, req.query);
+  return { verification: await verifyTime(client, connection, await linkedAzureClient(userId, connection.azureCredentialId, { refresh }), { from, to }) };
 });
 
 export const accuracyController = solidtimeRoute("Building the estimate accuracy report failed", async (req, { client, connection }, userId) => {

@@ -113,16 +113,28 @@ function forbiddenAsNull(error: unknown): null {
   throw error;
 }
 
-const roundQuarter = (hours: number) => Math.round(hours * 4) / 4;
+const roundHours = (hours: number) => Math.round(hours * 100) / 100;
+
+/** Hours that differ by at most a minute are the same time: 40 min is 0.67 h, and Azure may hold 0.66 or 0.67. */
+export const SAME_TIME_HOURS = 1 / 60;
+
+export function sameHours(a: number, b: number): boolean {
+  return Math.abs(a - b) <= SAME_TIME_HOURS + 1e-9;
+}
 
 export interface TimeVsEstimate {
+  /** Exact tracked time, in hours to 2 decimals. */
   trackedHours: number;
   estimateHours: number | null;
   /** Tracked time passed the Azure original estimate. */
   overEstimate: boolean;
-  /** What Azure's time fields would be if they followed Solidtime (hours, quarter-hour steps). */
+  /** What Azure's time fields would be if they followed Solidtime (hours, 2 decimals). */
   suggested: { completedWork: number; remainingWork: number | null };
-  /** Azure already matches the suggestion. */
+  /** Azure's Completed Work is the tracked time (within a minute). */
+  completedInSync: boolean;
+  /** Azure's Remaining Work is what follows from it (or there is no estimate to follow). */
+  remainingInSync: boolean;
+  /** Both of the above. */
   inSync: boolean;
   /** "team": everyone's time on the ticket; "mine": only my own (my Solidtime role cannot read others'). */
   basis: "team" | "mine";
@@ -131,19 +143,32 @@ export interface TimeVsEstimate {
 /**
  * Solidtime is the source of truth for hours: Completed Work = tracked time,
  * Remaining Work = estimate minus tracked (never below zero; kept when there is
- * no estimate). Uses the team total when known, otherwise mine.
+ * no estimate). Uses the team total when known, otherwise mine. Times are
+ * exact; Azure matches when it is within a minute of them. A finished ticket
+ * (resolved, closed or removed) keeps its Remaining Work: work may have ended
+ * before the estimate ran out.
  */
-export function compareWithEstimate(time: TicketTime, ticket: Pick<TicketInfo, "originalEstimate" | "completedWork" | "remainingWork">): TimeVsEstimate {
-  const trackedHours = roundQuarter((time.teamSeconds ?? time.mySeconds) / 3600);
+export function compareWithEstimate(
+  time: TicketTime,
+  ticket: Pick<TicketInfo, "originalEstimate" | "completedWork" | "remainingWork">,
+  options: { finished?: boolean } = {}
+): TimeVsEstimate {
+  const exactHours = (time.teamSeconds ?? time.mySeconds) / 3600;
+  const trackedHours = roundHours(exactHours);
   const estimate = ticket.originalEstimate;
-  const remaining = estimate === null ? ticket.remainingWork : Math.max(0, roundQuarter(estimate - trackedHours));
+  const exactRemaining = estimate === null || options.finished ? null : Math.max(0, estimate - exactHours);
+  const remaining = options.finished ? null : exactRemaining === null ? ticket.remainingWork : roundHours(exactRemaining);
+  const completedInSync = sameHours(ticket.completedWork ?? 0, exactHours);
+  const remainingInSync = exactRemaining === null || (ticket.remainingWork !== null && sameHours(ticket.remainingWork, exactRemaining));
 
   return {
     trackedHours,
     estimateHours: estimate,
-    overEstimate: estimate !== null && trackedHours > estimate,
+    overEstimate: estimate !== null && exactHours > estimate + SAME_TIME_HOURS,
     suggested: { completedWork: trackedHours, remainingWork: remaining },
-    inSync: (ticket.completedWork ?? 0) === trackedHours && (remaining === null || (ticket.remainingWork ?? null) === remaining),
+    completedInSync,
+    remainingInSync,
+    inSync: completedInSync && remainingInSync,
     basis: time.teamSeconds === null ? "mine" : "team",
   };
 }

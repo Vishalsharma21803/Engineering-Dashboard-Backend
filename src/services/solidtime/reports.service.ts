@@ -13,7 +13,7 @@ type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: s
 
 const roundHours = (seconds: number) => Math.round((seconds / 3600) * 100) / 100;
 
-async function zoneOf(client: SolidtimeClient): Promise<string> {
+export async function zoneOf(client: SolidtimeClient): Promise<string> {
   const zone = (await getMe(client)).timezone;
   return zone && isValidTimeZone(zone) ? zone : "UTC";
 }

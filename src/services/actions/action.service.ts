@@ -64,6 +64,7 @@ const WRITE_SCOPE_KINDS: Record<WriteScopeArea, ActionKind[]> = {
     "WORK_ITEM_EDIT_TEXT",
     "WORK_ITEM_SET_CATEGORY",
     "WORK_ITEM_ADD_TAGS",
+    "WORK_ITEMS_UPDATE_TIME",
   ],
   build: ["PIPELINE_QUEUE_RUN", "BUILD_RETRY_STAGE", "BUILD_CANCEL"],
 };

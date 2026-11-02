@@ -3,6 +3,7 @@ import { Router } from "express";
 import { requireJson } from "../controllers/controller-helpers.js";
 import {
   accuracyController,
+  verificationController,
   catalogController,
   profileController,
   draftController,
@@ -52,6 +53,7 @@ read.get("/unlinked", unlinkedController);
 read.get("/tickets/:ticketId/time", ticketTimeController);
 read.get("/ticket-times", ticketTimesController);
 read.get("/draft", draftController);
+read.get("/verification", verificationController);
 read.get("/reports/accuracy", accuracyController);
 read.get("/reports/weekly.csv", weeklyCsvController);
 

@@ -70,14 +70,20 @@ describe("placing drafted entries", () => {
 describe("tracked time vs estimate", () => {
   it("uses team time when known and keeps remaining work at or above zero", () => {
     const time = { ticketId: 1, mySeconds: 3600, teamSeconds: 5 * 3600 + 600, people: null, running: false };
+    // Exact time (5 h 10 min = 5.17 h), not rounded to a quarter hour.
     expect(compareWithEstimate(time, { originalEstimate: 4, completedWork: 1, remainingWork: 3 })).toEqual({
-      trackedHours: 5.25,
+      trackedHours: 5.17,
       estimateHours: 4,
       overEstimate: true,
-      suggested: { completedWork: 5.25, remainingWork: 0 },
+      suggested: { completedWork: 5.17, remainingWork: 0 },
+      completedInSync: false,
+      remainingInSync: false,
       inSync: false,
       basis: "team",
     });
+    // Within a minute is the same time: Azure's 5.16 or 5.17 matches 5 h 10 min.
+    expect(compareWithEstimate(time, { originalEstimate: 8, completedWork: 5.16, remainingWork: 2.84 })).toMatchObject({ completedInSync: true, remainingInSync: true, inSync: true });
+    expect(compareWithEstimate(time, { originalEstimate: 8, completedWork: 5.1, remainingWork: 2.9 })).toMatchObject({ completedInSync: false, inSync: false });
     expect(compareWithEstimate({ ...time, teamSeconds: null }, { originalEstimate: null, completedWork: 1, remainingWork: 2 })).toMatchObject({
       trackedHours: 1,
       overEstimate: false,

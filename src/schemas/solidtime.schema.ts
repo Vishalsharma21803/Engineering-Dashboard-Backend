@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { normalizeSolidtimeUrl } from "../lib/solidtime/url.js";
-import { pageQuery } from "./azure.schema.js";
+import { booleanFlag, pageQuery } from "./azure.schema.js";
 
 export const solidtimeUrlSchema = z
   .string()
@@ -100,6 +100,12 @@ export const draftEstimateBodySchema = z.object({
 
 export const accuracyQuerySchema = z
   .object({ from: daySchema, to: daySchema, personPage: pageQuery, typePage: pageQuery, ticketPage: pageQuery })
+  .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
+  .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 366, { message: "Choose at most a year", path: ["to"] });
+
+/** Time → Verify: the tickets I logged time on between two days (at most a year). ?refresh=true reads Azure fresh. */
+export const verificationQuerySchema = z
+  .object({ from: daySchema, to: daySchema, refresh: booleanFlag })
   .refine((value) => value.to >= value.from, { message: "The end day is before the start day", path: ["to"] })
   .refine((value) => (Date.parse(value.to) - Date.parse(value.from)) / 86_400_000 <= 366, { message: "Choose at most a year", path: ["to"] });
 

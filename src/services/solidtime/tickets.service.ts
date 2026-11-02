@@ -1,6 +1,7 @@
 import type { AzureClient } from "../../lib/azure/client.js";
 import { AzureApiError } from "../../lib/azure/errors.js";
-import { getWorkItemsByIds, WORK_ITEM_FIELDS, workItemProjectName, workItemType } from "../azure/work-items.service.js";
+import type { StateCategory } from "../../types/azure.types.js";
+import { getWorkItemsByIds, getWorkItemTypeStates, WORK_ITEM_FIELDS, workItemProjectName, workItemType } from "../azure/work-items.service.js";
 import { createAzureClientForCredential } from "../azure/azure-context.service.js";
 
 /** What Cockpit shows about an Azure ticket next to Solidtime time. */
@@ -65,6 +66,21 @@ export async function lookUpTickets(azure: AzureClient | null, ids: number[]): P
       return { tickets: new Map(), checked: false };
     }
 
+    throw error;
+  }
+}
+
+/** States where the work is done: Remaining Work is then left as it is. */
+const FINISHED_CATEGORIES: StateCategory[] = ["Resolved", "Completed", "Removed"];
+
+/** Whether the ticket's state is resolved, closed or removed. Unknown (Azure unreadable) counts as open. */
+export async function isFinished(azure: AzureClient, ticket: Pick<TicketInfo, "projectName" | "type" | "state">): Promise<boolean> {
+  try {
+    const states = await getWorkItemTypeStates(azure, ticket.projectName, ticket.type);
+    const category = states.find((state) => state.name === ticket.state)?.category;
+    return category !== undefined && FINISHED_CATEGORIES.includes(category);
+  } catch (error) {
+    if (error instanceof AzureApiError) return false;
     throw error;
   }
 }

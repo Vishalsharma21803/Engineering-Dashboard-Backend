@@ -2,7 +2,8 @@ import { AppError } from "../../lib/app-error.js";
 import { ApprovalTicket, isTicketConsumed } from "../../lib/azure/approval-ticket.js";
 import { pullRequestArtifactUri } from "../../lib/azure/artifact-links.js";
 import type { AzureClient } from "../../lib/azure/client.js";
-import type { RawBuild } from "../../lib/azure/azure-api.types.js";
+import type { RawBuild, RawWorkItem } from "../../lib/azure/azure-api.types.js";
+import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText, textToHtml } from "../../lib/html-to-text.js";
 import type { EditableTextField, UpdatableWorkField } from "../../schemas/action.schema.js";
 import { asNumber, asString } from "../azure/mappers.js";
@@ -16,6 +17,7 @@ import {
   loadRunningBuild,
   loadWorkItemForAction,
   splitTags,
+  type TimeBatchItem,
 } from "./prepare.js";
 
 /**
@@ -87,18 +89,7 @@ async function assertFreshWorkItem(client: AzureClient, action: ApprovedAction) 
   const expected = action.params.expected;
 
   if (expected && typeof expected === "object") {
-    for (const [reference, before] of Object.entries(expected as Record<string, unknown>)) {
-      const current = normalizeFieldValue(workItem.fields[reference]);
-
-      if (current !== normalizeFieldValue(before)) {
-        throw new AppError(
-          409,
-          "ACTION_STALE",
-          `${fieldLabel(reference)} changed in Azure DevOps after this was proposed ` +
-            `(was ${before ?? "empty"}, now ${current ?? "empty"}). Propose it again.`
-        );
-      }
-    }
+    assertExpectedFields(workItem, expected as Record<string, unknown>);
   } else if (action.baseRev !== null && workItem.rev !== action.baseRev) {
     // Proposals created before field-level guards still use the whole-item revision.
     throw new AppError(
@@ -109,6 +100,22 @@ async function assertFreshWorkItem(client: AzureClient, action: ApprovedAction) 
   }
 
   return workItem;
+}
+
+/** Refuses when a field the change writes no longer holds the value the preview showed. */
+function assertExpectedFields(workItem: RawWorkItem, expected: Record<string, unknown>): void {
+  for (const [reference, before] of Object.entries(expected)) {
+    const current = normalizeFieldValue(workItem.fields[reference]);
+
+    if (current !== normalizeFieldValue(before)) {
+      throw new AppError(
+        409,
+        "ACTION_STALE",
+        `${fieldLabel(reference)} changed in Azure DevOps after this was proposed ` +
+          `(was ${before ?? "empty"}, now ${current ?? "empty"}). Propose it again.`
+      );
+    }
+  }
 }
 
 async function patchWorkItem(
@@ -212,6 +219,10 @@ export async function executeAction(
   client: AzureClient,
   action: ApprovedAction
 ): Promise<ExecutionResult> {
+  if (action.kind === "WORK_ITEMS_UPDATE_TIME") {
+    return executeTimeBatch(client, action);
+  }
+
   const ticket = ApprovalTicket.issue(action.id, client.credentialId);
 
   try {
@@ -219,6 +230,101 @@ export async function executeAction(
   } catch (error) {
     throw new ExecutionFailure(error, isTicketConsumed(ticket));
   }
+}
+
+function storedTimeItems(params: Record<string, unknown>): TimeBatchItem[] {
+  const items = params.items;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("INVALID_STORED_PARAM:items");
+  }
+
+  return items as TimeBatchItem[];
+}
+
+/** The PAT itself is refused: every later ticket would fail the same way. */
+function stopsTheBatch(error: unknown): boolean {
+  return error instanceof AzureApiError && (error.reason === "AZURE_PAT_INVALID" || error.reason === "AZURE_INSUFFICIENT_SCOPE");
+}
+
+function hoursLabel(item: TimeBatchItem): string {
+  return Object.entries(item.fields)
+    .map(([reference, value]) => `${fieldLabel(reference)} ${value} h`)
+    .join(", ");
+}
+
+/**
+ * One approval covers the listed tickets; each write still gets its own
+ * single-use ticket. A ticket changed since the preview is skipped (and
+ * reported) while the others are written. Nothing written at all is a failure.
+ */
+async function executeTimeBatch(client: AzureClient, action: ApprovedAction): Promise<ExecutionResult> {
+  const items = storedTimeItems(action.params);
+  const outcomes: Array<{ workItemId: number; status: "updated" | "unverified" | "stale" | "failed" | "unknown" | "not-attempted"; message?: string }> = [];
+  let firstError: unknown = null;
+  let anyWriteSent = false;
+  let stopped = false;
+
+  for (const item of items) {
+    if (stopped) {
+      outcomes.push({ workItemId: item.workItemId, status: "not-attempted" });
+      continue;
+    }
+
+    const ticket = ApprovalTicket.issue(action.id, client.credentialId);
+
+    try {
+      const workItem = await loadWorkItemForAction(client, item.projectId, item.workItemId);
+      assertExpectedFields(workItem, item.expected);
+      await patchWorkItem(
+        client,
+        ticket,
+        workItem.id,
+        workItem.rev,
+        Object.entries(item.fields).map(([field, value]) => ({ op: "add", path: `/fields/${field}`, value }))
+      );
+      const verification = await safeVerify(() => verifyFields(client, workItem.id, item.fields));
+      outcomes.push({ workItemId: item.workItemId, status: verification.verified ? "updated" : "unverified" });
+    } catch (error) {
+      const writeSent = isTicketConsumed(ticket);
+      anyWriteSent ||= writeSent;
+      firstError ??= error;
+      stopped = stopsTheBatch(error);
+      const stale = error instanceof AppError && error.reason === "ACTION_STALE";
+      outcomes.push({
+        workItemId: item.workItemId,
+        status: writeSent ? "unknown" : stale ? "stale" : "failed",
+        message: error instanceof Error ? error.message : "Failed",
+      });
+    }
+  }
+
+  if (!outcomes.some((outcome) => outcome.status === "updated" || outcome.status === "unverified")) {
+    throw new ExecutionFailure(firstError, anyWriteSent);
+  }
+
+  const describe = (outcome: (typeof outcomes)[number], item: TimeBatchItem): string => {
+    switch (outcome.status) {
+      case "updated":
+        return `#${item.workItemId}: ${hoursLabel(item)}`;
+      case "unverified":
+        return `#${item.workItemId}: written, but reading it back did not match`;
+      case "stale":
+        return `#${item.workItemId}: changed in Azure DevOps since the check, not updated`;
+      case "unknown":
+        return `#${item.workItemId}: Azure DevOps did not confirm; check the ticket`;
+      case "not-attempted":
+        return `#${item.workItemId}: not attempted`;
+      default:
+        return `#${item.workItemId}: not updated (${outcome.message ?? "failed"})`;
+    }
+  };
+  const checks = outcomes.map((outcome, index) => ({ check: describe(outcome, items[index]!), passed: outcome.status === "updated" }));
+
+  return {
+    result: { items: outcomes },
+    verification: { verified: checks.every((check) => check.passed), checks },
+  };
 }
 
 async function runAction(

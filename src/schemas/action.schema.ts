@@ -80,6 +80,29 @@ const actionVariants = z.discriminatedUnion("kind", [
       ),
   }),
   z.object({
+    /** Time → Verify: Solidtime totals onto several tickets, approved together. */
+    kind: z.literal("WORK_ITEMS_UPDATE_TIME"),
+    target: z.object({}).strict().default({}),
+    params: z
+      .object({
+        items: z
+          .array(
+            z
+              .object({
+                projectId: azureProjectIdSchema,
+                workItemId: z.number().int().positive(),
+                completedWork: hours,
+                remainingWork: hours.optional(),
+              })
+              .strict()
+          )
+          .min(1, "Choose at least one ticket")
+          .max(50, "Update at most 50 tickets at once")
+          .refine((items) => new Set(items.map((item) => item.workItemId)).size === items.length, { message: "A ticket is listed twice" }),
+      })
+      .strict(),
+  }),
+  z.object({
     kind: z.literal("WORK_ITEM_TRANSITION_STATE"),
     target: workItemTarget,
     params: z.object({ state: z.string().trim().min(1).max(128) }).strict(),
