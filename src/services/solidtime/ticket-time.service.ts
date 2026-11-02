@@ -5,6 +5,7 @@ import type { SolidtimeConnectionDto } from "./connection.service.js";
 import { aggregateByDescription, getActiveEntry, listMembers } from "./read.service.js";
 import { candidateTicketIds } from "./ticket-ids.js";
 import type { TicketInfo } from "./tickets.service.js";
+import { fallbackTo } from "../../lib/log-fallback.js";
 
 type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: string };
 
@@ -84,7 +85,7 @@ export async function getTicketTimes(
   let people: Map<number, Map<string, number>> | null = null;
 
   if (team && options.withPeople) {
-    const members = await listMembers(client, connection.organizationId).catch(() => []);
+    const members = await listMembers(client, connection.organizationId).catch(fallbackTo("Reading Solidtime member names failed", []));
     people = peopleByTicket(team, wanted, new Map(members.map((member) => [member.user_id, member.name])));
   }
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeSolidtimeUrl } from "../../src/lib/solidtime/url.js";
 import { addDays, startOfZonedDay, zonedDay, zonedDayRange } from "../../src/lib/zoned-time.js";
 import { fitEstimates } from "../../src/services/solidtime/draft-ai.service.js";
-import { chooseProject, placeEntry, projectHints, projectNameKey, sameNameProjects } from "../../src/services/solidtime/draft.service.js";
+import { activityHours, chooseProject, hoursEvidence, placeEntry, projectHints, projectNameKey, sameNameProjects } from "../../src/services/solidtime/draft.service.js";
 import { candidateTicketIds, mentionsTicket, ticketDescription } from "../../src/services/solidtime/ticket-ids.js";
 import { compareWithEstimate } from "../../src/services/solidtime/ticket-time.service.js";
 
@@ -148,17 +148,67 @@ describe("matching project names", () => {
   });
 });
 
+describe("hours from evidence", () => {
+  const H = 3_600_000;
+  const t = (hours: number) => hours * H;
+
+  it("credits the time before each of my changes to that change's ticket, gaps at most 2 h, without tracked time", () => {
+    const hours = activityHours(
+      [
+        { ticketId: 1, at: t(9) },
+        { ticketId: 1, at: t(10.5) },
+        // After lunch: a 3 h gap counts 2 h.
+        { ticketId: 2, at: t(13.5) },
+        // 1 h before, but 30 min of it is a Solidtime entry (a meeting).
+        { ticketId: 3, at: t(14.5) },
+      ],
+      [{ start: t(13.5), end: t(14) }]
+    );
+    expect(Object.fromEntries(hours)).toEqual({ 1: 1.5, 2: 2, 3: 0.5 });
+    // An entry and a running timer over the same half hour leave it out once, not twice.
+    expect(Object.fromEntries(activityHours([{ ticketId: 1, at: t(9) }, { ticketId: 2, at: t(10) }], [{ start: t(9), end: t(9.5) }, { start: t(9.25), end: t(9.5) }]))).toEqual({ 1: 0.25, 2: 0.5 });
+    // The day's first change is measured from my first Solidtime entry (08:00 standup, 30 min of it busy): 1 h.
+    expect(Object.fromEntries(activityHours([{ ticketId: 4, at: t(9.5) }], [{ start: t(8), end: t(8.5) }]))).toEqual({ 4: 1 });
+    // A lone change still counts a little; same input, same hours.
+    expect(Object.fromEntries(activityHours([{ ticketId: 7, at: t(9) }], []))).toEqual({ 7: 0.25 });
+  });
+
+  it("uses the strongest evidence: Completed Work, then Remaining Work, then activity capped by Remaining Work", () => {
+    const clock = (at: string) => at.slice(11, 16);
+    const activity = [
+      { at: "2026-11-02T09:00:00Z", what: "Commented" },
+      { at: "2026-11-02T11:00:00Z", what: "State Active → Resolved" },
+    ];
+    expect(hoursEvidence({ remainingThatDay: 1, activity, added: 3, lowered: 2 }, 5, clock)).toEqual({ hours: 3, source: "completed-work", basis: "Completed Work raised by 3 h" });
+    expect(hoursEvidence({ remainingThatDay: 1, activity, added: 0, lowered: 2 }, 5, clock)).toEqual({ hours: 2, source: "remaining-work", basis: "Remaining Work lowered by 2 h" });
+    expect(hoursEvidence({ remainingThatDay: 1, activity, added: 0, lowered: 0 }, 2.1, clock)).toEqual({
+      hours: 1,
+      source: "activity",
+      basis: "2 changes between 09:00 and 11:00, capped at its 1 h Remaining Work",
+    });
+    // Lowering 40 h to 0 when closing is not 40 h of work in a day.
+    expect(hoursEvidence({ remainingThatDay: 0, activity, added: 0, lowered: 40 }, 1, clock)).toEqual({ hours: 12, source: "remaining-work", basis: "Remaining Work lowered by 40 h, counted as 12 h at most" });
+    // No Remaining Work (or 0): no cap.
+    expect(hoursEvidence({ remainingThatDay: 0, activity: activity.slice(0, 1), added: 0, lowered: 0 }, 2.1, clock)).toEqual({ hours: 2, source: "activity", basis: "1 change at 09:00" });
+  });
+});
+
 describe("fitting AI hours", () => {
   const item = (ticketId: number, hours: number) => ({ ticketId, hours, confidence: "medium" as const, reason: "  why\n it  " });
 
-  it("keeps asked tickets once, in quarter hours, and never more than is available", () => {
-    expect(fitEstimates([item(1, 1.1), item(2, -3), item(3, 2), item(1, 4)], [1, 2], 8)).toEqual([
-      { ticketId: 1, hours: 1, confidence: "medium", reason: "why it" },
-      { ticketId: 2, hours: 0, confidence: "medium", reason: "why it" },
+  it("keeps asked tickets once, in quarter hours, within half to one and a half times the rule hours", () => {
+    const rules = new Map([
+      [1, 2],
+      [2, 1],
+      [3, 0.25],
     ]);
-    const scaled = fitEstimates([item(1, 6), item(2, 30)], [1, 2], 5.5);
-    expect(scaled.map((estimate) => estimate.hours)).toEqual([1.75, 3.5]);
-    expect(scaled.reduce((sum, estimate) => sum + estimate.hours, 0)).toBeLessThanOrEqual(5.5);
-    expect(fitEstimates([item(1, 2)], [1], 0).map((estimate) => estimate.hours)).toEqual([0]);
+    expect(fitEstimates([item(1, 1.1), item(2, 30), item(9, 2), item(1, 4), item(3, 0)], rules)).toEqual([
+      { ticketId: 1, ruleHours: 2, hours: 1, confidence: "medium", reason: "why it" },
+      { ticketId: 2, ruleHours: 1, hours: 1.5, confidence: "medium", reason: "why it" },
+      { ticketId: 3, ruleHours: 0.25, hours: 0.25, confidence: "medium", reason: "why it" },
+    ]);
+    // Nothing is scaled to fill a target, and 12 h per ticket is the most.
+    expect(fitEstimates([item(1, 20)], new Map([[1, 10]])).map((estimate) => estimate.hours)).toEqual([12]);
   });
 });
+

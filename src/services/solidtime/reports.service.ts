@@ -9,6 +9,7 @@ import { aggregateByDescription, entrySeconds, getMe, listEntries, listMembers }
 import { candidateTicketIds } from "./ticket-ids.js";
 import { SAME_TIME_HOURS, getTicketTimes } from "./ticket-time.service.js";
 import { lookUpTickets, type TicketInfo } from "./tickets.service.js";
+import { fallbackTo } from "../../lib/log-fallback.js";
 
 type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: string };
 
@@ -117,7 +118,7 @@ export async function estimateAccuracy(
     team = false;
     aggregate = await aggregateByDescription(client, connection.organizationId, { ...range, memberId: connection.memberId }, false);
   }
-  const names = team ? new Map((await listMembers(client, connection.organizationId).catch(() => [])).map((member) => [member.user_id, member.name])) : new Map<string, string>();
+  const names = team ? new Map((await listMembers(client, connection.organizationId).catch(fallbackTo("Reading Solidtime member names failed", []))).map((member) => [member.user_id, member.name])) : new Map<string, string>();
 
   // seconds per ticket, and per (ticket, person)
   const perTicket = new Map<number, number>();
@@ -137,7 +138,12 @@ export async function estimateAccuracy(
     }
   }
 
-  const { tickets } = await lookUpTickets(azure, [...perTicket.keys()]);
+  const { tickets, checked } = await lookUpTickets(azure, [...perTicket.keys()]);
+
+  if (!checked) {
+    // Without the tickets there are no estimates: an empty report would look like nothing to compare.
+    throw new AppError(502, "AZURE_UNAVAILABLE", "Azure DevOps could not be read, so estimates cannot be compared. Try again.");
+  }
   const estimated = [...perTicket.keys()].filter((id) => tickets.get(id)?.originalEstimate);
   const totals = await getTicketTimes(client, connection, estimated, {});
   const byPerson = new Map<string, { label: string; items: Array<{ tracked: number; estimate: number }> }>();
@@ -223,7 +229,7 @@ export async function timeCsv(client: SolidtimeClient, connection: Connection, a
   const range = { start: startOfZonedDay(input.from, timeZone), end: startOfZonedDay(addDays(input.to, 1), timeZone) };
   const team = connection.canViewTeam;
   const { entries } = await listEntries(client, connection.organizationId, team ? range : { ...range, memberId: connection.memberId });
-  const names = team ? new Map((await listMembers(client, connection.organizationId).catch(() => [])).map((member) => [member.user_id, member.name])) : new Map<string, string>();
+  const names = team ? new Map((await listMembers(client, connection.organizationId).catch(fallbackTo("Reading Solidtime member names failed", []))).map((member) => [member.user_id, member.name])) : new Map<string, string>();
   const { tickets, checked } = await lookUpTickets(azure, entries.flatMap((entry) => candidateTicketIds(entry.description)));
   const totals = await getTicketTimes(client, connection, [...tickets.keys()], { now });
   const rows = new Map<string, { person: string; day: string; ticketId: number | null; title: string; seconds: number }>();

@@ -6,6 +6,7 @@ import type { SolidtimeConnectionDto } from "./connection.service.js";
 import { entrySeconds, getMe, listEntries, listProjects } from "./read.service.js";
 import { candidateTicketIds } from "./ticket-ids.js";
 import { lookUpTickets } from "./tickets.service.js";
+import { fallbackTo } from "../../lib/log-fallback.js";
 
 type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: string };
 
@@ -50,7 +51,7 @@ async function myEntries(client: SolidtimeClient, connection: Connection, azure:
   const timeZone = await timeZoneOf(client);
   const [{ entries, truncated }, projects] = await Promise.all([
     listEntries(client, connection.organizationId, { memberId: connection.memberId, start: startOfZonedDay(from, timeZone), end: startOfZonedDay(addDays(to, 1), timeZone) }),
-    listProjects(client, connection.organizationId, "all").catch(() => []),
+    listProjects(client, connection.organizationId, "all").catch(fallbackTo("Reading Solidtime projects for the timesheet failed", [])),
   ]);
   const lookup = await lookUpTickets(azure, entries.flatMap((entry) => candidateTicketIds(entry.description)));
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));

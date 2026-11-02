@@ -46,13 +46,14 @@ function parseOutput<T>(text: string | null | undefined, schema: z.ZodType<T>, b
   try {
     parsed = JSON.parse(text ?? "");
   } catch {
-    throw new AiProviderError("AI_BAD_OUTPUT", null, billed);
+    throw new AiProviderError("AI_BAD_OUTPUT", null, billed, null, text ? `the answer was not JSON (${text.length} characters, starting "${text.slice(0, 60).replace(/\s+/g, " ")}")` : "the answer was empty");
   }
 
   const result = schema.safeParse(parsed);
 
   if (!result.success) {
-    throw new AiProviderError("AI_BAD_OUTPUT", null, billed);
+    const issues = result.error.issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "answer"}: ${issue.message}`);
+    throw new AiProviderError("AI_BAD_OUTPUT", null, billed, null, `the answer did not match the expected shape (${issues.join("; ")})`);
   }
 
   return result.data;
@@ -99,7 +100,7 @@ async function judgeWithClaude<T>(request: JudgeRequest<T>): Promise<JudgeRespon
   }
 
   if (response.stop_reason === "max_tokens") {
-    throw new AiProviderError("AI_BAD_OUTPUT", null, billed);
+    throw new AiProviderError("AI_BAD_OUTPUT", null, billed, null, "the answer was cut off at the output token limit");
   }
 
   const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
@@ -142,7 +143,7 @@ async function judgeWithChatCompletions<T>(
   try {
     payload = (await response.json()) as ChatCompletion;
   } catch {
-    throw new AiProviderError("AI_BAD_OUTPUT");
+    throw new AiProviderError("AI_BAD_OUTPUT", null, null, null, "the provider's reply was not JSON");
   }
 
   const choice = payload.choices?.[0];
@@ -162,7 +163,7 @@ async function judgeWithChatCompletions<T>(
   }
 
   if (choice?.finish_reason === "length") {
-    throw new AiProviderError("AI_BAD_OUTPUT", null, billed);
+    throw new AiProviderError("AI_BAD_OUTPUT", null, billed, null, "the answer was cut off at the output token limit");
   }
 
   return { data: parseOutput(choice?.message?.content, request.schema, billed), ...billed };

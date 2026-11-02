@@ -19,6 +19,7 @@ import {
   splitTags,
   type TimeBatchItem,
 } from "./prepare.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 /**
  * The ONLY module allowed to write to Azure DevOps. It is invoked by
@@ -143,7 +144,8 @@ type Verification = ExecutionResult["verification"];
 async function safeVerify(fn: () => Promise<Verification>): Promise<Verification> {
   try {
     return await fn();
-  } catch {
+  } catch (error) {
+    logFallback("Reading a written work item back from Azure DevOps failed", error);
     return { verified: false, checks: [{ check: "read back from Azure DevOps", passed: false }] };
   }
 }

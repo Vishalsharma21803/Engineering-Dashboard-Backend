@@ -1,3 +1,5 @@
+import { logFallback, networkFailure } from "../lib/log-fallback.js";
+
 const AZURE_DEVOPS_API_VERSION = "7.1";
 const AZURE_DEVOPS_TIMEOUT_MS = 10_000;
 const PROJECTS_PAGE_SIZE = "1";
@@ -51,7 +53,8 @@ export async function validateAzurePat(
       redirect: "manual",
       signal: AbortSignal.timeout(AZURE_DEVOPS_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error) {
+    logFallback("Validating an Azure DevOps token: no answer from Azure", new Error(networkFailure(error)));
     throw new AzureDevOpsUpstreamError(null);
   }
 

@@ -86,11 +86,10 @@ export const ticketIdsQuerySchema = z.object({
 
 export const draftQuerySchema = z.object({ day: daySchema });
 
-/** Which drafted rows the AI should estimate, and the hours already planned on the other rows of that draft. */
+/** Which drafted rows the AI should check, and where the other rows of that draft are planned. */
 export const draftEstimateBodySchema = z.object({
   day: daySchema,
   ticketIds: z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(50).transform((ids) => [...new Set(ids)]),
-  plannedHours: z.number().min(0).max(24).default(0),
   /** When the other rows are planned (only used to avoid placing AI rows on top of them). */
   planned: z
     .array(z.object({ start: z.iso.datetime({ offset: true }), end: z.iso.datetime({ offset: true }) }).refine((slot) => Date.parse(slot.end) > Date.parse(slot.start), "The end is before the start"))

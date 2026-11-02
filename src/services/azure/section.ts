@@ -1,5 +1,6 @@
 import { AzureApiError } from "../../lib/azure/errors.js";
 import type { Section } from "../../types/azure.types.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 /**
  * Runs one dashboard section. A missing scope or upstream failure only
@@ -13,6 +14,8 @@ export async function toSection<T>(fn: () => Promise<T>): Promise<Section<T>> {
       if (error.reason === "AZURE_PAT_INVALID") {
         throw error;
       }
+
+      if (error.reason !== "AZURE_INSUFFICIENT_SCOPE") logFallback("An Azure section could not be read", error);
 
       return {
         status:

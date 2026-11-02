@@ -7,6 +7,7 @@ import { clearAzureCache, getCached, setCached } from "./cache.js";
 import { AzureApiError, reasonForStatus } from "./errors.js";
 import { createLimiter, type Limiter } from "./limiter.js";
 import { redactSecrets } from "../redact.js";
+import { networkFailure } from "../log-fallback.js";
 
 export const AZURE_API_VERSION = "7.1";
 
@@ -393,8 +394,8 @@ export class AzureClient {
         redirect: "manual",
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-    } catch {
-      throw new AzureApiError("AZURE_UPSTREAM_ERROR", null);
+    } catch (error) {
+      throw new AzureApiError("AZURE_UPSTREAM_ERROR", null, null, networkFailure(error));
     }
   }
 
@@ -427,7 +428,7 @@ export class AzureClient {
           return { data: undefined as T, continuationToken };
         }
 
-        throw new AzureApiError("AZURE_UPSTREAM_ERROR", response.status);
+        throw new AzureApiError("AZURE_UPSTREAM_ERROR", response.status, null, "the reply was not valid JSON");
       }
     }
 

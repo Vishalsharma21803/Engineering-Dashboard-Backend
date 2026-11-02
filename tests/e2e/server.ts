@@ -114,7 +114,7 @@ app.post("/__e2e/tickets", (req, res) => {
   res.json({ ok: true, count });
 });
 
-// Yesterday (UTC) for the Time → Draft tab: #102 Completed Work +2 h, #103 edited and resolved (no hours), a 30 min standup already in Solidtime.
+// Yesterday (UTC) for the Time → Draft tab: #102 Completed Work +2 h, #103 edited and resolved (hours from that activity), a 30 min standup already in Solidtime.
 app.post("/__e2e/draft-activity", (_req, res) => {
   const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const at = (time: string) => `${day}T${time}:00Z`;

@@ -1,4 +1,5 @@
 import { AiProviderError, parseRetryAfter, providerMessage, type AiModelOption, type KeyValidationResult } from "./types.js";
+import { networkFailure } from "../log-fallback.js";
 
 /** OpenCode's pay-as-you-go gateway (opencode.ai/console). Keys come from opencode.ai/auth. */
 export const OPENCODE_BASE_URL = "https://opencode.ai/inference";
@@ -83,8 +84,8 @@ export async function openCodeFetch(path: string, apiKey: string | null, init: {
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
-    throw new AiProviderError("AI_UPSTREAM_ERROR");
+  } catch (error) {
+    throw new AiProviderError("AI_UPSTREAM_ERROR", null, null, null, networkFailure(error));
   }
 }
 

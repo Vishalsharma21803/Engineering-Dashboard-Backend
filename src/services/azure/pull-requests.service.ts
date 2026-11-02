@@ -17,6 +17,7 @@ import type {
 } from "../../types/azure.types.js";
 import { requireIdentityRef, stripRefPrefix } from "./mappers.js";
 import { toSection } from "./section.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 const MAX_PULL_REQUESTS = 50;
 const POLICY_API_VERSION = "7.1-preview.1";
@@ -183,7 +184,8 @@ export async function listMyPullRequests(
       unresolved = countUnresolvedThreads(
         await getThreads(client, pr.repository.project.id, pr.repository.id, pr.pullRequestId)
       );
-    } catch {
+    } catch (error) {
+      logFallback(`Counting unresolved threads on PR ${pr.pullRequestId} failed`, error);
       unresolved = null;
     }
 

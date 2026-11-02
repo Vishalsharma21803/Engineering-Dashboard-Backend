@@ -1,5 +1,6 @@
 import type { AzureClient } from "../../lib/azure/client.js";
 import { AzureApiError } from "../../lib/azure/errors.js";
+import { logFallback } from "../../lib/log-fallback.js";
 import type { StateCategory } from "../../types/azure.types.js";
 import { getWorkItemsByIds, getWorkItemTypeStates, WORK_ITEM_FIELDS, workItemProjectName, workItemType } from "../azure/work-items.service.js";
 import { createAzureClientForCredential } from "../azure/azure-context.service.js";
@@ -63,6 +64,7 @@ export async function lookUpTickets(azure: AzureClient | null, ids: number[]): P
   } catch (error) {
     // Without Azure the time still shows; only ticket titles and validation are missing.
     if (error instanceof AzureApiError) {
+      logFallback(`Reading ${unique.length} Azure ticket(s) failed`, error);
       return { tickets: new Map(), checked: false };
     }
 
@@ -80,7 +82,10 @@ export async function isFinished(azure: AzureClient, ticket: Pick<TicketInfo, "p
     const category = states.find((state) => state.name === ticket.state)?.category;
     return category !== undefined && FINISHED_CATEGORIES.includes(category);
   } catch (error) {
-    if (error instanceof AzureApiError) return false;
+    if (error instanceof AzureApiError) {
+      logFallback(`Reading the states of ${ticket.type} in ${ticket.projectName} failed; the ticket counts as open`, error);
+      return false;
+    }
     throw error;
   }
 }

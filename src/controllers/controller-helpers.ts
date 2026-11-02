@@ -7,6 +7,7 @@ import { AiProviderError } from "../lib/ai/types.js";
 import { ActionExecutionError } from "../services/actions/action.service.js";
 import type { RequestContext } from "../services/audit.service.js";
 import { markCredentialInvalid } from "../services/azure/azure-context.service.js";
+import { noteFailureCause } from "../middleware/failure-log.middleware.js";
 
 export function sendValidationError(res: Response, error: z.ZodError): void {
   res.status(400).json({
@@ -32,6 +33,9 @@ export async function sendError(
   label: string,
   credential?: { userId: string; credentialId: string }
 ): Promise<void> {
+  // The response tells the user; the log line (logFailedRequests) keeps the real cause.
+  noteFailureCause(res, error, label);
+
   if (error instanceof ActionExecutionError) {
     res.status(error.status).json({
       message: error.message,
@@ -51,7 +55,7 @@ export async function sendError(
       res.setHeader("Retry-After", String(error.retryAfterSeconds));
     }
 
-    res.status(error.httpStatus).json({ message: error.publicMessage, reason: error.reason });
+    res.status(error.httpStatus).json({ message: error.detail || error.diagnosis ? `${error.publicMessage} (${error.detail ?? error.diagnosis})` : error.publicMessage, reason: error.reason });
     return;
   }
 
@@ -73,9 +77,8 @@ export async function sendError(
     return;
   }
 
-  console.error(`${label}:`, error instanceof Error ? error.message : "Unknown error");
-
-  res.status(500).json({ message: "Internal server error" });
+  // Unexpected: what failed, not why (that stays in the server log).
+  res.status(500).json({ message: `${label} because of an unexpected server error. The details are in the server log.`, reason: "INTERNAL_ERROR" });
 }
 
 /** Rejects state-changing requests that are not JSON (cheap CSRF hardening). */

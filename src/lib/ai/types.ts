@@ -100,7 +100,9 @@ export class AiProviderError extends Error {
     readonly retryAfterSeconds: number | null = null,
     readonly billed: BilledUsage | null = null,
     /** What the provider itself said (shown to the user so limits are understandable). */
-    readonly detail: string | null = null
+    readonly detail: string | null = null,
+    /** What Cockpit found wrong itself (no answer in time, an answer that is not JSON…); never shown as the provider's words. */
+    readonly diagnosis: string | null = null
   ) {
     super(`AI provider request failed (${reason})`);
     this.name = "AiProviderError";

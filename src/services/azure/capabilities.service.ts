@@ -7,6 +7,7 @@ import type {
   WriteScopeArea,
 } from "../../types/azure.types.js";
 import { getIdentity } from "./identity.service.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 async function probe(fn: () => Promise<unknown>): Promise<ScopeStatus> {
   try {
@@ -23,6 +24,7 @@ async function probe(fn: () => Promise<unknown>): Promise<ScopeStatus> {
       }
     }
 
+    logFallback("Checking a token scope failed; shown as unknown", error);
     return "unknown";
   }
 }

@@ -17,6 +17,7 @@ import {
 import { blockSpans, parseRulebook } from "./rulebook.parser.js";
 import { ITEM_KINDS, SOP_STAGES, type ProjectProfile, type SopStage } from "./rulebook.types.js";
 import { STARTER_PROJECT_BLOCKS } from "./starter-rulebook.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 const MOVED_KEY = "sop.projectsMovedFromRulebook";
 /** Estimate-type rules that are checked once a ticket is estimated, not before work starts. */
@@ -375,8 +376,9 @@ export async function suggestProjectSetUp(client: AzureClient, projectName: stri
   try {
     const repositories = await listRepositories(client, projectId);
     prTargetBranch = stripRefPrefix(repositories.find((repo) => repo.defaultBranch)?.defaultBranch ?? null) ?? "develop";
-  } catch {
+  } catch (error) {
     // No code access: keep the common default.
+    logFallback("Reading repositories for the PR target branch failed; using develop", error);
   }
 
   return {

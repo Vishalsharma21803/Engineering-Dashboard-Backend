@@ -13,7 +13,7 @@ let app: Express | null = null;
 
 export function getApp(): Express {
   // Tests sign up a user per test from one address: no sign-up/sign-in limits here (they have their own test).
-  app ??= createApp({ authRateLimit: false });
+  app ??= createApp({ authRateLimit: false, logFailures: false });
   return app;
 }
 

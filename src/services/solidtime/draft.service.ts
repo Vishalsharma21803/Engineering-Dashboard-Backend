@@ -9,7 +9,8 @@ import type { SolidtimeConnectionDto } from "./connection.service.js";
 import type { SolidtimeTimeEntry } from "../../lib/solidtime/types.js";
 import { entrySeconds, getMe, listEntries, listProjects } from "./read.service.js";
 import { candidateTicketIds, ticketDescription } from "./ticket-ids.js";
-import { lookUpTickets } from "./tickets.service.js";
+import { isFinished, lookUpTickets } from "./tickets.service.js";
+import { fallbackTo } from "../../lib/log-fallback.js";
 
 type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: string };
 
@@ -26,6 +27,8 @@ export interface DraftActivity {
   at: string;
   what: string;
 }
+
+export type HoursSource = "completed-work" | "remaining-work" | "activity";
 
 /** Where a row's Solidtime project came from. */
 export type ProjectSource = "mapping" | "ticket" | "azure-project" | "name";
@@ -45,13 +48,21 @@ export interface DraftRow {
   completedWorkAdded: number;
   /** Decreases to Completed Work that day (corrections; not counted). */
   completedWorkRemoved: number;
+  /** Sum of my decreases to Remaining Work that day (hours). */
+  remainingWorkLowered: number;
   /** Time already in Solidtime for this ticket that day (hours). */
   alreadyTrackedHours: number;
-  /** Suggested new time (hours): Completed Work added minus already tracked; null = only activity, enter it yourself. */
+  /** Suggested new time (hours), from the evidence in `hoursSource`, minus what Solidtime already has for the ticket that day. */
   hours: number | null;
-  /** "completed-work" when `hours` comes from my Completed Work increases; null when there are no hours yet. */
-  hoursSource: "completed-work" | null;
-  /** Where an entry for this row would preferably end (UTC): my last Completed Work increase, else my last activity. */
+  /**
+   * The evidence behind `hours`, strongest first: my Completed Work increases,
+   * else my Remaining Work decreases, else the time before my changes on the
+   * ticket (see `activityHours`). Null when there is no evidence.
+   */
+  hoursSource: HoursSource | null;
+  /** The evidence in words, e.g. "Remaining Work 6 → 4 h", so the hours can be checked. */
+  hoursBasis: string | null;
+  /** Where an entry for this row would preferably end (UTC): where its evidence ends (my last such change). */
   anchor: string;
   /** Suggested placement (UTC); null when no slot fits or no hours are known. */
   start: string | null;
@@ -80,12 +91,88 @@ export interface DayDraft {
 }
 
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+/** The longest gap before a change that still counts as work on it; longer gaps (lunch, a meeting, the night) count this much. */
+export const MAX_GAP_HOURS = 2;
+/** Any ticket I changed gets at least this much (a lone small edit). */
+export const MIN_ACTIVITY_HOURS = 0.25;
+/** Remaining Work lowered counts as at most this much work in a day (lowering it from 40 h to 0 on closing is not 40 h of work). */
+export const MAX_REMAINING_WORK_HOURS = 12;
 const roundQuarter = (hours: number) => Math.round(hours * 4) / 4;
 const asNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
 
 interface Interval {
   start: number;
   end: number;
+}
+
+/**
+ * Hours per ticket from my day's timeline: the time between one of my changes
+ * (on any ticket) and the next is credited to the ticket of that next change,
+ * as the work that led to it. The first change of the day is measured from the
+ * start of my first Solidtime entry that day, when there is one before it. A
+ * gap counts at most MAX_GAP_HOURS, time already in Solidtime entries is left
+ * out, and every ticket gets at least MIN_ACTIVITY_HOURS. Same input, same hours.
+ */
+export function activityHours(events: Array<{ ticketId: number; at: number }>, busy: Interval[]): Map<number, number> {
+  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const hours = new Map<number, number>();
+  // Overlapping busy time (an entry and a running timer) counts once.
+  const merged: Interval[] = [];
+  for (const interval of [...busy].sort((a, b) => a.start - b.start)) {
+    const last = merged.at(-1);
+    if (last && interval.start <= last.end) last.end = Math.max(last.end, interval.end);
+    else merged.push({ ...interval });
+  }
+
+  // `busy` is that day's entries: the first one starts my working day.
+  const dayStart = merged[0]?.start;
+
+  sorted.forEach((event, index) => {
+    const previous = index > 0 ? sorted[index - 1]!.at : dayStart !== undefined && dayStart < event.at ? dayStart : event.at;
+    const from = Math.max(previous, event.at - MAX_GAP_HOURS * HOUR);
+    const covered = merged.reduce((sum, other) => sum + Math.max(0, Math.min(event.at, other.end) - Math.max(from, other.start)), 0);
+    const worked = Math.max(0, event.at - from - covered) / HOUR;
+    hours.set(event.ticketId, (hours.get(event.ticketId) ?? 0) + worked);
+  });
+
+  for (const [ticketId, value] of hours) hours.set(ticketId, Math.max(MIN_ACTIVITY_HOURS, value));
+  return hours;
+}
+
+/**
+ * The hours a ticket's evidence supports, strongest evidence first: my
+ * Completed Work increases, else my Remaining Work decreases, else my
+ * timeline (`activityHours`), capped by the Remaining Work the ticket had
+ * that day (`remainingThatDay`).
+ */
+export function hoursEvidence(
+  item: { remainingThatDay: number | null; activity: DraftActivity[]; added: number; lowered: number },
+  timelineHours: number,
+  clock: (at: string) => string
+): { hours: number; source: HoursSource; basis: string } {
+  if (item.added > 0) {
+    return { hours: item.added, source: "completed-work", basis: `Completed Work raised by ${roundQuarter(item.added)} h` };
+  }
+
+  if (item.lowered > 0) {
+    const limited = item.lowered > MAX_REMAINING_WORK_HOURS;
+    return {
+      hours: Math.min(item.lowered, MAX_REMAINING_WORK_HOURS),
+      source: "remaining-work",
+      basis: `Remaining Work lowered by ${roundQuarter(item.lowered)} h${limited ? `, counted as ${MAX_REMAINING_WORK_HOURS} h at most` : ""}`,
+    };
+  }
+
+  // Remaining Work is what was left to do at most (when it is set).
+  const left = item.remainingThatDay;
+  const capped = left !== null && left > 0 && timelineHours > left;
+  const hours = Math.max(MIN_ACTIVITY_HOURS, roundQuarter(capped ? left : timelineHours));
+  const first = item.activity[0]?.at;
+  const last = item.activity.at(-1)?.at;
+  const changes = `${item.activity.length} change${item.activity.length === 1 ? "" : "s"}`;
+  const span = first && last ? (first === last ? ` at ${clock(first)}` : ` between ${clock(first)} and ${clock(last)}`) : "";
+  return { hours, source: "activity", basis: `${changes}${span}${capped ? `, capped at its ${left} h Remaining Work` : ""}` };
 }
 
 /**
@@ -212,10 +299,10 @@ export function projectHints(entries: SolidtimeTimeEntry[], azureProjectOf: (tic
 
 /**
  * A suggested timesheet for one day, built from what I did in Azure DevOps:
- * hours from my increases to Completed Work (minus what Solidtime already has
- * for the ticket that day), activity (state changes, comments, other edits)
- * listed for tickets without hours. Projects come from my mapping or my
- * earlier entries (see `chooseProject`). Read-only: nothing is written.
+ * hours from the evidence (see `hoursEvidence`) minus what Solidtime already
+ * has for the ticket that day, with my activity (state changes, comments,
+ * other edits) listed so the hours can be checked. Projects come from my
+ * mapping or my earlier entries (see `chooseProject`). Read-only: nothing is written.
  */
 export async function draftDayFromAzure(client: SolidtimeClient, connection: Connection, azure: AzureClient | null, day: string, now = new Date()): Promise<DayDraft> {
   if (!azure) {
@@ -239,7 +326,7 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
     listTouchedWorkItemIds(azure, addDays(day, -1)),
     // My entries up to the end of the day: that day's (busy time, already tracked) and earlier ones (projects used).
     listEntries(client, connection.organizationId, { memberId: connection.memberId, start: historyStart, end: range.end }),
-    listProjects(client, connection.organizationId).catch(() => []),
+    listProjects(client, connection.organizationId).catch(fallbackTo("Reading Solidtime projects for the draft failed", [])),
   ]);
   const existing = history.entries.filter((entry) => {
     const start = Date.parse(entry.start);
@@ -251,6 +338,11 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
     .slice(0, MAX_HISTORY_TICKETS);
   // Earlier tickets are looked up on their own: if that fails, only the project hints are missing.
   const [lookup, earlier] = await Promise.all([lookUpTickets(azure, ids), lookUpTickets(azure, earlierIds)]);
+
+  if (!lookup.checked) {
+    // Without the tickets every row would be dropped: an empty draft would look like a day without work.
+    throw new AppError(502, "AZURE_UNAVAILABLE", "Azure DevOps could not be read, so the day cannot be drafted. Try again.");
+  }
   const projectOf = (ticketId: number) => (lookup.tickets.get(ticketId) ?? earlier.tickets.get(ticketId))?.projectName;
   const hints = projectHints(history.entries, projectOf);
   const inDay = (iso: string) => {
@@ -271,21 +363,35 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
 
     const [updates, comments] = await Promise.all([
       getWorkItemUpdates(azure, ticket.projectName, id),
-      getWorkItemComments(azure, ticket.projectName, id).catch(() => []),
+      getWorkItemComments(azure, ticket.projectName, id).catch(fallbackTo(`Reading comments on #${id} for the draft failed`, [])),
     ]);
     const activity: DraftActivity[] = [];
     let added = 0;
     let removed = 0;
+    let lowered = 0;
     let lastIncreaseAt: number | null = null;
+    let lastLoweredAt: number | null = null;
+    // Remaining Work as it stood at the end of that day (by anyone): the last value set by then, else the value the next change started from.
+    let remainingAtDayEnd: number | null | undefined;
+    // Remaining Work set to 0 in the same change as a state change: only work if the new state is not a done one (checked below).
+    const zeroedWithState: Array<{ hours: number; at: string; state: string }> = [];
+    let remainingAfterDay: number | null | undefined;
 
     for (const update of updates) {
       const at = updateDate(update);
+      const remainingChange = update.fields?.[WORK_ITEM_FIELDS.remainingWork];
+
+      if (at && remainingChange) {
+        if (Date.parse(at) < range.end.getTime()) remainingAtDayEnd = asNumber(remainingChange.newValue);
+        else if (remainingAfterDay === undefined) remainingAfterDay = asNumber(remainingChange.oldValue);
+      }
 
       if (!at || !inDay(at) || !isMe(update.revisedBy)) continue;
 
       const fields = update.fields ?? {};
       const state = fields[WORK_ITEM_FIELDS.state];
       const completed = fields[WORK_ITEM_FIELDS.completedWork];
+      const remaining = fields[WORK_ITEM_FIELDS.remainingWork];
 
       if (state && state.newValue !== undefined) {
         activity.push({ at, what: `State ${String(state.oldValue ?? "—")} → ${String(state.newValue)}` });
@@ -304,11 +410,26 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
         activity.push({ at, what: `Completed Work ${asNumber(completed.oldValue) ?? 0} → ${asNumber(completed.newValue) ?? 0}` });
       }
 
+      if (remaining) {
+        const before = asNumber(remaining.oldValue);
+        const after = asNumber(remaining.newValue);
+
+        // Lowering Remaining Work (from a known value to a known value) says that much was done; clearing it says nothing.
+        if (before !== null && after === 0 && before > 0 && state && state.newValue !== undefined) {
+          zeroedWithState.push({ hours: before, at, state: String(state.newValue) });
+        } else if (before !== null && after !== null && after < before) {
+          lowered += before - after;
+          lastLoweredAt = Date.parse(at);
+        }
+
+        activity.push({ at, what: `Remaining Work ${before ?? "not set"} → ${after ?? "cleared"}` });
+      }
+
       const other = Object.keys(fields).filter(
-        (field) => ![WORK_ITEM_FIELDS.state, WORK_ITEM_FIELDS.completedWork, WORK_ITEM_FIELDS.changedDate, "System.ChangedBy", "System.Rev", "System.AuthorizedDate", "System.RevisedDate", "System.AuthorizedAs", "System.PersonId", "System.Watermark", "System.StateChangeDate", "Microsoft.VSTS.Common.StateChangeDate"].includes(field)
+        (field) => ![WORK_ITEM_FIELDS.state, WORK_ITEM_FIELDS.completedWork, WORK_ITEM_FIELDS.remainingWork, WORK_ITEM_FIELDS.changedDate, "System.ChangedBy", "System.Rev", "System.AuthorizedDate", "System.RevisedDate", "System.AuthorizedAs", "System.PersonId", "System.Watermark", "System.StateChangeDate", "Microsoft.VSTS.Common.StateChangeDate"].includes(field)
       );
 
-      if (!state && !completed && other.length > 0) {
+      if (!state && !completed && !remaining && other.length > 0) {
         activity.push({ at, what: `Edited ${other.map((field) => field.split(".").pop()).join(", ")}` });
       }
     }
@@ -325,7 +446,15 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
 
     activity.sort((a, b) => a.at.localeCompare(b.at));
     const lastActivityAt = Math.max(...activity.map((item) => Date.parse(item.at)));
-    return { ticket, activity, added, removed, lastIncreaseAt, lastActivityAt };
+    // Zeroing Remaining Work when closing a ticket tidies it up; it is not that much work (the timeline decides instead).
+    for (const zeroed of zeroedWithState) {
+      if (await isFinished(azure, { projectName: ticket.projectName, type: ticket.type, state: zeroed.state })) continue;
+      lowered += zeroed.hours;
+      lastLoweredAt = Math.max(lastLoweredAt ?? 0, Date.parse(zeroed.at));
+    }
+
+    const remainingThatDay = remainingAtDayEnd !== undefined ? remainingAtDayEnd : remainingAfterDay !== undefined ? remainingAfterDay : ticket.remainingWork;
+    return { ticket, activity, added, removed, lowered, remainingThatDay, lastIncreaseAt, lastLoweredAt, lastActivityAt };
   });
 
   // Time Solidtime already has on each ticket that day (whatever the description wording).
@@ -339,22 +468,31 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
 
   const busy: Interval[] = existing.map((entry) => ({ start: Date.parse(entry.start), end: entry.end ? Date.parse(entry.end) : now.getTime() }));
   const found = perTicket.filter((item): item is NonNullable<typeof item> => item !== null);
-  // Place the ones with known hours, earliest change first, so later work stays later.
-  found.sort((a, b) => (a.lastIncreaseAt ?? Number.MAX_SAFE_INTEGER) - (b.lastIncreaseAt ?? Number.MAX_SAFE_INTEGER));
+  const fromActivity = activityHours(
+    found.flatMap(({ ticket, activity }) => activity.map((item) => ({ ticketId: ticket.id, at: Date.parse(item.at) }))),
+    busy
+  );
+  const clock = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  // Where the evidence ends: entries are placed to end there.
+  const evidenceAt = (item: (typeof found)[number]) => (item.added > 0 ? item.lastIncreaseAt : item.lowered > 0 ? item.lastLoweredAt : item.lastActivityAt) ?? item.lastActivityAt;
+  // Place the ones with recorded hours (Completed or Remaining Work) first, then the activity ones; each earliest first, so later work stays later.
+  const recorded = (item: (typeof found)[number]) => (item.added > 0 || item.lowered > 0 ? 0 : 1);
+  found.sort((a, b) => recorded(a) - recorded(b) || evidenceAt(a) - evidenceAt(b));
 
   const busyBefore = busy.map((interval) => ({ start: new Date(interval.start).toISOString(), end: new Date(interval.end).toISOString() }));
   const trackedSeconds = existing.reduce((sum, entry) => sum + entrySeconds(entry, now), 0);
 
-  const rows: DraftRow[] = found.map(({ ticket, activity, added, removed, lastIncreaseAt, lastActivityAt }) => {
+  const rows: DraftRow[] = found.map((item) => {
+    const { ticket, activity, added, removed, lowered } = item;
     const already = roundQuarter(tracked.get(ticket.id) ?? 0);
-    const missing = roundQuarter(added - already);
-    const hours = added > 0 ? Math.max(0, missing) : null;
+    const evidence = hoursEvidence(item, fromActivity.get(ticket.id) ?? MIN_ACTIVITY_HOURS, (at) => clock.format(new Date(at)));
+    const hours = Math.max(0, roundQuarter(evidence.hours - already));
     let start: string | null = null;
     let end: string | null = null;
     let note: string | null = removed > 0 ? `Completed Work was also lowered by ${removed} h that day (not counted).` : null;
 
-    if (hours !== null && hours > 0) {
-      const slot = placeEntry(busy, hours * 3_600_000, lastIncreaseAt ?? window.end, window);
+    if (hours > 0) {
+      const slot = placeEntry(busy, hours * 3_600_000, evidenceAt(item), window);
 
       if (slot) {
         busy.push(slot);
@@ -363,13 +501,13 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       } else {
         note = "No free time left in the day for this; set the times yourself.";
       }
-    } else if (hours === 0) {
+    } else {
       note = "Already tracked in Solidtime.";
     }
 
     const project = chooseProject(ticket.id, ticket.projectName, connection.projectMap, projects, hints);
     const sameName = project ? [] : sameNameProjects(ticket.projectName, projects);
-    const anchor = Math.min(Math.max(lastIncreaseAt ?? lastActivityAt, window.start), window.end);
+    const anchor = Math.min(Math.max(evidenceAt(item), window.start), window.end);
 
     return {
       ticketId: ticket.id,
@@ -383,9 +521,11 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       activity,
       completedWorkAdded: roundQuarter(added),
       completedWorkRemoved: roundQuarter(removed),
+      remainingWorkLowered: roundQuarter(lowered),
       alreadyTrackedHours: already,
       hours,
-      hoursSource: added > 0 ? "completed-work" : null,
+      hoursSource: evidence.source,
+      hoursBasis: evidence.basis,
       anchor: new Date(anchor).toISOString(),
       start,
       end,

@@ -24,7 +24,7 @@ describe("security headers", () => {
 
 describe("sign-in and sign-up limits", () => {
   it("blocks an address after 10 failed sign-ins, while successful ones do not count", async () => {
-    const app = createApp({ authRateLimit: true });
+    const app = createApp({ authRateLimit: true, logFailures: false });
     await request(app).post("/api/auth/register").send(account("limit@example.com")).expect(201);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -42,7 +42,7 @@ describe("sign-in and sign-up limits", () => {
   }, 30_000);
 
   it("allows 10 sign-ups an hour from one address", async () => {
-    const app = createApp({ authRateLimit: true });
+    const app = createApp({ authRateLimit: true, logFailures: false });
 
     for (let index = 0; index < 10; index += 1) {
       await request(app).post("/api/auth/register").send(account(`many${index}@example.com`)).expect(201);

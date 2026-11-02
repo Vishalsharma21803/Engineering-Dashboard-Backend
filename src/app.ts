@@ -13,9 +13,10 @@ import triageRoutes from "./routes/triage.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import sopRoutes from "./routes/sop.routes.js";
 import { prisma } from "./lib/prisma.js";
+import { logFailedRequests, noteFailureCause } from "./middleware/failure-log.middleware.js";
 
 /** Last-resort handler: JSON errors in the API's shape, never a stack trace. */
-function handleUnexpectedError(error: unknown, req: Request, res: Response, next: NextFunction): void {
+function handleUnexpectedError(error: unknown, _req: Request, res: Response, next: NextFunction): void {
   if (res.headersSent) {
     next(error);
     return;
@@ -34,7 +35,8 @@ function handleUnexpectedError(error: unknown, req: Request, res: Response, next
     return;
   }
 
-  console.error("Unhandled error:", { method: req.method, path: req.path, error });
+  // Logged with its stack by logFailedRequests.
+  noteFailureCause(res, error);
   res
     .status(typeof status === "number" && status >= 400 && status < 600 ? status : 500)
     .json({ message: "Something went wrong", reason: "INTERNAL_ERROR" });
@@ -43,6 +45,8 @@ function handleUnexpectedError(error: unknown, req: Request, res: Response, next
 export interface AppOptions {
   /** Rate limits on sign-in and sign-up. Off only in tests that sign up many users from one address. */
   authRateLimit?: boolean;
+  /** Log every failed request (on by default; off in tests, where failures are the point). */
+  logFailures?: boolean;
 }
 
 export function createApp(options: AppOptions = {}) {
@@ -71,6 +75,7 @@ export function createApp(options: AppOptions = {}) {
       credentials: true,
     })
   );
+  if (options.logFailures ?? true) app.use(logFailedRequests);
   app.use(express.json());
   app.use(cookieParser());
 
@@ -83,7 +88,8 @@ export function createApp(options: AppOptions = {}) {
     try {
       await prisma.$queryRaw`SELECT 1`;
       res.json({ status: "ok" });
-    } catch {
+    } catch (error) {
+      console.error("Health check: the database did not answer:", error instanceof Error ? error.message : error);
       res.status(503).json({ status: "unavailable" });
     }
   });

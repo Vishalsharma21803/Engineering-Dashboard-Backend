@@ -1,4 +1,5 @@
 import { AiProviderError, parseRetryAfter, providerMessage, type AiEffort, type AiModelOption, type KeyValidationResult } from "./types.js";
+import { networkFailure } from "../log-fallback.js";
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -47,8 +48,8 @@ export async function openRouterFetch(
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
-    throw new AiProviderError("AI_UPSTREAM_ERROR");
+  } catch (error) {
+    throw new AiProviderError("AI_UPSTREAM_ERROR", null, null, null, networkFailure(error));
   }
 }
 

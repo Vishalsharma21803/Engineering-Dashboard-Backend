@@ -1,4 +1,5 @@
 import { SolidtimeApiError, reasonForSolidtimeStatus, solidtimeErrorText } from "./errors.js";
+import { networkFailure } from "../log-fallback.js";
 
 const TIMEOUT_MS = 15_000;
 const BACKGROUND_TIMEOUT_MS = 5_000;
@@ -138,7 +139,7 @@ export class SolidtimeClient {
         signal: AbortSignal.timeout(this.#timeoutMs),
       });
     } catch (error) {
-      const failure = new SolidtimeApiError("SOLIDTIME_UPSTREAM_ERROR", null);
+      const failure = new SolidtimeApiError("SOLIDTIME_UPSTREAM_ERROR", null, networkFailure(error));
       // A write that timed out may still have been applied.
       throw method === "GET" ? failure : new SolidtimeWriteError(failure, error instanceof Error && error.name === "TimeoutError");
     }

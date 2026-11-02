@@ -25,6 +25,7 @@ import type { ProjectProfile, RuleCard } from "../rulebook.types.js";
 import { evaluateDossier, type RulebookForChecks } from "../sop-evaluator.js";
 import { VERDICT_JSON_SCHEMA, buildSystemPrompt, buildUserPrompt, quotableText, verdictSchema, type ReviewItem } from "./sop-ai-prompt.js";
 import { verifyVerdicts } from "./sop-ai-verifier.js";
+import { fallbackTo, logFallback } from "../../../lib/log-fallback.js";
 
 export const MAX_CHECKS_PER_REQUEST = 200;
 const MAX_RUNNING_PER_USER = 2;
@@ -118,7 +119,8 @@ async function trackedHoursFor(userId: string, azureCredentialId: string, ids: n
     if (!linked || ids.length === 0) return new Map();
     const { hours } = await trackedHoursByTicket(linked.client, linked.connection, ids);
     return new Map([...hours].map(([id, value]) => [id, Math.round(value * 4) / 4]));
-  } catch {
+  } catch (error) {
+    logFallback("Reading tracked hours for an SOP AI check failed", error);
     return null;
   }
 }
@@ -473,7 +475,7 @@ async function runCheck(id: string): Promise<void> {
     if (error instanceof AiProviderError && error.billed) {
       // Failed answers (refusals, cut-off or invalid JSON) are still billed; count them against the limit.
       const preference = await getAiPreference(row.userId);
-      const model = preference.provider && preference.model ? await findModel(preference.provider, preference.model, null).catch(() => null) : null;
+      const model = preference.provider && preference.model ? await findModel(preference.provider, preference.model, null).catch(fallbackTo("Looking up the AI model's prices failed; the cost may be under-counted", null)) : null;
       const pricing = model ? pricingFor(model, error.billed.servedBy) : CLAUDE_MODELS.find((candidate) => candidate.id === error.billed?.servedBy);
 
       if (preference.provider) {
@@ -489,6 +491,7 @@ async function runCheck(id: string): Promise<void> {
     }
 
     if (error instanceof AiProviderError && error.reason === "AI_RATE_LIMITED") {
+      logFallback(`SOP AI check ${row.id} rate limited; queued again`, error);
       const limitedPreference = await getAiPreference(row.userId);
       const limitedProvider = limitedPreference.provider;
       const notBefore = new Date(Date.now() + (error.retryAfterSeconds ?? DEFAULT_RATE_LIMIT_PAUSE_SECONDS) * 1000);
@@ -517,6 +520,9 @@ async function runCheck(id: string): Promise<void> {
 
     if (reason === "INTERNAL_ERROR") {
       console.error("SOP AI check failed:", error);
+    } else {
+      // Stored on the check for the user; logged so the server sees it too.
+      logFallback(`SOP AI check ${row.id} failed (${reason})`, error);
     }
 
     await done({ status: "FAILED", errorReason: reason, errorDetail: error instanceof AiProviderError ? error.detail : null });

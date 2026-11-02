@@ -46,7 +46,7 @@ export interface FakeTimeEstimate {
 
 /** The ticket ids a timesheet estimate request asks about ("- ticketId 103: ..."). */
 export function requestedTickets(userText: string): number[] | null {
-  if (!userText.includes("Estimate the hours for these tickets:")) return null;
+  if (!userText.includes("Check the hours for these tickets:")) return null;
   return [...userText.matchAll(/^- ticketId (\d+):/gm)].map((match) => Number(match[1]));
 }
 

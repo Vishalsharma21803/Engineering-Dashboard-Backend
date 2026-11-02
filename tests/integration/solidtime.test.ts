@@ -328,7 +328,8 @@ describe("time on tickets", () => {
     expect(fixFlaky.end).toBe(new Date(at(2)).toISOString());
     expect(Date.parse(fixFlaky.start)).toBeGreaterThanOrEqual(Date.parse(`${today}T00:30:00Z`));
 
-    expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 103)).toMatchObject({ hours: null, activity: [expect.objectContaining({ what: "Edited Title" })] });
+    // Only a title edit, at the same time as other work: the least activity counts (0.25 h).
+    expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 103)).toMatchObject({ hours: 0.25, hoursSource: "activity", hoursBasis: "1 change at 01:00", activity: [expect.objectContaining({ what: "Edited Title" })] });
     await agent.get(st(connection, "/draft?day=2020-01-01")).expect(422);
     expect(solidtimeWrites(solidtime)).toEqual([]);
   });
@@ -357,9 +358,9 @@ describe("time on tickets", () => {
     const row = (id: number) => draft.rows.find((item: { ticketId: number }) => item.ticketId === id);
     expect(row(102)).toMatchObject({ hours: 2, hoursSource: "completed-work", solidtimeProjectId: CLIENT_WORK, projectSource: "ticket", type: "Task", state: "Active" });
     expect(row(102).anchor).toBe(new Date(at("11:00")).toISOString());
-    // No hours known: no times yet, but the anchor is my last activity and the project comes from other Alpha tickets.
-    expect(row(103)).toMatchObject({ hours: null, hoursSource: null, start: null, solidtimeProjectId: SUPPORT, projectSource: "azure-project", remainingWork: 1 });
-    expect(row(103).anchor).toBe(new Date(at("15:30")).toISOString());
+    // Hours from my timeline (2 h before 13:00 + 2 h of the 2.5 h before 15:30), capped at its 1 h Remaining Work; ends at my last change.
+    expect(row(103)).toMatchObject({ hours: 1, hoursSource: "activity", hoursBasis: "2 changes between 13:00 and 15:30, capped at its 1 h Remaining Work", solidtimeProjectId: SUPPORT, projectSource: "azure-project", remainingWork: 1 });
+    expect(row(103)).toMatchObject({ anchor: new Date(at("15:30")).toISOString(), start: new Date(at("14:30")).toISOString(), end: new Date(at("15:30")).toISOString() });
 
     // A ticket from a project named differently only by case and separators finds it; two such projects: none is guessed.
     azure.workItems.get(103)!.fields["System.TeamProject"] = "beta";
@@ -393,6 +394,8 @@ describe("AI hours for a draft", () => {
     azure.updates.set(102, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("11:00") }, "Microsoft.VSTS.Scheduling.CompletedWork": { oldValue: 0, newValue: 2 } } }]);
     azure.updates.set(103, [{ id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:00") }, "System.State": { oldValue: "Active", newValue: "Resolved" } } }]);
     azure.updates.set(101, [{ id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "System.Tags": { oldValue: "", newValue: "ui" } } }]);
+    // The fake's comment on #101 is dated "a day ago" at the current clock time: it would make the hours depend on when the tests run.
+    azure.comments.set(101, []);
   });
 
   async function useClaude() {
@@ -414,7 +417,52 @@ describe("AI hours for a draft", () => {
     expect(judgeCalls()).toEqual([]);
   });
 
-  it("shares out what is left of the day, places the entries and records the cost, writing nothing", async () => {
+  it("does not count clearing Remaining Work as work, and caps activity at the Remaining Work the ticket had that day", async () => {
+    const connection = await connectSolidtime(agent);
+    // #101 (Remaining Work 4 h now): cleared by me that day, then set to 1 h by someone the next day.
+    azure.updates.set(101, [
+      { id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 6, newValue: null } } },
+      { id: 2, rev: 10, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: null, newValue: 1.5 } } },
+      { id: 3, rev: 11, revisedBy: ME, fields: { "System.ChangedDate": { newValue: new Date(Date.parse(at("17:00")) + 86_400_000).toISOString() }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 1.5, newValue: 1 } } },
+    ]);
+    const draft = (await agent.get(st(connection, `/draft?day=${day()}`)).expect(200)).body.draft;
+    // 2 h before 15:00 + 2 h before 17:00 from my timeline, capped at the 1.5 h it had at the end of that day (not today's 1 h).
+    expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 101)).toMatchObject({
+      hours: 1.5,
+      hoursSource: "activity",
+      remainingWorkLowered: 0,
+      hoursBasis: expect.stringMatching(/, capped at its 1\.5 h Remaining Work$/),
+      activity: expect.arrayContaining([expect.objectContaining({ what: "Remaining Work 6 → cleared" })]),
+    });
+  });
+
+  it("does not count Remaining Work zeroed while closing a ticket, but does when the ticket stays open", async () => {
+    const connection = await connectSolidtime(agent);
+    const zeroed = (state: string) => [{ id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "System.State": { oldValue: "Active", newValue: state }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 6, newValue: 0 } } }];
+    const row101 = async () => (await agent.get(st(connection, `/draft?day=${day()}&refresh=true`)).expect(200)).body.draft.rows.find((row: { ticketId: number }) => row.ticketId === 101);
+
+    azure.updates.set(101, zeroed("Closed"));
+    expect(await row101()).toMatchObject({ hoursSource: "activity", remainingWorkLowered: 0 });
+
+    azure.updates.set(101, zeroed("New"));
+    clearAzureCache();
+    expect(await row101()).toMatchObject({ hoursSource: "remaining-work", remainingWorkLowered: 6, hours: 6 });
+  });
+
+  it("lowers Remaining Work into hours: what I lowered it by is what I worked", async () => {
+    const connection = await connectSolidtime(agent);
+    azure.updates.set(101, [{ id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 6, newValue: 3.5 } } }]);
+    const draft = (await agent.get(st(connection, `/draft?day=${day()}`)).expect(200)).body.draft;
+    expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 101)).toMatchObject({
+      hours: 2.5,
+      hoursSource: "remaining-work",
+      hoursBasis: "Remaining Work lowered by 2.5 h",
+      remainingWorkLowered: 2.5,
+      activity: expect.arrayContaining([expect.objectContaining({ what: "Remaining Work 6 → 3.5" })]),
+    });
+  });
+
+  it("checks the rule hours (within half to one and a half times), places the entries and records the cost, writing nothing", async () => {
     const connection = await connectSolidtime(agent);
     await useClaude();
     ai.timeEstimates = () => [
@@ -424,13 +472,13 @@ describe("AI hours for a draft", () => {
       { ticketId: 103, hours: 5, confidence: "low", reason: "Duplicate." },
     ];
 
-    // 8 h target − 0.5 h tracked − 2 h planned (the Completed Work row) = 5.5 h to share; 3 + 12 is scaled down to fit.
-    const response = (await estimate(connection, { day: day(), ticketIds: [101, 103], plannedHours: 2 }).expect(200)).body.estimate;
-    expect(response).toMatchObject({ day: day(), availableHours: 5.5, model: "claude-sonnet-5-5" });
+    // Rules: #103 1 h (capped at its Remaining Work), #101 2 h (the 2 h before its 17:00 change). 3 h is held to 1.5 h, 20 h to 3 h.
+    const response = (await estimate(connection, { day: day(), ticketIds: [101, 103] }).expect(200)).body.estimate;
+    expect(response).toMatchObject({ day: day(), model: "claude-sonnet-5-5" });
     expect(response.costUsd).toBeGreaterThan(0);
-    expect(response.estimates.map((item: { ticketId: number; hours: number; confidence: string }) => [item.ticketId, item.hours, item.confidence])).toEqual([
-      [103, 1, "high"],
-      [101, 4.25, "low"],
+    expect(response.estimates.map((item: { ticketId: number; ruleHours: number; hours: number; confidence: string }) => [item.ticketId, item.ruleHours, item.hours, item.confidence])).toEqual([
+      [103, 1, 1.5, "high"],
+      [101, 2, 3, "low"],
     ]);
 
     // Placed inside the day, around existing time and the Completed Work row, never overlapping.
@@ -445,7 +493,8 @@ describe("AI hours for a draft", () => {
     // One call, about the asked tickets only, without comment text; usage recorded under its own purpose.
     expect(judgeCalls()).toHaveLength(1);
     const prompt = String((judgeCalls()[0]!.body!.messages as Array<{ content: string }>)[0]!.content);
-    expect(prompt).toContain("Hours available to share: 5.5 h.");
+    expect(prompt).toContain("Suggested: 1 h (1 change at 15:00, capped at its 1 h Remaining Work).");
+    expect(prompt).not.toContain("target");
     expect(prompt).toContain('- ticketId 103: "Crash on save"');
     expect(prompt).not.toContain("ticketId 102");
     expect(await prisma.aiUsage.findMany({ select: { purpose: true } })).toEqual([{ purpose: "time-draft" }]);
@@ -482,14 +531,13 @@ describe("AI hours for a draft", () => {
     await estimate(connection, { day: day(), ticketIds: [103] }).expect(200);
   });
 
-  it("makes no call when the day is already full, and reports bad answers after counting their cost", async () => {
+  it("reports bad answers, saying what was wrong, after counting their cost", async () => {
     const connection = await connectSolidtime(agent);
     await useClaude();
-    expect((await estimate(connection, { day: day(), ticketIds: [103], plannedHours: 8 }).expect(200)).body.estimate).toMatchObject({ availableHours: 0, estimates: [], model: null });
-    expect(judgeCalls()).toEqual([]);
-
     ai.badJson = true;
-    expect((await estimate(connection, { day: day(), ticketIds: [103] }).expect(502)).body.reason).toBe("AI_BAD_OUTPUT");
+    const bad = (await estimate(connection, { day: day(), ticketIds: [103] }).expect(502)).body;
+    expect(bad.reason).toBe("AI_BAD_OUTPUT");
+    expect(bad.message).toContain("not JSON");
     expect(await prisma.aiUsage.count({ where: { purpose: "time-draft" } })).toBe(1);
   });
 });
