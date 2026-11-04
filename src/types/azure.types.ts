@@ -147,6 +147,29 @@ export interface LinkedPullRequest {
   webUrl: string | null;
 }
 
+/** What a group heading shows: the parent ticket, which may be someone else's. */
+export interface GroupHeading {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+  stateCategory: StateCategory;
+  projectName: string;
+  assignedTo: IdentityRef | null;
+  changedDate: string | null;
+  /** False when Azure could not return it (deleted, no access): only its id is known. */
+  readable: boolean;
+}
+
+/** A ticket's place in the backlog: its parent, and its children (mine listed, others counted). */
+export interface WorkItemFamily {
+  parent: GroupHeading | null;
+  /** The parent is assigned to me. */
+  parentIsMine: boolean;
+  myChildren: GroupHeading[];
+  otherChildren: number;
+}
+
 export interface WorkItemDetail extends WorkItemSummary {
   description: string;
   acceptanceCriteria: string;
@@ -159,6 +182,7 @@ export interface WorkItemDetail extends WorkItemSummary {
   compliance: ComplianceResult;
   /** False when the project's SOP has a Testing stage after merge. */
   closeAfterMergeAllowed: boolean;
+  family: Section<WorkItemFamily>;
 }
 
 export interface SupportedWorkFields {
@@ -398,6 +422,8 @@ export interface ComplianceResult {
   skippedRules: Array<ComplianceRuleRef & { reason: string }>;
   /** Rules only AI can judge (personal AI rules); judged on the ticket page. `due`: a fail counts as a gap. */
   aiRules: Array<ComplianceRuleRef & { due: boolean; phase: "now" | "earlier" }>;
+  /** AI-only rules the user's current AI review explicitly passed. */
+  aiPassed?: ComplianceRuleRef[];
   /** Code findings the user's AI review showed to be met (with its reason and verified quotes). */
   cleared: Array<ComplianceRuleRef & { reason: string; quotes: string[] }>;
   /** The user's last AI review of this ticket; null when there is none. */
@@ -444,6 +470,8 @@ export interface Recommendation {
 export interface Dashboard {
   identity: AzureIdentity;
   generatedAt: string;
+  /** The project the dashboard is narrowed to, by name; null for all projects. */
+  projectName: string | null;
   projectsScanned: number;
   projectsTruncated: boolean;
   sections: {

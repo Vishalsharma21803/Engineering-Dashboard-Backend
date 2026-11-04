@@ -50,6 +50,12 @@ export type AuditLog = Prisma.AuditLogModel
  */
 export type TriageMark = Prisma.TriageMarkModel
 /**
+ * Model Notification
+ * What needs the user outside the ticket list (reviews, failed pipelines, approvals, time, closed tickets' SOP gaps).
+ * Kept until the cause is fixed: reading or abandoning one only changes its status.
+ */
+export type Notification = Prisma.NotificationModel
+/**
  * Model AiCredential
  * A user's own AI provider key. One per provider per user; never returned to clients.
  */

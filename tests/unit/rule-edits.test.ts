@@ -93,6 +93,12 @@ describe("withAiReview", () => {
     expect(next.aiReview).toEqual({ status: "DONE", checkedAt: "2025-10-15T00:00:00.000Z", outdated: false });
   });
 
+  it("lists only AI-only rules the review explicitly passed: unsure, missing or outdated prove nothing", () => {
+    expect(withAiReview(result, check([verdict("MY-01", "ai-rule", "pass"), verdict("MY-02", "ai-rule", "unsure")]), 5).aiPassed?.map((rule) => rule.ruleId)).toEqual(["MY-01"]);
+    expect(withAiReview(result, check([]), 5).aiPassed).toBeUndefined();
+    expect(withAiReview(result, check([verdict("MY-01", "ai-rule", "pass")], 4), 5).aiPassed).toBeUndefined();
+  });
+
   it("applies nothing from an outdated review, results saved before reviews existed, or quality and draft verdicts", () => {
     const outdated = withAiReview(result, check([verdict("STR-08", "gap", "pass")], 4), 5);
     expect(outdated).toMatchObject({ violations: result.violations, cleared: [], aiReview: { outdated: true } });

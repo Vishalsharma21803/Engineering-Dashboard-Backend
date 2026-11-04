@@ -104,12 +104,8 @@ function buildAssignedWiql(query: WorkItemQuery, recentDays: number): string {
     clauses.push("[System.ChangedDate] >= @Today - 90");
   }
 
-  // Team-wide lists show what moved recently; personal lists show what matters most.
-  const order = everyone
-    ? "[System.ChangedDate] DESC"
-    : "[Microsoft.VSTS.Common.Priority] ASC, [System.ChangedDate] DESC";
-
-  return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(" AND ")} ORDER BY ${order}`;
+  // Lists show what moved most recently first (what needs attention is ranked by the dashboard's actions).
+  return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(" AND ")} ORDER BY [System.ChangedDate] DESC`;
 }
 
 export async function listAssignedWorkItemIds(

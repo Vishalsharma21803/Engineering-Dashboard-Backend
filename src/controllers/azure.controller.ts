@@ -338,11 +338,11 @@ export const getDashboardController = azureRead(
   }
 );
 
-/** My work tickets, filtered and paged on the server (10 per page). */
+/** My work tickets grouped by story, filtered and paged on the server (10 groups per page). */
 export const getMyWorkController = azureRead("Listing your work items failed", async (req, client, userId) => {
   const query = parse(myWorkQuerySchema, req.query);
   const projectName = query.projectId === undefined ? undefined : (await getProject(client, query.projectId)).name;
-  const { projectId: _projectId, page, hidden, ...filters } = query;
+  const { projectId: _projectId, page, hidden, sprint, closed, attention, groupBy, ...filters } = query;
 
   return {
     myWork: await getMyWorkPage(client, userId, {
@@ -350,12 +350,16 @@ export const getMyWorkController = azureRead("Listing your work items failed", a
       filters,
       page,
       hidden,
+      sprint,
+      closed,
+      attention,
+      groupBy,
       refresh: req.query.refresh === "1" || req.query.refresh === "true",
     }),
   };
 });
 
-/** Everyone's tickets in one project, filtered and paged on the server (10 per page). */
+/** Everyone's tickets in one project grouped by story, filtered and paged on the server (10 groups per page). */
 export const getTeamWorkController = azureRead("Listing team work items failed", async (req, client) => {
   const { scope, page, ...filters } = parse(teamWorkQuerySchema, req.query);
   const project = await getProject(client, projectParam(req));

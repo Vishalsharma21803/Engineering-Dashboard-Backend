@@ -57,6 +57,7 @@ export const ModelName = {
   ProposedAction: 'ProposedAction',
   AuditLog: 'AuditLog',
   TriageMark: 'TriageMark',
+  Notification: 'Notification',
   AiCredential: 'AiCredential',
   AiPreference: 'AiPreference',
   AiUsage: 'AiUsage',
@@ -180,6 +181,26 @@ export const TriageMarkScalarFieldEnum = {
 } as const
 
 export type TriageMarkScalarFieldEnum = (typeof TriageMarkScalarFieldEnum)[keyof typeof TriageMarkScalarFieldEnum]
+
+
+export const NotificationScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  credentialId: 'credentialId',
+  key: 'key',
+  kind: 'kind',
+  projectName: 'projectName',
+  title: 'title',
+  reasons: 'reasons',
+  target: 'target',
+  signals: 'signals',
+  readSignals: 'readSignals',
+  status: 'status',
+  firstSeenAt: 'firstSeenAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[keyof typeof NotificationScalarFieldEnum]
 
 
 export const AiCredentialScalarFieldEnum = {

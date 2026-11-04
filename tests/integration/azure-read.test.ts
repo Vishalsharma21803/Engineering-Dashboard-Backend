@@ -19,6 +19,7 @@ import {
   signIn,
   type Agent,
 } from "../support/harness.js";
+import { myWorkRows } from "../support/my-work.js";
 
 let fake: FakeAzure;
 let agent: Agent;
@@ -399,7 +400,7 @@ describe("fresh ticket data", () => {
   it("shows a change made in Azure on the next ticket load, and drops My work lists that still have the old state", async () => {
     await get("/dashboard").expect(200);
     const myWorkState = async () =>
-      ((await get("/my-work").expect(200)).body.myWork.items as Array<{ workItem: { id: number; state: string } }>).find((row) => row.workItem.id === 101)?.workItem.state;
+      (myWorkRows((await get("/my-work").expect(200)).body.myWork) as Array<{ workItem: { id: number; state: string } }>).find((row) => row.workItem.id === 101)?.workItem.state;
     expect((await get("/projects/Alpha/work-items/101").expect(200)).body.workItem.state).toBe("Active");
     expect(await myWorkState()).toBe("Active");
 
@@ -418,7 +419,7 @@ describe("lists after a rule change", () => {
     await useAlphaRulebook();
     await get("/dashboard").expect(200);
     const gaps = async () =>
-      ((await get("/my-work").expect(200)).body.myWork.items as Array<{ workItem: { id: number }; compliance: { violations: Array<{ ruleId: string }> } | null }>)
+      (myWorkRows((await get("/my-work").expect(200)).body.myWork) as Array<{ workItem: { id: number }; compliance: { violations: Array<{ ruleId: string }> } | null }>)
         .find((row) => row.workItem.id === 102)
         ?.compliance?.violations.map((violation) => violation.ruleId);
     expect(await gaps()).toContain("T-01");

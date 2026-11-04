@@ -9,6 +9,7 @@ import solidtimeRoutes from "./routes/solidtime.routes.js";
 import azureRoutes from "./routes/azure.routes.js";
 import actionRoutes from "./routes/action.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 import triageRoutes from "./routes/triage.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import sopRoutes from "./routes/sop.routes.js";
@@ -100,6 +101,7 @@ export function createApp(options: AppOptions = {}) {
   app.use("/api/actions", actionRoutes);
   app.use("/api/audit-logs", auditLogRoutes);
   app.use("/api/triage", triageRoutes);
+  app.use("/api/notifications", notificationRoutes);
   app.use("/api/ai", aiRoutes);
   app.use("/api/sop", sopRoutes);
   app.use("/api/solidtime", solidtimeRoutes);

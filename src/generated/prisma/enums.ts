@@ -96,6 +96,15 @@ export const TriageStatus = {
 export type TriageStatus = (typeof TriageStatus)[keyof typeof TriageStatus]
 
 
+export const NotificationStatus = {
+  UNREAD: 'UNREAD',
+  READ: 'READ',
+  ABANDONED: 'ABANDONED'
+} as const
+
+export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus]
+
+
 export const AuditEvent = {
   PROPOSED: 'PROPOSED',
   APPROVED: 'APPROVED',

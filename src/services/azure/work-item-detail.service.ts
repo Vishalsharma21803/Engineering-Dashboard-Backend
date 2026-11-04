@@ -1,12 +1,14 @@
 import type { AzureClient } from "../../lib/azure/client.js";
 import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText } from "../../lib/html-to-text.js";
-import type { SupportedWorkFields, WorkItemDetail } from "../../types/azure.types.js";
+import type { SupportedWorkFields, WorkItemDetail, WorkItemFamily, WorkItemSummary } from "../../types/azure.types.js";
 import { getEffectiveRulebook, isCloseAfterMergeAllowed } from "../sop/rulebook.service.js";
 import { clearAzureCache } from "../../lib/azure/cache.js";
 import { applyAiReviews } from "../sop/ai/sop-ai-review.js";
 import { forgetDashboardLists } from "../work-item-list/dashboard-lists.service.js";
 import { forgetMyWorkSnapshots, myWorkIsBehind } from "../work-item-list/my-work.service.js";
+import { toHeading, unreadableHeading } from "../work-item-list/grouping.js";
+import { getIdentity } from "./identity.service.js";
 import { evaluateTicket } from "../sop/sop-evaluator.js";
 import { asString } from "./mappers.js";
 import { sectionData, toSection } from "./section.js";
@@ -18,6 +20,8 @@ import {
   getWorkItem,
   getWorkItemComments,
   getWorkItemTypeStates,
+  getWorkItemsByIds,
+  toWorkItemSummaries,
   toWorkItemSummary,
   workItemProjectName,
   workItemType,
@@ -74,7 +78,7 @@ export async function getWorkItemDetail(
     clearAzureCache(client.credentialId);
   }
 
-  const [comments, history, linkedPullRequests, compliance, closeAfterMergeAllowed] = await Promise.all([
+  const [comments, history, linkedPullRequests, compliance, closeAfterMergeAllowed, family] = await Promise.all([
     toSection(() => getWorkItemComments(client, projectName, workItemId)),
     toSection(() => getWorkFieldHistory(client, projectName, workItemId)),
     toSection(() => getLinkedPullRequests(client, summary.links.pullRequests)),
@@ -82,6 +86,7 @@ export async function getWorkItemDetail(
       .then((rulebook) => evaluateTicket(client, rulebook, summary, raw, new Date()))
       .then(async (result) => (await applyAiReviews(userId, client.credentialId, [result], new Map([[summary.id, summary.rev]])))[0] ?? result),
     isCloseAfterMergeAllowed(projectName),
+    toSection(() => readFamily(client, summary)),
   ]);
 
   return {
@@ -96,5 +101,30 @@ export async function getWorkItemDetail(
     supportedFields: sectionData(supportedFields, NO_SUPPORTED_FIELDS),
     compliance,
     closeAfterMergeAllowed,
+    family,
+  };
+}
+
+/** The parent (whoever it belongs to) and the children: mine by name, other people's only counted. */
+async function readFamily(client: AzureClient, summary: WorkItemSummary): Promise<WorkItemFamily> {
+  const { parentId, childIds } = summary.links;
+
+  if (parentId === null && childIds.length === 0) {
+    return { parent: null, parentIsMine: false, myChildren: [], otherChildren: 0 };
+  }
+
+  const [identity, related] = await Promise.all([
+    getIdentity(client),
+    toWorkItemSummaries(client, await getWorkItemsByIds(client, [...(parentId === null ? [] : [parentId]), ...childIds])),
+  ]);
+  const parent = parentId === null ? null : (related.find((item) => item.id === parentId) ?? null);
+  const children = related.filter((item) => childIds.includes(item.id));
+  const mine = children.filter((item) => item.assignedTo?.id === identity.id);
+
+  return {
+    parentIsMine: parent?.assignedTo?.id === identity.id,
+    parent: parent ? toHeading(parent) : parentId === null ? null : unreadableHeading(parentId),
+    myChildren: mine.sort((a, b) => (b.changedDate ?? "").localeCompare(a.changedDate ?? "")).map(toHeading),
+    otherChildren: children.length - mine.length,
   };
 }

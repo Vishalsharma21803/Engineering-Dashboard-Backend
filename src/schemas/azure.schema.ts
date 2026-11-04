@@ -83,6 +83,14 @@ export const myWorkQuerySchema = workItemFiltersSchema.extend({
   page: pageQuery,
   /** Show snoozed and abandoned tickets instead of the active ones. */
   hidden: booleanFlag.catch(false),
+  /** "current": only tickets in their project's current sprint; absent: current when any are, else all. */
+  sprint: z.enum(["current", "all"]).optional().catch(undefined),
+  /** Also list tickets closed in the last days. */
+  closed: booleanFlag.catch(false),
+  /** Only tickets that need something from me (blocked, SOP gaps, idle…). */
+  attention: booleanFlag.catch(false),
+  /** "status": sections (in progress, to do, resolved, done) with stories inside; "story": story groups only. */
+  groupBy: z.enum(["status", "story"]).optional().catch(undefined),
 });
 
 export const teamWorkQuerySchema = workItemFiltersSchema.extend({

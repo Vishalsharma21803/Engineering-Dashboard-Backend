@@ -12,6 +12,7 @@ import {
   signIn,
   type Agent,
 } from "../support/harness.js";
+import { myWorkRows } from "../support/my-work.js";
 
 let fake: FakeAzure;
 let agent: Agent;
@@ -659,12 +660,12 @@ describe("interrupted executions and fresh lists", () => {
   it("shows an approved change in My work at once, not after the list snapshot expires", async () => {
     await useAlphaRulebook();
     const before = (await agent.get(azurePath(credentialId, "/my-work")).expect(200)).body.myWork;
-    expect(before.items.find((row: { workItem: { id: number } }) => row.workItem.id === 102).workItem.priority).toBe(2);
+    expect(myWorkRows<{ workItem: { id: number; priority: number } }>(before).find((row) => row.workItem.id === 102)!.workItem.priority).toBe(2);
 
     const action = await propose({ kind: "WORK_ITEM_UPDATE_FIELDS", target: { projectId: "Alpha", workItemId: 102 }, params: { priority: 1 } });
     expect((await approve(action)).status).toBe(200);
 
     const after = (await agent.get(azurePath(credentialId, "/my-work")).expect(200)).body.myWork;
-    expect(after.items.find((row: { workItem: { id: number } }) => row.workItem.id === 102).workItem.priority).toBe(1);
+    expect(myWorkRows<{ workItem: { id: number; priority: number } }>(after).find((row) => row.workItem.id === 102)!.workItem.priority).toBe(1);
   });
 });

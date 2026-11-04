@@ -775,3 +775,25 @@ export function addFakeTasks(fake: FakeAzure, count: number, firstId = 1001, ass
     fake.workItems.set(id, item);
   }
 }
+
+const hierarchy = (rel: "Reverse" | "Forward", id: number) => ({ rel: `System.LinkTypes.Hierarchy-${rel}`, url: `${FAKE_ORG_URL}/_apis/wit/workItems/${id}`, attributes: {} });
+
+/**
+ * Stories over the seeded tickets, for grouped lists: #120 "Checkout flow"
+ * (someone else's) over my #102 and #103 and their #105; #121 "Settings
+ * revamp" (mine) over my #106. #101 stays under no story.
+ */
+export function addFakeHierarchy(fake: FakeAzure) {
+  const story = (id: number, title: string, assignee: typeof ME, children: number[]) => {
+    const item = workItem(id, "Alpha", "User Story", title, "Active", { "Microsoft.VSTS.Common.Priority": 2, "System.ChangedDate": ago(3) }, children.map((child) => hierarchy("Forward", child)));
+    item.fields["System.AssignedTo"] = assignee;
+    fake.workItems.set(id, item);
+  };
+  story(120, "Checkout flow", OTHER, [102, 103, 105]);
+  story(121, "Settings revamp", ME, [106]);
+
+  for (const [child, parent] of [[102, 120], [103, 120], [105, 120], [106, 121]] as const) {
+    const item = fake.workItems.get(child)!;
+    item.relations = [...(item.relations ?? []), hierarchy("Reverse", parent)];
+  }
+}

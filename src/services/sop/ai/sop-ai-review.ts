@@ -52,6 +52,11 @@ export function withAiReview(
     }),
   ];
 
+  // AI-only rules that apply now and the review explicitly passed ("unsure" and missing verdicts prove nothing).
+  next.aiPassed = verdicts
+    .filter((verdict) => verdict.review === "ai-rule" && verdict.verdict === "pass")
+    .flatMap((verdict) => result.aiRules.filter((rule) => rule.ruleId === verdict.ruleId).map((rule) => ({ ruleId: rule.ruleId, ruleTitle: rule.ruleTitle })));
+
   // AI-only rules that apply now (listed by the code result) and failed.
   for (const verdict of verdicts) {
     const rule = verdict.review === "ai-rule" && verdict.verdict === "fail" ? result.aiRules.find((candidate) => candidate.ruleId === verdict.ruleId) : undefined;

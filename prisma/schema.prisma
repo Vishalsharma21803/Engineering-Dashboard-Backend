@@ -78,6 +78,12 @@ enum TriageStatus {
   ABANDONED
 }
 
+enum NotificationStatus {
+  UNREAD
+  READ
+  ABANDONED
+}
+
 enum AuditEvent {
   PROPOSED
   APPROVED
@@ -97,6 +103,7 @@ model User {
   actions              ProposedAction[]
   auditLogs            AuditLog[]
   triageMarks          TriageMark[]
+  notifications         Notification[]
   aiCredentials        AiCredential[]
   aiPreference         AiPreference?
   aiUsage              AiUsage[]
@@ -132,6 +139,7 @@ model Credential {
   user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   actions              ProposedAction[]
   triageMarks          TriageMark[]
+  notifications         Notification[]
   sopAiChecks          SopAiCheck[]
   sopReportRuns        SopReportRun[]
   /// Set for Solidtime credentials: the chosen organization and options.
@@ -214,6 +222,35 @@ model TriageMark {
 
   @@unique([credentialId, itemKey])
   @@index([userId, credentialId])
+}
+
+/// What needs the user outside the ticket list (reviews, failed pipelines, approvals, time, closed tickets' SOP gaps).
+/// Kept until the cause is fixed: reading or abandoning one only changes its status.
+model Notification {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String
+  credential   Credential         @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  /// Stable per cause: pr:<repositoryId>:<id>, pipeline:<project>:<definitionId>:<branch>, approvals,
+  /// time:day:<day>, time:timer, time:wi:<id>:untracked:<day> or closed:wi:<id>.
+  key          String
+  kind         String
+  /// Null when not tied to a project (time, approvals).
+  projectName  String?
+  title        String
+  reasons      String[]
+  /// Where Open goes: { type, projectName, id, repositoryId?, solidtimeCredentialId? }.
+  target       Json
+  /// Signal codes now; one not in readSignals brings a read notification back to unread.
+  signals      String[]
+  readSignals  String[]
+  status       NotificationStatus @default(UNREAD)
+  firstSeenAt  DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([credentialId, key])
+  @@index([userId, credentialId, status])
 }
 
 enum AiProvider {

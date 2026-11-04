@@ -36,7 +36,7 @@ process.env.FRONTEND_ORIGIN = process.env.E2E_FRONTEND_ORIGIN ?? "http://localho
 const { createApp } = await import("../../src/app.js");
 const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
-const { ME, addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
+const { ME, addFakeHierarchy, addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
 const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
 const { addEntry, createFakeSolidtime, fakeSolidtimeHandlers } = await import("../support/fake-solidtime.js");
 const { clearSolidtimeCache } = await import("../../src/lib/solidtime/client.js");
@@ -114,7 +114,21 @@ app.post("/__e2e/tickets", (req, res) => {
   res.json({ ok: true, count });
 });
 
-// Yesterday (UTC) for the Time → Draft tab: #102 Completed Work +2 h, #103 edited and resolved (hours from that activity), a 30 min standup already in Solidtime.
+// Stories over the seeded tickets (grouped lists): #120 someone else's story over my #102, #103; my #121 over #106.
+app.post("/__e2e/hierarchy", (_req, res) => {
+  addFakeHierarchy(fake);
+  res.json({ ok: true });
+});
+
+// Puts every Alpha ticket in the current sprint (Alpha\\Sprint 12), for the sprint overview.
+app.post("/__e2e/sprint", (_req, res) => {
+  for (const item of fake.workItems.values()) {
+    if (item.fields["System.TeamProject"] === "Alpha") item.fields["System.IterationPath"] = "Alpha\\Sprint 12";
+  }
+  res.json({ ok: true });
+});
+
+// Yesterday (UTC) for the Time → Draft tab: #102 Completed Work +2 h, #103 edited and resolved (hours from that activity), #101 Remaining Work −2 h at 17:00, a 30 min standup already in Solidtime.
 app.post("/__e2e/draft-activity", (_req, res) => {
   const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const at = (time: string) => `${day}T${time}:00Z`;
@@ -123,6 +137,8 @@ app.post("/__e2e/draft-activity", (_req, res) => {
     { id: 1, rev: 4, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("13:00") }, "System.Title": { oldValue: "Crash", newValue: "Crash on save" } } },
     { id: 2, rev: 5, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("15:00") }, "System.State": { oldValue: "Active", newValue: "Resolved" } } },
   ]);
+  // #101's Remaining Work 6 → 4 at a fixed time (the default fixture dates it at the current clock time).
+  fake.updates.set(101, [{ id: 1, rev: 2, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 6, newValue: 4 } } }]);
   addEntry(fakeSolidtime, { start: at("08:00"), end: at("08:30"), description: "Standup" });
   res.json({ ok: true, day });
 });

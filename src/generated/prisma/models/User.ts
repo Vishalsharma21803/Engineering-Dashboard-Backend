@@ -194,6 +194,7 @@ export type UserWhereInput = {
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  notifications?: Prisma.NotificationListRelationFilter
   aiCredentials?: Prisma.AiCredentialListRelationFilter
   aiPreference?: Prisma.XOR<Prisma.AiPreferenceNullableScalarRelationFilter, Prisma.AiPreferenceWhereInput> | null
   aiUsage?: Prisma.AiUsageListRelationFilter
@@ -215,6 +216,7 @@ export type UserOrderByWithRelationInput = {
   actions?: Prisma.ProposedActionOrderByRelationAggregateInput
   auditLogs?: Prisma.AuditLogOrderByRelationAggregateInput
   triageMarks?: Prisma.TriageMarkOrderByRelationAggregateInput
+  notifications?: Prisma.NotificationOrderByRelationAggregateInput
   aiCredentials?: Prisma.AiCredentialOrderByRelationAggregateInput
   aiPreference?: Prisma.AiPreferenceOrderByWithRelationInput
   aiUsage?: Prisma.AiUsageOrderByRelationAggregateInput
@@ -239,6 +241,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   actions?: Prisma.ProposedActionListRelationFilter
   auditLogs?: Prisma.AuditLogListRelationFilter
   triageMarks?: Prisma.TriageMarkListRelationFilter
+  notifications?: Prisma.NotificationListRelationFilter
   aiCredentials?: Prisma.AiCredentialListRelationFilter
   aiPreference?: Prisma.XOR<Prisma.AiPreferenceNullableScalarRelationFilter, Prisma.AiPreferenceWhereInput> | null
   aiUsage?: Prisma.AiUsageListRelationFilter
@@ -284,6 +287,7 @@ export type UserCreateInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -305,6 +309,7 @@ export type UserUncheckedCreateInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -326,6 +331,7 @@ export type UserUpdateInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -347,6 +353,7 @@ export type UserUncheckedUpdateInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -494,6 +501,20 @@ export type UserUpdateOneRequiredWithoutTriageMarksNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutTriageMarksInput, Prisma.UserUpdateWithoutTriageMarksInput>, Prisma.UserUncheckedUpdateWithoutTriageMarksInput>
 }
 
+export type UserCreateNestedOneWithoutNotificationsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutNotificationsInput, Prisma.UserUncheckedCreateWithoutNotificationsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutNotificationsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutNotificationsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutNotificationsInput, Prisma.UserUncheckedCreateWithoutNotificationsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutNotificationsInput
+  upsert?: Prisma.UserUpsertWithoutNotificationsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutNotificationsInput, Prisma.UserUpdateWithoutNotificationsInput>, Prisma.UserUncheckedUpdateWithoutNotificationsInput>
+}
+
 export type UserCreateNestedOneWithoutAiCredentialsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutAiCredentialsInput, Prisma.UserUncheckedCreateWithoutAiCredentialsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutAiCredentialsInput
@@ -603,6 +624,7 @@ export type UserCreateWithoutRevokedTokensInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -623,6 +645,7 @@ export type UserUncheckedCreateWithoutRevokedTokensInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -659,6 +682,7 @@ export type UserUpdateWithoutRevokedTokensInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -679,6 +703,7 @@ export type UserUncheckedUpdateWithoutRevokedTokensInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -698,6 +723,7 @@ export type UserCreateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -718,6 +744,7 @@ export type UserUncheckedCreateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -754,6 +781,7 @@ export type UserUpdateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -774,6 +802,7 @@ export type UserUncheckedUpdateWithoutCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -794,6 +823,7 @@ export type UserCreateWithoutActionsInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -814,6 +844,7 @@ export type UserUncheckedCreateWithoutActionsInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -850,6 +881,7 @@ export type UserUpdateWithoutActionsInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -870,6 +902,7 @@ export type UserUncheckedUpdateWithoutActionsInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -890,6 +923,7 @@ export type UserCreateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -910,6 +944,7 @@ export type UserUncheckedCreateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -946,6 +981,7 @@ export type UserUpdateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -966,6 +1002,7 @@ export type UserUncheckedUpdateWithoutAuditLogsInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -986,6 +1023,7 @@ export type UserCreateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -1006,6 +1044,7 @@ export type UserUncheckedCreateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -1042,6 +1081,7 @@ export type UserUpdateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -1062,6 +1102,107 @@ export type UserUncheckedUpdateWithoutTriageMarksInput = {
   credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedUpdateManyWithoutUserNestedInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedUpdateManyWithoutUserNestedInput
+  revokedTokens?: Prisma.RevokedTokenUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutNotificationsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckCreateNestedManyWithoutUserInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunCreateNestedManyWithoutUserInput
+  revokedTokens?: Prisma.RevokedTokenCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutNotificationsInput = {
+  id?: string
+  name: string
+  email: string
+  password: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  credentials?: Prisma.CredentialUncheckedCreateNestedManyWithoutUserInput
+  actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
+  aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
+  aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
+  userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
+  sopAiChecks?: Prisma.SopAiCheckUncheckedCreateNestedManyWithoutUserInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUncheckedCreateNestedManyWithoutUserInput
+  sopReportRuns?: Prisma.SopReportRunUncheckedCreateNestedManyWithoutUserInput
+  revokedTokens?: Prisma.RevokedTokenUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutNotificationsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutNotificationsInput, Prisma.UserUncheckedCreateWithoutNotificationsInput>
+}
+
+export type UserUpsertWithoutNotificationsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutNotificationsInput, Prisma.UserUncheckedUpdateWithoutNotificationsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutNotificationsInput, Prisma.UserUncheckedCreateWithoutNotificationsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutNotificationsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutNotificationsInput, Prisma.UserUncheckedUpdateWithoutNotificationsInput>
+}
+
+export type UserUpdateWithoutNotificationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
+  aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
+  aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
+  userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
+  sopAiChecks?: Prisma.SopAiCheckUpdateManyWithoutUserNestedInput
+  sopProjectExclusions?: Prisma.SopProjectExclusionUpdateManyWithoutUserNestedInput
+  sopReportRuns?: Prisma.SopReportRunUpdateManyWithoutUserNestedInput
+  revokedTokens?: Prisma.RevokedTokenUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutNotificationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  credentials?: Prisma.CredentialUncheckedUpdateManyWithoutUserNestedInput
+  actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -1083,6 +1224,7 @@ export type UserCreateWithoutAiCredentialsInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
@@ -1103,6 +1245,7 @@ export type UserUncheckedCreateWithoutAiCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
@@ -1139,6 +1282,7 @@ export type UserUpdateWithoutAiCredentialsInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
@@ -1159,6 +1303,7 @@ export type UserUncheckedUpdateWithoutAiCredentialsInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
@@ -1179,6 +1324,7 @@ export type UserCreateWithoutAiPreferenceInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
@@ -1199,6 +1345,7 @@ export type UserUncheckedCreateWithoutAiPreferenceInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
@@ -1235,6 +1382,7 @@ export type UserUpdateWithoutAiPreferenceInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
@@ -1255,6 +1403,7 @@ export type UserUncheckedUpdateWithoutAiPreferenceInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
@@ -1275,6 +1424,7 @@ export type UserCreateWithoutAiUsageInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   userRulebooks?: Prisma.UserRulebookCreateNestedManyWithoutUserInput
@@ -1295,6 +1445,7 @@ export type UserUncheckedCreateWithoutAiUsageInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   userRulebooks?: Prisma.UserRulebookUncheckedCreateNestedManyWithoutUserInput
@@ -1331,6 +1482,7 @@ export type UserUpdateWithoutAiUsageInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUpdateManyWithoutUserNestedInput
@@ -1351,6 +1503,7 @@ export type UserUncheckedUpdateWithoutAiUsageInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   userRulebooks?: Prisma.UserRulebookUncheckedUpdateManyWithoutUserNestedInput
@@ -1371,6 +1524,7 @@ export type UserCreateWithoutSopProjectExclusionsInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -1391,6 +1545,7 @@ export type UserUncheckedCreateWithoutSopProjectExclusionsInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -1427,6 +1582,7 @@ export type UserUpdateWithoutSopProjectExclusionsInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -1447,6 +1603,7 @@ export type UserUncheckedUpdateWithoutSopProjectExclusionsInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -1467,6 +1624,7 @@ export type UserCreateWithoutUserRulebooksInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -1487,6 +1645,7 @@ export type UserUncheckedCreateWithoutUserRulebooksInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -1523,6 +1682,7 @@ export type UserUpdateWithoutUserRulebooksInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -1543,6 +1703,7 @@ export type UserUncheckedUpdateWithoutUserRulebooksInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -1563,6 +1724,7 @@ export type UserCreateWithoutSopAiChecksInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -1583,6 +1745,7 @@ export type UserUncheckedCreateWithoutSopAiChecksInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -1619,6 +1782,7 @@ export type UserUpdateWithoutSopAiChecksInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -1639,6 +1803,7 @@ export type UserUncheckedUpdateWithoutSopAiChecksInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -1659,6 +1824,7 @@ export type UserCreateWithoutSopReportRunsInput = {
   actions?: Prisma.ProposedActionCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageCreateNestedManyWithoutUserInput
@@ -1679,6 +1845,7 @@ export type UserUncheckedCreateWithoutSopReportRunsInput = {
   actions?: Prisma.ProposedActionUncheckedCreateNestedManyWithoutUserInput
   auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
   triageMarks?: Prisma.TriageMarkUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
   aiCredentials?: Prisma.AiCredentialUncheckedCreateNestedManyWithoutUserInput
   aiPreference?: Prisma.AiPreferenceUncheckedCreateNestedOneWithoutUserInput
   aiUsage?: Prisma.AiUsageUncheckedCreateNestedManyWithoutUserInput
@@ -1715,6 +1882,7 @@ export type UserUpdateWithoutSopReportRunsInput = {
   actions?: Prisma.ProposedActionUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUpdateManyWithoutUserNestedInput
@@ -1735,6 +1903,7 @@ export type UserUncheckedUpdateWithoutSopReportRunsInput = {
   actions?: Prisma.ProposedActionUncheckedUpdateManyWithoutUserNestedInput
   auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
   triageMarks?: Prisma.TriageMarkUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
   aiCredentials?: Prisma.AiCredentialUncheckedUpdateManyWithoutUserNestedInput
   aiPreference?: Prisma.AiPreferenceUncheckedUpdateOneWithoutUserNestedInput
   aiUsage?: Prisma.AiUsageUncheckedUpdateManyWithoutUserNestedInput
@@ -1754,6 +1923,7 @@ export type UserCountOutputType = {
   actions: number
   auditLogs: number
   triageMarks: number
+  notifications: number
   aiCredentials: number
   aiUsage: number
   userRulebooks: number
@@ -1768,6 +1938,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   actions?: boolean | UserCountOutputTypeCountActionsArgs
   auditLogs?: boolean | UserCountOutputTypeCountAuditLogsArgs
   triageMarks?: boolean | UserCountOutputTypeCountTriageMarksArgs
+  notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
   aiCredentials?: boolean | UserCountOutputTypeCountAiCredentialsArgs
   aiUsage?: boolean | UserCountOutputTypeCountAiUsageArgs
   userRulebooks?: boolean | UserCountOutputTypeCountUserRulebooksArgs
@@ -1813,6 +1984,13 @@ export type UserCountOutputTypeCountAuditLogsArgs<ExtArgs extends runtime.Types.
  */
 export type UserCountOutputTypeCountTriageMarksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.TriageMarkWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountNotificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.NotificationWhereInput
 }
 
 /**
@@ -1876,6 +2054,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
+  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   aiCredentials?: boolean | Prisma.User$aiCredentialsArgs<ExtArgs>
   aiPreference?: boolean | Prisma.User$aiPreferenceArgs<ExtArgs>
   aiUsage?: boolean | Prisma.User$aiUsageArgs<ExtArgs>
@@ -1920,6 +2099,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   actions?: boolean | Prisma.User$actionsArgs<ExtArgs>
   auditLogs?: boolean | Prisma.User$auditLogsArgs<ExtArgs>
   triageMarks?: boolean | Prisma.User$triageMarksArgs<ExtArgs>
+  notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   aiCredentials?: boolean | Prisma.User$aiCredentialsArgs<ExtArgs>
   aiPreference?: boolean | Prisma.User$aiPreferenceArgs<ExtArgs>
   aiUsage?: boolean | Prisma.User$aiUsageArgs<ExtArgs>
@@ -1940,6 +2120,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     actions: Prisma.$ProposedActionPayload<ExtArgs>[]
     auditLogs: Prisma.$AuditLogPayload<ExtArgs>[]
     triageMarks: Prisma.$TriageMarkPayload<ExtArgs>[]
+    notifications: Prisma.$NotificationPayload<ExtArgs>[]
     aiCredentials: Prisma.$AiCredentialPayload<ExtArgs>[]
     aiPreference: Prisma.$AiPreferencePayload<ExtArgs> | null
     aiUsage: Prisma.$AiUsagePayload<ExtArgs>[]
@@ -2354,6 +2535,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   actions<T extends Prisma.User$actionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$actionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProposedActionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   auditLogs<T extends Prisma.User$auditLogsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$auditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AuditLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   triageMarks<T extends Prisma.User$triageMarksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$triageMarksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TriageMarkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  notifications<T extends Prisma.User$notificationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   aiCredentials<T extends Prisma.User$aiCredentialsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiCredentialsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiCredentialPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   aiPreference<T extends Prisma.User$aiPreferenceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiPreferenceArgs<ExtArgs>>): Prisma.Prisma__AiPreferenceClient<runtime.Types.Result.GetResult<Prisma.$AiPreferencePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   aiUsage<T extends Prisma.User$aiUsageArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$aiUsageArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiUsagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -2883,6 +3065,30 @@ export type User$triageMarksArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.TriageMarkScalarFieldEnum | Prisma.TriageMarkScalarFieldEnum[]
+}
+
+/**
+ * User.notifications
+ */
+export type User$notificationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Notification
+   */
+  select?: Prisma.NotificationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Notification
+   */
+  omit?: Prisma.NotificationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.NotificationInclude<ExtArgs> | null
+  where?: Prisma.NotificationWhereInput
+  orderBy?: Prisma.NotificationOrderByWithRelationInput | Prisma.NotificationOrderByWithRelationInput[]
+  cursor?: Prisma.NotificationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.NotificationScalarFieldEnum | Prisma.NotificationScalarFieldEnum[]
 }
 
 /**

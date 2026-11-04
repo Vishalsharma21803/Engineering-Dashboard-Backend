@@ -4,6 +4,7 @@ import type { WorkItemRecord } from "../azure/work-items.service.js";
 import { linkedSolidtimeFor } from "./connection.service.js";
 import { aggregateByDescription, entrySeconds, getActiveEntry, getMe, listEntries } from "./read.service.js";
 import { candidateTicketIds } from "./ticket-ids.js";
+import { createLimiter, mapWithLimit } from "../../lib/azure/limiter.js";
 
 /** After this local hour on a working day, today's total is compared with the target. */
 const END_OF_DAY_HOUR = 17;
@@ -50,23 +51,42 @@ function timeNudge(credentialId: string, key: string, score: number, title: stri
   };
 }
 
-/**
- * Time-tracking nudges for the dashboard of one Azure organization, from the
- * user's Solidtime connection linked to it. Never fails the dashboard: any
- * Solidtime problem means no nudges.
- */
 /** "Mon, Oct 26" for a YYYY-MM-DD day (the day itself, not shifted by any time zone). */
 function readableDay(day: string): string {
   const [year, month, date] = day.split("-").map(Number) as [number, number, number];
   return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, date)));
 }
 
-export async function timeNudges(userId: string, azureCredentialId: string, identity: AzureIdentity, records: WorkItemRecord[], now = new Date()): Promise<Recommendation[]> {
+export interface TimeCheck {
+  nudges: Recommendation[];
+  /** Solidtime was read: a reminder missing from `nudges` is really gone (not just unknown). */
+  ok: boolean;
+  /** Tickets with any time tracked on them in the last year. */
+  trackedEver: Set<number>;
+  /** True when `nudges` speaks for this key (a missing one is fixed); other day reminders need `recheck`. */
+  covers: (key: string) => boolean;
+  /**
+   * For day reminders (time:day:<day>, time:wi:<id>:untracked:<day>): the keys whose cause is
+   * fixed now (the day reached the target, or time names the ticket that day). Null when Solidtime could not be read.
+   */
+  recheck: (keys: string[]) => Promise<Set<string> | null>;
+}
+
+const NOT_READ: TimeCheck = { nudges: [], ok: false, trackedEver: new Set(), covers: () => false, recheck: async () => null };
+const DAY_KEY = /^time:day:(\d{4}-\d{2}-\d{2})$/;
+const UNTRACKED_KEY = /^time:wi:(\d+):untracked:(\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * Time-tracking nudges for the dashboard of one Azure organization, from the
+ * user's Solidtime connection linked to it. Never fails the dashboard: any
+ * Solidtime problem means no nudges (and `ok: false`).
+ */
+export async function timeNudges(userId: string, azureCredentialId: string, identity: AzureIdentity, records: WorkItemRecord[], now = new Date()): Promise<TimeCheck> {
   try {
     const linked = await linkedSolidtimeFor(userId, azureCredentialId, { background: true });
 
     if (!linked) {
-      return [];
+      return NOT_READ;
     }
 
     const { client, connection } = linked;
@@ -147,9 +167,62 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
       }
     }
 
-    return nudges;
+    const recheck = async (keys: string[]): Promise<Set<string> | null> => {
+      const days = keys.flatMap((key) => {
+        const match = DAY_KEY.exec(key) ?? UNTRACKED_KEY.exec(key);
+        return match ? [match[match.length - 1]!] : [];
+      });
+
+      if (days.length === 0) {
+        return new Set();
+      }
+
+      try {
+        // One small read per day (a reminder's day may be weeks back; no long ranges).
+        const byDay = new Map<string, Awaited<ReturnType<typeof listEntries>>["entries"]>();
+        const limit = createLimiter(3);
+        await mapWithLimit([...new Set(days)], limit, async (day) => {
+          try {
+            const read = await listEntries(client, connection.organizationId, { ...own, ...zonedDayRange(day, timeZone) });
+            // A cut-off day cannot prove it is still short (or that the ticket has no time): it is left as it is.
+            if (!read.truncated) byDay.set(day, read.entries);
+          } catch (error) {
+            // One day that cannot be read is left as it is; the others are still checked.
+            console.error(`Re-checking time on ${day} failed:`, error instanceof Error ? error.message : "Unknown error");
+          }
+        });
+
+        const fixed = new Set<string>();
+
+        for (const key of keys) {
+          const dayMatch = DAY_KEY.exec(key);
+          const untrackedMatch = UNTRACKED_KEY.exec(key);
+          const day = dayMatch?.[1] ?? untrackedMatch?.[2];
+          const entries = day ? byDay.get(day) : undefined;
+
+          if (!entries) continue;
+
+          if (dayMatch && hours(total(entries)) >= target) {
+            fixed.add(key);
+          } else if (untrackedMatch && entries.some((entry) => candidateTicketIds(entry.description).includes(Number(untrackedMatch[1])))) {
+            fixed.add(key);
+          }
+        }
+
+        return fixed;
+      } catch (error) {
+        console.error("Re-checking older time reminders failed:", error instanceof Error ? error.message : "Unknown error");
+        return null;
+      }
+    };
+
+    // The timer, the previous working day, today after the end of the day, and today's untracked tickets are read above.
+    const covered = new Set(["time:timer", `time:day:${previous}`, ...(isWorkingDay(today) && localHour(now, timeZone) >= END_OF_DAY_HOUR ? [`time:day:${today}`] : [])]);
+    const covers = (key: string) => covered.has(key) || UNTRACKED_KEY.exec(key)?.[2] === today;
+
+    return { nudges, ok: true, trackedEver, covers, recheck };
   } catch (error) {
     console.error("Time nudges unavailable:", error instanceof Error ? error.message : "Unknown error");
-    return [];
+    return NOT_READ;
   }
 }
