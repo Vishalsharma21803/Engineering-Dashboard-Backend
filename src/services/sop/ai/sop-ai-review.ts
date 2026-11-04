@@ -1,6 +1,6 @@
 import { prisma } from "../../../lib/prisma.js";
 import type { ComplianceResult, ComplianceViolation } from "../../../types/azure.types.js";
-import type { AiRuleResult } from "./sop-ai-verifier.js";
+import { VERIFIER_VERSION, type AiRuleResult } from "./sop-ai-verifier.js";
 
 function findingFor(result: AiRuleResult, phase: ComplianceViolation["phase"]): ComplianceViolation {
   return {
@@ -19,25 +19,38 @@ function findingFor(result: AiRuleResult, phase: ComplianceViolation["phase"]): 
  * One ticket's code result with the user's AI review applied, when the review
  * judged this revision of the ticket: a cleared gap (or to-do or notice) moves
  * to `cleared`, and a failed AI-only rule becomes a gap (to-do while not due).
- * An outdated review is only reported, never applied.
+ * An outdated review is only reported, never applied: one checked by an older
+ * verifier, or one whose cleared gap code now describes differently (the pull
+ * requests, links or timing changed without a new revision).
  */
 export function withAiReview(
   result: ComplianceResult,
   check: { status: NonNullable<ComplianceResult["aiReview"]>["status"]; results: unknown; ticketRev: number | null; finishedAt: Date | null },
   rev: number
 ): ComplianceResult {
-  const outdated = check.ticketRev === null || check.ticketRev !== rev;
+  const saved = Array.isArray(check.results) ? (check.results as AiRuleResult[]) : [];
+  // Results of an older verifier (weaker quote checks, who/when rules cleared) prove nothing any more.
+  const verdicts = saved.filter((verdict) => verdict.verifier === VERIFIER_VERSION);
+  const findings = new Map([...result.violations, ...result.todos, ...result.notices].filter((finding) => finding.checker === "code").map((finding) => [finding.ruleId, finding]));
+  // A clear was given for what code said then; when code now says something else, the review is out of date.
+  const stale = verdicts.some(
+    (verdict) => verdict.review === "gap" && verdict.verdict === "pass" && findings.has(verdict.ruleId) && findings.get(verdict.ruleId)?.message !== verdict.codeMessage
+  );
+  const outdated = check.ticketRev === null || check.ticketRev !== rev || verdicts.length < saved.length || stale;
   const next: ComplianceResult = {
     ...result,
     aiReview: { status: check.status, checkedAt: check.finishedAt?.toISOString() ?? null, outdated },
   };
-  const verdicts = Array.isArray(check.results) ? (check.results as AiRuleResult[]) : [];
 
-  if (outdated || verdicts.length === 0) {
+  if (check.ticketRev === null || check.ticketRev !== rev || verdicts.length === 0) {
     return next;
   }
 
-  const cleared = new Map(verdicts.filter((verdict) => verdict.review === "gap" && verdict.verdict === "pass").map((verdict) => [verdict.ruleId, verdict]));
+  const cleared = new Map(
+    verdicts
+      .filter((verdict) => verdict.review === "gap" && verdict.verdict === "pass" && findings.get(verdict.ruleId)?.message === verdict.codeMessage)
+      .map((verdict) => [verdict.ruleId, verdict])
+  );
   const keep = (finding: ComplianceViolation) => finding.checker !== "code" || !cleared.has(finding.ruleId);
   const removed = [...result.violations, ...result.todos, ...result.notices].filter((finding) => !keep(finding));
 

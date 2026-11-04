@@ -2147,6 +2147,7 @@ export const SopReportRunScalarFieldEnum = {
   roles: 'roles',
   tickets: 'tickets',
   timeScope: 'timeScope',
+  truncated: 'truncated',
   createdAt: 'createdAt'
 } as const
 
@@ -2460,6 +2461,13 @@ export type EnumSopAiStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pris
  * Reference to a field of type 'SopAiStatus[]'
  */
 export type ListEnumSopAiStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SopAiStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 /**

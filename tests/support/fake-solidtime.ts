@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { lookup } from "node:dns/promises";
 
 import { HttpResponse, http } from "msw";
 
@@ -11,6 +12,12 @@ export const SOLIDTIME_URL = "https://solidtime.test";
 export const EMPLOYEE_TOKEN = "st-employee-token-0123456789abcdefghijklmnop";
 export const MANAGER_TOKEN = "st-manager-token-0123456789abcdefghijklmnopq";
 export const REVOKED_TOKEN = "st-revoked-token-0123456789abcdefghijklmnopq";
+
+/** The Solidtime address check resolves solidtime.test to a public address (no real DNS); other names resolve normally. */
+export async function solidtimeTestResolver(hostname: string): Promise<string[]> {
+  if (hostname === new URL(SOLIDTIME_URL).hostname) return ["93.184.215.14"];
+  return (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
+}
 
 export const ORG_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 export const EMPLOYEE = { userId: "bbbbbbbb-0000-4000-8000-000000000001", memberId: "cccccccc-0000-4000-8000-000000000001", name: "Dev Example", email: "dev@example.com" };
@@ -43,6 +50,10 @@ export interface FakeSolidtime {
   timeZone: string;
   /** Entry creations allowed before the server starts failing (simulates an outage mid-batch). */
   createsBeforeFailure: number | null;
+  /** Entry creations answered normally before the following ones are saved but answered with `200 {}` (no entry in the reply). */
+  createsBeforeMalformed: number | null;
+  /** The next write is answered with this status without being applied (e.g. 502 from a gateway). */
+  failNextWrite: number | null;
 }
 
 const PER_PAGE = 15;
@@ -57,6 +68,8 @@ export function createFakeSolidtime(): FakeSolidtime {
     requests: [],
     timeZone: "UTC",
     createsBeforeFailure: null,
+    createsBeforeMalformed: null,
+    failNextWrite: null,
   };
 }
 
@@ -180,6 +193,12 @@ export function fakeSolidtimeHandlers(fake: FakeSolidtime) {
         return HttpResponse.json({ message: "Not found" }, { status: 404 });
       }
 
+      if (method !== "GET" && fake.failNextWrite !== null) {
+        const status = fake.failNextWrite;
+        fake.failNextWrite = null;
+        return HttpResponse.json({ message: "Bad Gateway" }, { status });
+      }
+
       const memberFilter = url.searchParams.get("member_id");
 
       if (method === "GET") {
@@ -258,6 +277,12 @@ export function fakeSolidtimeHandlers(fake: FakeSolidtime) {
           type: "work",
         };
         fake.entries.push(created);
+
+        if (fake.createsBeforeMalformed !== null) {
+          if (fake.createsBeforeMalformed <= 0) return HttpResponse.json({}, { status: 200 });
+          fake.createsBeforeMalformed -= 1;
+        }
+
         return HttpResponse.json({ data: resource(created) }, { status: 201 });
       }
 

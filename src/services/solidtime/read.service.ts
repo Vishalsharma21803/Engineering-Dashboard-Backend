@@ -141,3 +141,24 @@ export function entrySeconds(entry: Pick<SolidtimeTimeEntry, "start" | "end" | "
 
   return Math.max(0, Math.round((now.getTime() - Date.parse(entry.start)) / 1000));
 }
+
+/**
+ * Seconds of an entry inside a range (a day): the overlap of [start, end] (a
+ * running one up to `now`) with it, so a timer crossing midnight counts on
+ * each day only for its own part.
+ */
+export function secondsWithin(entry: Pick<SolidtimeTimeEntry, "start" | "end" | "duration">, range: { start: Date; end: Date }, now: Date): number {
+  const start = Date.parse(entry.start);
+  const end = entry.end ? Date.parse(entry.end) : now.getTime();
+
+  if (start >= range.start.getTime() && end <= range.end.getTime()) {
+    return entrySeconds(entry, now);
+  }
+
+  return Math.max(0, Math.round((Math.min(end, range.end.getTime()) - Math.max(start, range.start.getTime())) / 1000));
+}
+
+/** The entry has time inside the range (see secondsWithin). */
+export function overlapsRange(entry: Pick<SolidtimeTimeEntry, "start" | "end">, range: { start: Date; end: Date }, now: Date): boolean {
+  return Date.parse(entry.start) < range.end.getTime() && (entry.end ? Date.parse(entry.end) : now.getTime()) > range.start.getTime();
+}

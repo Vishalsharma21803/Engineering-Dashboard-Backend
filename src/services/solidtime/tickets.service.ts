@@ -15,6 +15,10 @@ export interface TicketInfo {
   originalEstimate: number | null;
   completedWork: number | null;
   remainingWork: number | null;
+  /** The ticket's revision count (how much history it has). */
+  rev: number;
+  /** When anyone last changed it (ISO), or null. */
+  changedDate: string | null;
 }
 
 const asNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
@@ -56,6 +60,8 @@ export async function lookUpTickets(azure: AzureClient | null, ids: number[]): P
           originalEstimate: asNumber(raw.fields[WORK_ITEM_FIELDS.originalEstimate]),
           completedWork: asNumber(raw.fields[WORK_ITEM_FIELDS.completedWork]),
           remainingWork: asNumber(raw.fields[WORK_ITEM_FIELDS.remainingWork]),
+          rev: raw.rev,
+          changedDate: typeof raw.fields[WORK_ITEM_FIELDS.changedDate] === "string" ? (raw.fields[WORK_ITEM_FIELDS.changedDate] as string) : null,
         },
       ])
     );
@@ -75,17 +81,22 @@ export async function lookUpTickets(azure: AzureClient | null, ids: number[]): P
 /** States where the work is done: Remaining Work is then left as it is. */
 const FINISHED_CATEGORIES: StateCategory[] = ["Resolved", "Completed", "Removed"];
 
-/** Whether the ticket's state is resolved, closed or removed. Unknown (Azure unreadable) counts as open. */
-export async function isFinished(azure: AzureClient, ticket: Pick<TicketInfo, "projectName" | "type" | "state">): Promise<boolean> {
+/** Whether the ticket's state is resolved, closed or removed; null when Azure's states could not be read. */
+export async function finishedState(azure: AzureClient, ticket: Pick<TicketInfo, "projectName" | "type" | "state">): Promise<boolean | null> {
   try {
     const states = await getWorkItemTypeStates(azure, ticket.projectName, ticket.type);
     const category = states.find((state) => state.name === ticket.state)?.category;
     return category !== undefined && FINISHED_CATEGORIES.includes(category);
   } catch (error) {
     if (error instanceof AzureApiError) {
-      logFallback(`Reading the states of ${ticket.type} in ${ticket.projectName} failed; the ticket counts as open`, error);
-      return false;
+      logFallback(`Reading the states of ${ticket.type} in ${ticket.projectName} failed`, error);
+      return null;
     }
     throw error;
   }
+}
+
+/** Whether the ticket's state is resolved, closed or removed. Unknown (Azure unreadable) counts as open. */
+export async function isFinished(azure: AzureClient, ticket: Pick<TicketInfo, "projectName" | "type" | "state">): Promise<boolean> {
+  return (await finishedState(azure, ticket)) ?? false;
 }

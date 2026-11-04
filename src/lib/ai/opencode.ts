@@ -118,13 +118,16 @@ export async function toOpenCodeError(response: Response): Promise<AiProviderErr
               ? "AI_MODEL_UNAVAILABLE"
               : response.status === 429
                 ? "AI_RATE_LIMITED"
-                : "AI_UPSTREAM_ERROR";
+                : response.status === 400 || response.status === 422
+                  ? "AI_REQUEST_REJECTED"
+                  : "AI_UPSTREAM_ERROR";
 
   return new AiProviderError(
     reason,
     reason === "AI_RATE_LIMITED" ? parseRetryAfter(response.headers.get("retry-after")) : null,
     null,
-    detail
+    detail,
+    reason === "AI_UPSTREAM_ERROR" ? `OpenCode answered HTTP ${response.status}` : null
   );
 }
 

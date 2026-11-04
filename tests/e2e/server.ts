@@ -38,13 +38,15 @@ const { prisma } = await import("../../src/lib/prisma.js");
 const { clearAzureCache } = await import("../../src/lib/azure/cache.js");
 const { ME, addFakeHierarchy, addFakeTasks, createFakeAzure, fakeAzureHandlers } = await import("../support/fake-azure.js");
 const { createFakeAi, fakeAiHandlers } = await import("../support/fake-ai.js");
-const { addEntry, createFakeSolidtime, fakeSolidtimeHandlers } = await import("../support/fake-solidtime.js");
+const { addEntry, createFakeSolidtime, fakeSolidtimeHandlers, solidtimeTestResolver } = await import("../support/fake-solidtime.js");
 const { clearSolidtimeCache } = await import("../../src/lib/solidtime/client.js");
+const { setSolidtimeResolverForTests } = await import("../../src/lib/solidtime/address-guard.js");
 const { clearOpenRouterModelsCache } = await import("../../src/lib/ai/openrouter.js");
 const { clearOpenCodeModelsCache } = await import("../../src/lib/ai/opencode.js");
 const { clearMyWorkSnapshots } = await import("../../src/services/work-item-list/my-work.service.js");
 const { clearDashboardLists } = await import("../../src/services/work-item-list/dashboard-lists.service.js");
 const { useAlphaRulebook } = await import("../support/test-rulebook.js");
+const { waitForSopAiIdle } = await import("../../src/services/sop/ai/sop-ai.service.js");
 
 const blockExternal = http.all(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, ({ request }) => {
   console.error(`Unmocked external request blocked: ${request.method} ${request.url}`);
@@ -71,8 +73,12 @@ let fakeAi = createFakeAi();
 let fakeSolidtime = createFakeSolidtime();
 const server = setupServer(...fakeAzureHandlers(fake), ...fakeAiHandlers(fakeAi), ...fakeSolidtimeHandlers(fakeSolidtime), secondOrg, blockExternal);
 server.listen({ onUnhandledFrame: "bypass" });
+// https://solidtime.test passes the Solidtime address check without real DNS.
+setSolidtimeResolverForTests(solidtimeTestResolver);
 
 async function reset(): Promise<void> {
+  // A check still running for the previous test would write AiUsage rows for a user that is being deleted.
+  await waitForSopAiIdle();
   await prisma.$executeRawUnsafe(
     'TRUNCATE TABLE "AuditLog", "ProposedAction", "Credential", "User", "AppSetting", "Rulebook", "SopProject", "SopProjectChange" CASCADE'
   );

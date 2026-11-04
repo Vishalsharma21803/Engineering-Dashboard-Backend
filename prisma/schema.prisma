@@ -450,6 +450,8 @@ model SopReportRun {
   tickets        Json
   /// Whose Solidtime hours the run includes: "team", "mine", or null when no Solidtime connection is linked.
   timeScope      String?
+  /// More tickets existed than a run checks: only the most recently changed ones were checked.
+  truncated      Boolean    @default(false)
   createdAt      DateTime   @default(now())
 
   @@index([userId, credentialId, projectName, createdAt])

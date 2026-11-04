@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 
 import { AppError } from "../../../lib/app-error.js";
 import type { AzureClient } from "../../../lib/azure/client.js";
+import type { RawWorkItem } from "../../../lib/azure/azure-api.types.js";
 import { AzureApiError } from "../../../lib/azure/errors.js";
+import { createLimiter, mapWithLimit } from "../../../lib/azure/limiter.js";
 import { CLAUDE_MODELS } from "../../../lib/ai/claude.js";
 import { judge } from "../../../lib/ai/judge.js";
 import { estimateCostUsd } from "../../../lib/ai/pricing.js";
@@ -11,11 +13,11 @@ import { prisma } from "../../../lib/prisma.js";
 import { getAiApiKey } from "../../ai/ai-credential.service.js";
 import { findModel } from "../../ai/ai-models.service.js";
 import { getAiPreference } from "../../ai/ai-preference.service.js";
-import { recordAiUsage, spentSince, startOfUtcDay } from "../../ai/ai-usage.service.js";
+import { recordAiSpend, releaseAiSpend, reserveAiSpend, spentSince, startOfUtcDay, worstCaseCostUsd } from "../../ai/ai-usage.service.js";
 import { createAzureClientForCredential } from "../../azure/azure-context.service.js";
 import { getWorkItem, getWorkItemsByIds, toWorkItemSummaries, workItemProjectName, workItemType } from "../../azure/work-items.service.js";
 import { AI_REVIEW, type BuiltinCheckName } from "../builtin-checks.js";
-import { buildDossier, kindOf } from "../dossier.js";
+import { buildDossier, kindOf, type DossierNeed, type TicketDossier } from "../dossier.js";
 import { linkedSolidtimeFor } from "../../solidtime/connection.service.js";
 import { trackedHoursByTicket } from "../../solidtime/reports.service.js";
 import { findProjectProfile } from "../rulebook.merge.js";
@@ -24,10 +26,15 @@ import type { ComplianceResult } from "../../../types/azure.types.js";
 import type { ProjectProfile, RuleCard } from "../rulebook.types.js";
 import { evaluateDossier, type RulebookForChecks } from "../sop-evaluator.js";
 import { VERDICT_JSON_SCHEMA, buildSystemPrompt, buildUserPrompt, quotableText, verdictSchema, type ReviewItem } from "./sop-ai-prompt.js";
-import { verifyVerdicts } from "./sop-ai-verifier.js";
+import { VERIFIER_VERSION, verifyVerdicts } from "./sop-ai-verifier.js";
 import { fallbackTo, logFallback } from "../../../lib/log-fallback.js";
 
-export const MAX_CHECKS_PER_REQUEST = 200;
+/** The page sends one ticket; each queued ticket costs a full read of its history and links (see contextFingerprint). */
+export const MAX_CHECKS_PER_REQUEST = 50;
+/** Bumped when the prompt layout changes, so every ticket is checked again with the new one. */
+const PROMPT_VERSION = 2;
+/** What an AI check reads for a ticket (the same at queueing, for the fingerprint, and when it runs). */
+const CHECK_NEEDS = new Set<DossierNeed>(["updates", "comments", "pullRequests", "prThreads", "relatedItems"]);
 const MAX_RUNNING_PER_USER = 2;
 const MAX_RUNNING_GLOBAL = 6;
 const DEFAULT_RATE_LIMIT_PAUSE_SECONDS = 60;
@@ -80,33 +87,56 @@ export function reviewItems(result: ComplianceResult, cards: RuleCard[]): Review
   });
 }
 
-/** Anything that changes the answer: the ticket revision, the rules and the model settings. */
+/**
+ * What the AI would see that changes without a new ticket revision: pull
+ * requests (status, target, merge time, open threads, votes), linked items'
+ * states, the SOP stage and what code found now (rule windows move with time).
+ */
+export function contextFingerprint(dossier: TicketDossier, items: ReviewItem[]): unknown {
+  return {
+    stage: dossier.stage,
+    pullRequests:
+      dossier.pullRequests?.map((pr) => [pr.pullRequestId, pr.status, pr.targetBranch, pr.closedDate?.toISOString() ?? null, pr.unresolvedThreads, pr.reviewers.map((reviewer) => [reviewer.id ?? reviewer.displayName, reviewer.vote])]) ?? null,
+    relatedItems: dossier.relatedItems?.map((item) => [item.id, item.relation, item.state]) ?? null,
+    items: items.map((item) => [item.card.id, item.mode, item.codeMessage]),
+  };
+}
+
+const sha256 = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+/**
+ * Anything that changes the answer: the ticket revision and context, the rules, the model settings and the prompt and verifier versions.
+ * Stored as "<everything but the context>.<context>", so a context that could not be read can be told apart from a real change.
+ */
 function inputHash(
   rev: number,
   cards: RuleCard[],
   profile: ProjectProfile,
   settings: { provider: string; model: string; effort: string },
-  trackedHours: number | null = null
+  trackedHours: number | null = null,
+  context: unknown = null
 ): string {
   // The whole project set-up counts: stages decide which rules apply, categories what a fix may suggest.
   const { line: _line, ...project } = profile;
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        rev,
-        settings,
-        project,
-        cards: cards.map((card) =>
-          card.checker === "ai"
-            ? [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]
-            : [card.id, card.severity, card.when, card.rule, card.uses, card.params]
-        ),
-        // Tracked time is part of what the AI sees; a change (to the quarter hour) re-checks.
-        ...(trackedHours === null ? {} : { trackedHours }),
-      })
-    )
-    .digest("hex");
+  const base = sha256({
+    promptVersion: PROMPT_VERSION,
+    verifier: VERIFIER_VERSION,
+    rev,
+    settings,
+    project,
+    cards: cards.map((card) =>
+      card.checker === "ai"
+        ? [card.id, card.severity, card.when, card.rule, card.passesWhen, card.failsWhen, card.passExample, card.failExample, card.suggestedFix]
+        : [card.id, card.severity, card.when, card.rule, card.uses, card.params]
+    ),
+    // Tracked time is part of what the AI sees; a change (to the quarter hour) re-checks.
+    ...(trackedHours === null ? {} : { trackedHours }),
+  });
+  return `${base}.${sha256(context)}`;
 }
+
+/** The part of an input hash that is not the context (see inputHash); hashes stored before the split have none. */
+const hashWithoutContext = (hash: string): string | null => (hash.includes(".") ? hash.slice(0, hash.indexOf(".")) : null);
 
 /**
  * Solidtime hours per ticket for AI checks: empty when no connection is
@@ -136,6 +166,32 @@ async function hiddenByTriage(userId: string, credentialId: string, now: Date) {
   });
   // Project keys are stored lower-cased by the dashboard; compare case-insensitively.
   return new Set(marks.map((mark) => mark.itemKey.toLowerCase()));
+}
+
+interface ReviewContext {
+  fingerprint: unknown;
+  /** A read behind it failed (history, comments, pull requests or linked items): the fingerprint is not the ticket's real context. */
+  readFailed: boolean;
+}
+
+/** Each ticket's context fingerprint, from the same reads and code check the AI check makes (limiter 4). */
+async function reviewContexts(client: AzureClient, rawItems: RawWorkItem[], rulebook: RulebookForChecks, now: Date): Promise<Map<number, ReviewContext>> {
+  const summaries = await toWorkItemSummaries(client, rawItems);
+  const limit = createLimiter(4);
+  const entries = await mapWithLimit(rawItems.map((raw, index) => ({ raw, summary: summaries[index] })), limit, async ({ raw, summary }): Promise<[number, ReviewContext] | null> => {
+    const profile = summary ? findProjectProfile(rulebook.projects, summary.projectName) : null;
+
+    if (!summary || !profile || reviewCardsFor(rulebook, profile, summary.type).length === 0) {
+      return null;
+    }
+
+    const dossier = await buildDossier(client, summary, raw, profile, CHECK_NEEDS);
+    const items = reviewItems(evaluateDossier(dossier, rulebook, now), reviewCardsFor(rulebook, profile, summary.type));
+    const readFailed = dossier.stageHistory === null || dossier.comments === null || dossier.pullRequests === null || dossier.relatedItems === null;
+    return [raw.id, { fingerprint: contextFingerprint(dossier, items), readFailed }];
+  });
+
+  return new Map(entries.filter((entry): entry is [number, ReviewContext] => entry !== null));
 }
 
 /**
@@ -180,6 +236,7 @@ export async function enqueueAiChecks(
   // "Try now" (force) makes one real attempt even during a pause; a new 429 pauses again.
   const pauseUntil = options.force ? null : (paused?.notBefore ?? null);
   const found = new Map(rawItems.map((raw) => [raw.id, raw]));
+  const contexts = await reviewContexts(client, rawItems, rulebook, now);
   const result: EnqueueResult = { queued: [], unchanged: [], skipped: [] };
 
   for (const id of ids) {
@@ -213,14 +270,18 @@ export async function enqueueAiChecks(
     const before = previous.get(id);
     // Solidtime unreadable: use the hours the last check was made with, so nothing is re-checked just for that.
     const hours = tracked === null ? (before?.trackedHours ?? null) : (tracked.get(id) ?? null);
-    const hash = inputHash(raw.rev, cards, profile, settings, hours);
+    const context = contexts.get(id);
+    const hash = inputHash(raw.rev, cards, profile, settings, hours, context?.fingerprint ?? null);
     const retryable = before && (before.status === "FAILED" || before.status === "SKIPPED") && RETRYABLE_REASONS.has(before.errorReason ?? "");
+    // A context read that failed just now is no change: when nothing else changed (revision, rules, model, hours, versions),
+    // the ticket is not checked (and paid for) again because of it.
+    const contextUnread = context?.readFailed === true && before !== undefined && hashWithoutContext(before.inputHash) === hashWithoutContext(hash);
 
     // A live running check is never re-queued: it would run (and be paid for) twice.
     // An abandoned one (older than STALE_RUN_MS) may be.
     const runningNow = before?.status === "RUNNING" && before.startedAt !== null && now.getTime() - before.startedAt.getTime() < STALE_RUN_MS;
 
-    if (runningNow || (before && before.inputHash === hash && !options.force && !retryable)) {
+    if (runningNow || (before && (before.inputHash === hash || contextUnread) && !options.force && !retryable)) {
       result.unchanged.push(id);
       continue;
     }
@@ -393,6 +454,8 @@ async function runCheck(id: string): Promise<void> {
   }
 
   let done = (data: Parameters<typeof finish>[2]) => finish(row.id, row.inputHash, data);
+  /** This call's spend reservation while it is open. */
+  let reservation: string | null = null;
 
   try {
     const preference = await getAiPreference(row.userId);
@@ -444,7 +507,7 @@ async function runCheck(id: string): Promise<void> {
       return await done({ status: "SKIPPED", errorReason: "PROJECT_NOT_CONFIGURED", results: [] });
     }
 
-    const dossier = await buildDossier(client, summary, raw, profile, new Set(["updates", "comments", "pullRequests", "prThreads", "relatedItems"]));
+    const dossier = await buildDossier(client, summary, raw, profile, CHECK_NEEDS);
     // The AI reviews what code found on the ticket as it is now.
     const items = reviewItems(evaluateDossier(dossier, rulebook, new Date()), reviewCardsFor(rulebook, profile, summary.type));
     const judged = { ticketRev: raw.rev };
@@ -453,21 +516,42 @@ async function runCheck(id: string): Promise<void> {
       return await done({ status: "DONE", errorDetail: null, results: [], errorReason: null, provider: preference.provider, model: model.id, costUsd: 0, ...judged });
     }
 
+    const system = buildSystemPrompt();
+    // The hours the check was queued with (part of its input hash).
+    const user = buildUserPrompt(dossier, items, { trackedHours: row.trackedHours });
+
+    // Held at its worst case while the call runs, so parallel calls cannot all pass the limit.
+    if (!model.free) {
+      reservation = await reserveAiSpend({
+        userId: row.userId,
+        provider: preference.provider,
+        model: model.id,
+        purpose: USAGE_PURPOSE,
+        maxCostUsd: worstCaseCostUsd(model, system.length + user.length),
+        limitUsd: preference.dailyLimitUsd,
+      });
+
+      if (reservation === null) {
+        return await done({ status: "SKIPPED", errorReason: "DAILY_LIMIT_REACHED" });
+      }
+    }
+
     const response = await judge({
       provider: preference.provider,
       apiKey,
       model: model.id,
       effort: model.efforts.includes(preference.effort) ? preference.effort : null,
-      system: buildSystemPrompt(),
-      // The hours the check was queued with (part of its input hash).
-      user: buildUserPrompt(dossier, items, { trackedHours: row.trackedHours }),
+      system,
+      user,
       schema: verdictSchema,
       jsonSchema: VERDICT_JSON_SCHEMA,
       allowDataCollection: preference.dataCollectionAcceptedAt !== null,
     });
     const costUsd = estimateCostUsd(pricingFor(model, response.servedBy), response.usage);
 
-    await recordAiUsage({ userId: row.userId, provider: preference.provider, model: response.servedBy, purpose: USAGE_PURPOSE, usage: response.usage, costUsd });
+    // Never throws: a paid answer is used even when recording its cost failed (it is not paid for again).
+    await recordAiSpend(reservation, { userId: row.userId, provider: preference.provider, model: response.servedBy, purpose: USAGE_PURPOSE, usage: response.usage, costUsd });
+    reservation = null;
 
     const results = verifyVerdicts(response.data, items, quotableText(dossier), profile);
     await done({ status: "DONE", errorDetail: null, results: results as object[], errorReason: null, provider: preference.provider, model: response.servedBy, costUsd, ...judged });
@@ -479,7 +563,7 @@ async function runCheck(id: string): Promise<void> {
       const pricing = model ? pricingFor(model, error.billed.servedBy) : CLAUDE_MODELS.find((candidate) => candidate.id === error.billed?.servedBy);
 
       if (preference.provider) {
-        await recordAiUsage({
+        await recordAiSpend(reservation, {
           userId: row.userId,
           provider: preference.provider,
           model: error.billed.servedBy,
@@ -487,7 +571,13 @@ async function runCheck(id: string): Promise<void> {
           usage: error.billed.usage,
           costUsd: pricing ? estimateCostUsd(pricing, error.billed.usage) : 0,
         });
+        reservation = null;
       }
+    }
+
+    // Nothing was billed: the held amount is free again (maintenance removes it if this fails).
+    if (reservation) {
+      await releaseAiSpend(reservation).catch(fallbackTo("Releasing an AI spend reservation failed", undefined));
     }
 
     if (error instanceof AiProviderError && error.reason === "AI_RATE_LIMITED") {
@@ -552,20 +642,21 @@ async function drain(): Promise<void> {
     }
 
     const now = new Date();
-    const candidates = await prisma.sopAiCheck.findMany({
-      where: { status: "QUEUED", OR: [{ notBefore: null }, { notBefore: { lte: now } }] },
-      // Newest first: the ticket someone just opened is the one they are waiting for.
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-      select: { id: true, userId: true },
-    });
+    const ready = { status: "QUEUED" as const, OR: [{ notBefore: null }, { notBefore: { lte: now } }] };
+    const atCap = [...runningByUser].filter(([, count]) => count >= MAX_RUNNING_PER_USER).map(([userId]) => userId);
+    // Fair between users: every user with a ready check gets one per round, so one user's long queue never hides another's.
+    const users = await prisma.sopAiCheck.groupBy({ by: ["userId"], where: { ...ready, userId: { notIn: atCap } }, _max: { updatedAt: true } });
+    let claimedAny = false;
 
-    for (const candidate of candidates) {
+    // Users whose newest check is newest first: the ticket someone just opened is the one they are waiting for.
+    for (const { userId } of users.sort((a, b) => (b._max.updatedAt?.getTime() ?? 0) - (a._max.updatedAt?.getTime() ?? 0))) {
       if (runningGlobal >= MAX_RUNNING_GLOBAL) {
         break;
       }
 
-      if ((runningByUser.get(candidate.userId) ?? 0) >= MAX_RUNNING_PER_USER) {
+      const candidate = await prisma.sopAiCheck.findFirst({ where: { ...ready, userId }, orderBy: { updatedAt: "desc" }, select: { id: true, userId: true } });
+
+      if (!candidate) {
         continue;
       }
 
@@ -579,6 +670,7 @@ async function drain(): Promise<void> {
         continue;
       }
 
+      claimedAny = true;
       adjustRunning(candidate.userId, 1);
       runningHere.add(candidate.id);
       const run: Promise<void> = runCheck(candidate.id)
@@ -592,6 +684,11 @@ async function drain(): Promise<void> {
           active.delete(run);
         });
       active.add(run);
+    }
+
+    // Another round while there is room: users below their cap may take a second check (also when the ones just claimed already ended).
+    if (claimedAny && runningGlobal < MAX_RUNNING_GLOBAL) {
+      continue;
     }
 
     if (active.size === 0) {

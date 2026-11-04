@@ -2,7 +2,8 @@ import { addDays, isValidTimeZone, weekdayOf, zonedDay, zonedDayRange } from "..
 import type { AzureIdentity, Recommendation } from "../../types/azure.types.js";
 import type { WorkItemRecord } from "../azure/work-items.service.js";
 import { linkedSolidtimeFor } from "./connection.service.js";
-import { aggregateByDescription, entrySeconds, getActiveEntry, getMe, listEntries } from "./read.service.js";
+import type { SolidtimeTimeEntry } from "../../lib/solidtime/types.js";
+import { aggregateByDescription, entrySeconds, getActiveEntry, getMe, listEntries, overlapsRange, secondsWithin } from "./read.service.js";
 import { candidateTicketIds } from "./ticket-ids.js";
 import { createLimiter, mapWithLimit } from "../../lib/azure/limiter.js";
 
@@ -13,6 +14,10 @@ const CLOSED_LOOKBACK_DAYS = 7;
 const TIME_LOOKBACK_DAYS = 365;
 
 const hours = (seconds: number) => Math.round((seconds / 3600) * 10) / 10;
+const DAY_MS = 86_400_000;
+
+/** A day's range widened to the 24 h before it, so an entry started the evening before is read too (its part of the day counts). */
+const withEveningBefore = (range: { start: Date; end: Date }) => ({ start: new Date(range.start.getTime() - DAY_MS), end: range.end });
 const isWorkingDay = (day: string) => weekdayOf(day) !== 0 && weekdayOf(day) !== 6;
 
 function previousWorkingDay(day: string): string {
@@ -100,15 +105,20 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
     const previousRange = zonedDayRange(previous, timeZone);
     const own = { memberId: connection.memberId };
 
-    const [todayEntries, previousEntries, active, lifetime] = await Promise.all([
-      listEntries(client, connection.organizationId, { ...own, start: todayRange.start, end: todayRange.end }),
-      listEntries(client, connection.organizationId, { ...own, start: previousRange.start, end: previousRange.end }),
+    const [todayRead, previousRead, active, lifetime] = await Promise.all([
+      listEntries(client, connection.organizationId, { ...own, ...withEveningBefore(todayRange) }),
+      listEntries(client, connection.organizationId, { ...own, ...withEveningBefore(previousRange) }),
       getActiveEntry(client),
       aggregateByDescription(client, connection.organizationId, { ...own, start: new Date(now.getTime() - TIME_LOOKBACK_DAYS * 86_400_000), end: now }, false),
     ]);
+    // A day's entries are those with time inside it, including my running timer even when it started before.
+    const inDay = (entries: SolidtimeTimeEntry[], range: { start: Date; end: Date }) =>
+      [...entries, ...(active && !entries.some((entry) => entry.id === active.id) ? [active] : [])].filter((entry) => overlapsRange(entry, range, now));
+    const todayEntries = inDay(todayRead.entries, todayRange);
+    const previousEntries = inDay(previousRead.entries, previousRange);
 
     const nudges: Recommendation[] = [];
-    const trackedToday = new Set(todayEntries.entries.flatMap((entry) => candidateTicketIds(entry.description)));
+    const trackedToday = new Set(todayEntries.flatMap((entry) => candidateTicketIds(entry.description)));
     const trackedEver = new Set((lifetime.grouped_data ?? []).filter((group) => group.seconds > 0).flatMap((group) => candidateTicketIds(group.key)));
     const changedByMe = (record: WorkItemRecord) => {
       const changedBy = record.raw.fields["System.ChangedBy"] as { id?: string; uniqueName?: string } | undefined;
@@ -150,17 +160,17 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
       }
     }
 
-    // 4. Daily total below target: the previous working day, and today after the end of the day.
-    const total = (entries: typeof todayEntries.entries) => entries.reduce((sum, entry) => sum + entrySeconds(entry, now), 0);
+    // 4. Daily total below target: the previous working day, and today after the end of the day. Only time inside the day counts.
+    const total = (entries: SolidtimeTimeEntry[], range: { start: Date; end: Date }) => entries.reduce((sum, entry) => sum + secondsWithin(entry, range, now), 0);
     const target = connection.dailyTargetHours;
-    const previousTotal = hours(total(previousEntries.entries));
+    const previousTotal = hours(total(previousEntries, previousRange));
 
     if (previousTotal < target) {
       nudges.push(timeNudge(link.credentialId, `time:day:${previous}`, 8, `Only ${previousTotal} h tracked on ${readableDay(previous)}`, `Your target is ${target} h a working day`, `TIME:DAY:${previous}`));
     }
 
     if (isWorkingDay(today) && localHour(now, timeZone) >= END_OF_DAY_HOUR) {
-      const todayTotal = hours(total(todayEntries.entries));
+      const todayTotal = hours(total(todayEntries, todayRange));
 
       if (todayTotal < target) {
         nudges.push(timeNudge(link.credentialId, `time:day:${today}`, 9, `Only ${todayTotal} h tracked today`, `Your target is ${target} h a working day`, `TIME:DAY:${today}`));
@@ -179,13 +189,15 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
 
       try {
         // One small read per day (a reminder's day may be weeks back; no long ranges).
-        const byDay = new Map<string, Awaited<ReturnType<typeof listEntries>>["entries"]>();
+        const byDay = new Map<string, SolidtimeTimeEntry[]>();
         const limit = createLimiter(3);
         await mapWithLimit([...new Set(days)], limit, async (day) => {
           try {
-            const read = await listEntries(client, connection.organizationId, { ...own, ...zonedDayRange(day, timeZone) });
+            // Clipped like the reminders themselves, so a reminder never flaps between the two.
+            const range = zonedDayRange(day, timeZone);
+            const read = await listEntries(client, connection.organizationId, { ...own, ...withEveningBefore(range) });
             // A cut-off day cannot prove it is still short (or that the ticket has no time): it is left as it is.
-            if (!read.truncated) byDay.set(day, read.entries);
+            if (!read.truncated) byDay.set(day, inDay(read.entries, range));
           } catch (error) {
             // One day that cannot be read is left as it is; the others are still checked.
             console.error(`Re-checking time on ${day} failed:`, error instanceof Error ? error.message : "Unknown error");
@@ -202,7 +214,7 @@ export async function timeNudges(userId: string, azureCredentialId: string, iden
 
           if (!entries) continue;
 
-          if (dayMatch && hours(total(entries)) >= target) {
+          if (dayMatch && day && hours(total(entries, zonedDayRange(day, timeZone))) >= target) {
             fixed.add(key);
           } else if (untrackedMatch && entries.some((entry) => candidateTicketIds(entry.description).includes(Number(untrackedMatch[1])))) {
             fixed.add(key);

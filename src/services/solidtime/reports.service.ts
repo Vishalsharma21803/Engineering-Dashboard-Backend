@@ -6,7 +6,7 @@ import { addDays, isValidTimeZone, startOfZonedDay, zonedDay } from "../../lib/z
 import type { SolidtimeConnectionDto } from "./connection.service.js";
 import { SolidtimeApiError } from "../../lib/solidtime/errors.js";
 import { aggregateByDescription, entrySeconds, getMe, listEntries, listMembers } from "./read.service.js";
-import { candidateTicketIds } from "./ticket-ids.js";
+import { candidateTicketIds, shareSeconds, ticketIdsOf } from "./ticket-ids.js";
 import { SAME_TIME_HOURS, getTicketTimes } from "./ticket-time.service.js";
 import { lookUpTickets, type TicketInfo } from "./tickets.service.js";
 import { fallbackTo } from "../../lib/log-fallback.js";
@@ -120,29 +120,32 @@ export async function estimateAccuracy(
   }
   const names = team ? new Map((await listMembers(client, connection.organizationId).catch(fallbackTo("Reading Solidtime member names failed", []))).map((member) => [member.user_id, member.name])) : new Map<string, string>();
 
-  // seconds per ticket, and per (ticket, person)
-  const perTicket = new Map<number, number>();
-  const perTicketPerson = new Map<number, Map<string, number>>();
-
-  for (const group of aggregate.grouped_data ?? []) {
-    for (const id of candidateTicketIds(group.key)) {
-      perTicket.set(id, (perTicket.get(id) ?? 0) + group.seconds);
-      const people = perTicketPerson.get(id) ?? new Map<string, number>();
-
-      for (const person of group.grouped_data ?? [{ key: "me", seconds: group.seconds }]) {
-        const key = person.key ?? "unknown";
-        people.set(key, (people.get(key) ?? 0) + person.seconds);
-      }
-
-      perTicketPerson.set(id, people);
-    }
-  }
-
-  const { tickets, checked } = await lookUpTickets(azure, [...perTicket.keys()]);
+  const { tickets, checked } = await lookUpTickets(azure, (aggregate.grouped_data ?? []).flatMap((group) => candidateTicketIds(group.key)));
 
   if (!checked) {
     // Without the tickets there are no estimates: an empty report would look like nothing to compare.
     throw new AppError(502, "AZURE_UNAVAILABLE", "Azure DevOps could not be read, so estimates cannot be compared. Try again.");
+  }
+
+  // seconds per ticket, and per (ticket, person); a description naming two tickets is split between them
+  const perTicket = new Map<number, number>();
+  const perTicketPerson = new Map<number, Map<string, number>>();
+  const isTicket = (id: number) => tickets.has(id);
+
+  for (const group of aggregate.grouped_data ?? []) {
+    const ids = ticketIdsOf(group.key, isTicket);
+
+    for (const id of ids) {
+      perTicket.set(id, (perTicket.get(id) ?? 0) + group.seconds / ids.length);
+      const people = perTicketPerson.get(id) ?? new Map<string, number>();
+
+      for (const person of group.grouped_data ?? [{ key: "me", seconds: group.seconds }]) {
+        const key = person.key ?? "unknown";
+        people.set(key, (people.get(key) ?? 0) + person.seconds / ids.length);
+      }
+
+      perTicketPerson.set(id, people);
+    }
   }
   const estimated = [...perTicket.keys()].filter((id) => tickets.get(id)?.originalEstimate);
   const totals = await getTicketTimes(client, connection, estimated, {});
@@ -304,8 +307,9 @@ export async function trackedHoursByTicket(client: SolidtimeClient, connection: 
   const hours = new Map<number, number>();
 
   for (const group of aggregate.grouped_data ?? []) {
-    for (const id of candidateTicketIds(group.key)) {
-      if (wanted.has(id)) hours.set(id, (hours.get(id) ?? 0) + group.seconds / 3600);
+    // The asked-for ids are tickets; a description naming two tickets is split between them.
+    for (const [id, seconds] of shareSeconds(group.key, group.seconds, (candidate) => (wanted.has(candidate) ? true : null))) {
+      if (wanted.has(id)) hours.set(id, (hours.get(id) ?? 0) + seconds / 3600);
     }
   }
 

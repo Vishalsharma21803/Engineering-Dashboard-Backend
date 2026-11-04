@@ -9,6 +9,7 @@ import { findProjectProfile } from "./rulebook.merge.js";
 import { getEffectiveRulebook } from "./rulebook.service.js";
 import { linkedSolidtimeFor } from "../solidtime/connection.service.js";
 import { trackedHoursByTicket } from "../solidtime/reports.service.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 /* ------------------------------------------------------------------ shapes */
 
@@ -65,8 +66,13 @@ export interface ReportRunSummary {
   itemsChecked: number;
   itemsWithGaps: number;
   createdAt: string;
-  /** Whose Solidtime hours are included: "team", "mine", or null (no Solidtime connection linked). */
-  timeScope: "team" | "mine" | null;
+  /**
+   * Whose Solidtime hours are included: "team", "mine", "unavailable" (a connection is linked but
+   * Solidtime could not be read when the run was made; hours unknown), or null (no connection linked).
+   */
+  timeScope: "team" | "mine" | "unavailable" | null;
+  /** More tickets existed than a run checks: only the most recently changed were checked. */
+  truncated: boolean;
 }
 
 export interface ReportRunView {
@@ -203,7 +209,7 @@ function toReportTicket(result: ComplianceResult, assignee: IdentityRef | null, 
 
 /* -------------------------------------------------------------------- runs */
 
-type RunRow = { id: string; projectName: string; defaultVersion: number; itemsChecked: number; itemsWithGaps: number; createdAt: Date; timeScope: string | null };
+type RunRow = { id: string; projectName: string; defaultVersion: number; itemsChecked: number; itemsWithGaps: number; createdAt: Date; timeScope: string | null; truncated: boolean };
 
 const runSummary = (row: RunRow): ReportRunSummary => ({
   id: row.id,
@@ -212,10 +218,11 @@ const runSummary = (row: RunRow): ReportRunSummary => ({
   itemsChecked: row.itemsChecked,
   itemsWithGaps: row.itemsWithGaps,
   createdAt: row.createdAt.toISOString(),
-  timeScope: row.timeScope === "team" || row.timeScope === "mine" ? row.timeScope : null,
+  timeScope: row.timeScope === "team" || row.timeScope === "mine" || row.timeScope === "unavailable" ? row.timeScope : null,
+  truncated: row.truncated,
 });
 
-const RUN_SUMMARY_FIELDS = { id: true, projectName: true, defaultVersion: true, itemsChecked: true, itemsWithGaps: true, createdAt: true, timeScope: true } as const;
+const RUN_SUMMARY_FIELDS = { id: true, projectName: true, defaultVersion: true, itemsChecked: true, itemsWithGaps: true, createdAt: true, timeScope: true, truncated: true } as const;
 
 /**
  * Checks every open and recently closed ticket in the project with the
@@ -234,14 +241,15 @@ export async function runSopReport(client: AzureClient, userId: string, projectN
     .filter((card) => card.checker === "code" && (card.severity === "fail" || card.severity === "warn"))
     .map((card) => ({ ruleId: card.id, ruleTitle: card.title, severity: card.severity === "fail" ? "high" : "medium" }));
   const gapRules = new Set(rules.map((rule) => rule.ruleId));
-  const records = await listAssignedWorkItemRecords(client, { projectName: profile.project, scope: "compliance", assignee: "any" });
+  // Capped like every SOP-checked list (the run must finish in time); a cut is saved with the run and shown.
+  const { items: records, truncated } = await listAssignedWorkItemRecords(client, { projectName: profile.project, scope: "compliance", assignee: "any" });
   const results = await checkCompliance(client, userId, records, now, { forTeamReports: true });
   const assignees = new Map(records.map((record) => [record.summary.id, record.summary.assignedTo]));
   const tickets = results.filter((result) => result.configured).map((result) => toReportTicket(result, assignees.get(result.workItemId) ?? null, gapRules));
   const time = await reportTime(userId, client.credentialId, tickets.map((ticket) => ticket.workItemId), now);
 
   for (const ticket of tickets) {
-    ticket.trackedHours = time ? (time.hours.get(ticket.workItemId) ?? 0) : null;
+    ticket.trackedHours = time && "hours" in time ? (time.hours.get(ticket.workItemId) ?? 0) : null;
   }
 
   const row = await prisma.sopReportRun.create({
@@ -255,7 +263,8 @@ export async function runSopReport(client: AzureClient, userId: string, projectN
       rules: rules as object[],
       roles: profile.roles as object,
       tickets: tickets as object[],
-      timeScope: time ? (time.team ? "team" : "mine") : null,
+      timeScope: time ? ("unavailable" in time ? "unavailable" : time.team ? "team" : "mine") : null,
+      truncated,
       createdAt: now,
     },
     select: RUN_SUMMARY_FIELDS,
@@ -313,7 +322,8 @@ export async function getSopReportRun(
   const roles = row.roles as unknown as ReportRoles;
   const matching = tickets.filter((ticket) => matches(ticket, input.filters, roles));
 
-  const hasTime = row.timeScope !== null;
+  // Hours were read (an "unavailable" run's hours are unknown, not 0).
+  const hasTime = row.timeScope === "team" || row.timeScope === "mine";
 
   return {
     run: runSummary(row),
@@ -325,16 +335,22 @@ export async function getSopReportRun(
 
 /**
  * Solidtime hours per ticket for a report, from the user's Solidtime connection
- * linked to this Azure organization. Null (no time column) when none is linked
- * or Solidtime cannot be read; the report itself never fails because of it.
+ * linked to this Azure organization. Null (no time column) when none is linked;
+ * `{ unavailable: true }` when Solidtime could not be read, so the run says so
+ * instead of showing no time. The report itself never fails because of it.
  */
-async function reportTime(userId: string, azureCredentialId: string, ticketIds: number[], now: Date) {
+async function reportTime(
+  userId: string,
+  azureCredentialId: string,
+  ticketIds: number[],
+  now: Date
+): Promise<Awaited<ReturnType<typeof trackedHoursByTicket>> | { unavailable: true } | null> {
   try {
     const linked = await linkedSolidtimeFor(userId, azureCredentialId, { background: true });
     return linked ? await trackedHoursByTicket(linked.client, linked.connection, ticketIds, now) : null;
   } catch (error) {
-    console.error("Report time unavailable:", error instanceof Error ? error.message : "Unknown error");
-    return null;
+    logFallback("Reading Solidtime hours for the SOP report failed", error);
+    return { unavailable: true };
   }
 }
 

@@ -25,7 +25,8 @@ export const testRulesSchema = z
   })
   .strict();
 
-const workItemIds = z.array(z.number().int().positive()).min(1).max(200);
+// Shared by queueing and reading AI checks (the page sends one id); matches MAX_CHECKS_PER_REQUEST.
+const workItemIds = z.array(z.number().int().positive()).min(1).max(50);
 
 export const aiCheckSchema = z.object({ workItemIds, force: z.boolean().default(false) }).strict();
 

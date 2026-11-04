@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+import { networkFailure } from "../log-fallback.js";
 import { AiProviderError, parseRetryAfter, providerMessage, type AiModelOption, type KeyValidationResult } from "./types.js";
 
 const TIMEOUT_MS = 120_000;
@@ -84,7 +85,24 @@ export function toClaudeError(error: unknown): AiProviderError {
     return new AiProviderError("AI_NO_CREDIT", null, null, detail);
   }
 
-  return new AiProviderError("AI_UPSTREAM_ERROR", null, null, detail);
+  if (error instanceof Anthropic.BadRequestError || error instanceof Anthropic.UnprocessableEntityError) {
+    return new AiProviderError("AI_REQUEST_REJECTED", null, null, detail);
+  }
+
+  // The timeout class extends the connection class: checked first.
+  if (error instanceof Anthropic.APIConnectionTimeoutError) {
+    return new AiProviderError("AI_UPSTREAM_ERROR", null, null, null, `no answer before the timeout (${TIMEOUT_MS / 1000} s)`);
+  }
+
+  if (error instanceof Anthropic.APIConnectionError) {
+    return new AiProviderError("AI_UPSTREAM_ERROR", null, null, null, networkFailure(error.cause ?? error));
+  }
+
+  if (error instanceof Anthropic.APIError && typeof error.status === "number") {
+    return new AiProviderError("AI_UPSTREAM_ERROR", null, null, detail, `Anthropic answered HTTP ${error.status}${error.status === 529 ? " (overloaded)" : ""}`);
+  }
+
+  return new AiProviderError("AI_UPSTREAM_ERROR", null, null, detail, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
 }
 
 /** Lists models with the key: free, and proves the key works. */

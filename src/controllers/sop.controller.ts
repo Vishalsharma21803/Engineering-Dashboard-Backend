@@ -99,7 +99,10 @@ function summarize(parsed: Pick<ParsedRulebook, "projects" | "cards" | "override
 function sopRoute(label: string, handler: (req: Request, userId: string) => Promise<unknown>) {
   return async (req: Request, res: Response): Promise<void> => {
     if (!req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 
@@ -260,7 +263,10 @@ function azureSopRoute(label: string, handler: AzureSopHandler) {
     const azure = req.azure;
 
     if (!azure || !req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 
@@ -303,25 +309,27 @@ export const listAiChecksController = azureSopRoute("Loading AI checks failed", 
 
 /** Projects set up for SOP checks, and whether each is checked for this user. */
 export const listProjectSetUpsController = sopRoute("Loading SOP projects failed", async (_req, userId) => {
-  const [setUps, mine] = await Promise.all([listProjectSetUps(), getProjectProfiles(userId)]);
+  const [setUps, mine] = await Promise.all([listProjectSetUps({ userId, isAdmin: await isUserSopAdmin(userId) }), getProjectProfiles(userId)]);
   const off = new Set(mine.switchedOff.map(nameKeyOf));
   return { projects: setUps.map((setUp) => ({ ...setUp, checkedForMe: !off.has(nameKeyOf(setUp.projectName)) })) };
 });
 
-/** Anyone may set a project up or change it; the change is recorded. */
+/** Anyone may set a new project up; only its creator or an SOP owner may change it. The change is recorded. */
 export const saveProjectSetUpController = sopRoute("Saving the project set-up failed", async (req, userId) => {
   const projectName = parse(projectNameParamSchema, req.params.projectName);
   const { settings } = parse(saveProjectSetUpSchema, req.body);
+  const isAdmin = await isUserSopAdmin(userId);
   // Invalid settings come back as field errors ({ field: "settings.stages", message }) like other forms.
   const project = await saveProjectSetUp(userId, projectName, parse(projectSettingsSchema, settings), {
-    canSetBranchPattern: await isUserSopAdmin(userId),
+    canSetBranchPattern: isAdmin,
+    isAdmin,
   });
   sopChanged();
   return { project };
 });
 
 export const removeProjectSetUpController = sopRoute("Removing the project set-up failed", async (req, userId) => {
-  await removeProjectSetUp(userId, parse(projectNameParamSchema, req.params.projectName));
+  await removeProjectSetUp(userId, parse(projectNameParamSchema, req.params.projectName), { isAdmin: await isUserSopAdmin(userId) });
   sopChanged();
   return { message: "Project removed from SOP checks" };
 });
@@ -342,7 +350,11 @@ export const setProjectCheckedController = sopRoute("Saving your project choice 
 /** The organization's projects with their SOP status (10 per page), plus set-ups for projects not in it (10 per page). */
 export const listAzureProjectsForSopController = azureSopRoute("Loading Azure projects failed", async (req, azure, userId) => {
   const { page, elsewherePage } = parse(sopProjectsPageQuerySchema, req.query);
-  const [{ projects }, setUps, mine] = await Promise.all([listProjects(azure.client), listProjectSetUps(), getProjectProfiles(userId)]);
+  const [{ projects }, setUps, mine] = await Promise.all([
+    listProjects(azure.client),
+    listProjectSetUps({ userId, isAdmin: await isUserSopAdmin(userId) }),
+    getProjectProfiles(userId),
+  ]);
   const setUpKeys = new Set(setUps.map((setUp) => nameKeyOf(setUp.projectName)));
   const off = new Set(mine.switchedOff.map(nameKeyOf));
   const inOrganization = new Set(projects.map((project) => nameKeyOf(project.name)));

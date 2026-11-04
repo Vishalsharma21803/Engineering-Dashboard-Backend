@@ -96,6 +96,60 @@ export function enteredAt(dossier: TicketDossier, stage: SopStage): Date | null 
   return null;
 }
 
+/**
+ * The latest move into `stage` (or a later one) from below it: after rework
+ * (Testing → Active → Testing) this is the second entry. Without history, the
+ * same as `enteredAt`.
+ */
+export function latestEntryFromBelow(dossier: TicketDossier, stage: SopStage): Date | null {
+  const target = stageIndex(stage);
+  let previous: SopStage | null = null;
+  let acrossGap = false;
+  let latest: Date | null = null;
+
+  for (const item of dossier.stageHistory ?? []) {
+    acrossGap ||= item.afterGap === true;
+
+    // States the SOP does not map (On Hold…) are skipped: Testing → On Hold → Testing never left Testing.
+    if (item.stage === null) {
+      continue;
+    }
+
+    // Across revisions that were not read, where the ticket came from is unknown: not counted as a move from below.
+    const fromBelow = !acrossGap && (previous === null || stageIndex(previous) < target);
+
+    if (stageIndex(item.stage) >= target && fromBelow) {
+      latest = item.at;
+    }
+
+    previous = item.stage;
+    acrossGap = false;
+  }
+
+  return latest ?? enteredAt(dossier, stage);
+}
+
+/**
+ * Closed (done or Removed) without ever being in a working stage (Active to
+ * UAT), with no linked pull request and no Completed Work: a duplicate or
+ * won't-fix closed from New. History that is unavailable or only partly read
+ * proves nothing.
+ */
+export function neverWorked(dossier: TicketDossier): boolean {
+  if (dossier.stageHistory === null || dossier.historyTruncated) {
+    return false;
+  }
+
+  // A linked pull request or logged hours show work was done, even on a ticket closed straight from New.
+  if (dossier.workItem.links.pullRequests.length > 0 || (dossier.workItem.completedWork ?? 0) > 0) {
+    return false;
+  }
+
+  const closed = dossier.stage === "done" || dossier.workItem.stateCategory === "Removed";
+  const worked = (stage: SopStage | null) => stage !== null && stageIndex(stage) >= stageIndex("active") && stageIndex(stage) <= stageIndex("uat");
+  return closed && !dossier.stageHistory.some((entry) => worked(entry.stage));
+}
+
 /** The ticket moved to a stage after `stage` at some point (moving back later does not undo it). */
 export function movedPast(dossier: TicketDossier, stage: SopStage): boolean {
   const target = stageIndex(stage);
@@ -743,7 +797,8 @@ export const CODE_CHECKS: Record<BuiltinCheckName, CheckDefinition> = {
     needs: ["updates", "pullRequests"],
     run: ({ dossier, params }) => {
       const stage = params.stage as SopStage;
-      const entered = enteredAt(dossier, stage);
+      // After rework, what counts is the latest move into the stage: a PR merged during rework is in time.
+      const entered = latestEntryFromBelow(dossier, stage);
 
       if (!entered) {
         return skip(`Not in ${stage} yet`);

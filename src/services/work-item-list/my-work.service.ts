@@ -3,10 +3,11 @@ import { paginate, type Page } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import type { ComplianceResult, ComplianceViolation, Recommendation, RecommendationCategory, SuggestedAction, WorkItemSummary } from "../../types/azure.types.js";
 import { getIdentity } from "../azure/identity.service.js";
-import { listAssignedWorkItemRecords } from "../azure/work-items.service.js";
+import { listAssignedWorkItemRecords, stateLookupFailures } from "../azure/work-items.service.js";
 import { checkCompliance } from "../compliance/compliance.service.js";
 import { buildRecommendations } from "../recommendation.service.js";
 import { applyAiReviews } from "../sop/ai/sop-ai-review.js";
+import { timeNudges } from "../solidtime/time-nudges.service.js";
 import { isHiddenState, resolveWorkItemTriage, type TriageMarkLike } from "./triage-resolve.js";
 import { matchesWorkItem, workItemFacets, type FilterOption, type WorkItemFilters } from "./work-item-filters.js";
 import { groupWorkItems, resolveGroups, type WorkItemGroup } from "./grouping.js";
@@ -27,8 +28,14 @@ export interface MyWorkSnapshot {
   closed: WorkItemSummary[];
   /** Tickets read for this list, including parents read for group headings (reused while the snapshot lives). */
   known: Map<number, WorkItemSummary>;
-  /** Each project's current sprint, read on the first page request. */
+  /** Each project's current sprint, read on the first page request (left unset while one could not be read, so it is read again). */
   sprints?: Map<string, CurrentSprint | null>;
+  /** Projects whose current sprint could not be read on the last try. */
+  sprintFailures: string[];
+  /** The ticket list was cut at `cap` (most recently changed kept). */
+  workItemsTruncated: { cap: number } | null;
+  /** "Bug in Alpha" pairs whose states could not be read (open/closed guessed). */
+  stateLookupFailed: string[];
   compliance: Map<number, ComplianceResult>;
   /** Recommendation signal codes per ticket (they decide when triaged tickets resurface). */
   signals: Map<number, string[]>;
@@ -57,7 +64,13 @@ export function rememberMyWork(
   userId: string,
   credentialId: string,
   projectName: string | undefined,
-  input: { workItems: WorkItemSummary[]; compliance: ComplianceResult[]; recommendations: Recommendation[]; sprints?: Map<string, CurrentSprint | null> | undefined },
+  input: {
+    workItems: WorkItemSummary[];
+    compliance: ComplianceResult[];
+    recommendations: Recommendation[];
+    sprints?: { sprints: Map<string, CurrentSprint | null>; failed: string[] } | undefined;
+    workItemsTruncated?: { cap: number } | null;
+  },
   readStartedAt = Date.now()
 ): MyWorkSnapshot {
   const isOpen = (item: WorkItemSummary) => item.stateCategory !== "Completed" && item.stateCategory !== "Removed";
@@ -82,7 +95,19 @@ export function rememberMyWork(
     }
   }
 
-  const snapshot: MyWorkSnapshot = { attention, items: open, closed, known: new Map(input.workItems.map((item) => [item.id, item])), ...(input.sprints ? { sprints: input.sprints } : {}), compliance: new Map(input.compliance.map((result) => [result.workItemId, result])), signals };
+  const snapshot: MyWorkSnapshot = {
+    attention,
+    items: open,
+    closed,
+    known: new Map(input.workItems.map((item) => [item.id, item])),
+    // A sprint read that failed is not kept: the next page request reads it again.
+    ...(input.sprints && input.sprints.failed.length === 0 ? { sprints: input.sprints.sprints } : {}),
+    sprintFailures: input.sprints?.failed ?? [],
+    workItemsTruncated: input.workItemsTruncated ?? null,
+    stateLookupFailed: stateLookupFailures(input.workItems),
+    compliance: new Map(input.compliance.map((result) => [result.workItemId, result])),
+    signals,
+  };
 
   if (forgottenSince(userId, credentialId) > readStartedAt) {
     return snapshot;
@@ -146,15 +171,25 @@ async function loadSnapshot(client: AzureClient, userId: string, projectName: st
   }
 
   const now = new Date();
-  const records = await listAssignedWorkItemRecords(client, { projectName, scope: "compliance" });
+  const { items: records, truncated, cap } = await listAssignedWorkItemRecords(client, { projectName, scope: "compliance" });
+  // Time reminders read Solidtime alongside the SOP checks (short timeout; never fails the list), as on the dashboard.
+  const nudges = timeNudges(userId, client.credentialId, await getIdentity(client), records, now);
   const compliance = await checkCompliance(client, userId, records, now);
   const workItems = records.map((record) => record.summary);
   // Ticket signals depend only on the ticket and its SOP results (with the user's AI reviews; the snapshot keeps code results).
   const reviewed = await applyAiReviews(userId, client.credentialId, compliance, new Map(workItems.map((item) => [item.id, item.rev])));
-  const recommendations = buildRecommendations({ workItems, compliance: reviewed, pullRequests: [], builds: [], now });
+  const recommendations = myWorkRecommendations(workItems, reviewed, (await nudges).nudges, now);
   const sprints = await currentSprints(client, workItems.map((item) => item.projectName));
 
-  return rememberMyWork(userId, client.credentialId, projectName, { workItems, compliance, recommendations, sprints }, now.getTime());
+  return rememberMyWork(userId, client.credentialId, projectName, { workItems, compliance, recommendations, sprints, workItemsTruncated: truncated ? { cap } : null }, now.getTime());
+}
+
+/**
+ * What My work shows on each ticket (its signals and what it needs): the ticket's own recommendations plus
+ * the time reminders. The dashboard and a cold My work load both build it here, so they cannot drift apart.
+ */
+export function myWorkRecommendations(workItems: WorkItemSummary[], compliance: ComplianceResult[], nudges: Recommendation[], now: Date): Recommendation[] {
+  return [...buildRecommendations({ workItems, compliance, pullRequests: [], builds: [], now }), ...nudges].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
 /** The user's saved AI reviews (clears, AI-only rules) applied to the cached code results. */
@@ -234,13 +269,25 @@ export interface MyWorkPage extends Page<MyWorkGroup> {
   /** Snoozed or abandoned tickets; shown only with `hidden`. */
   hiddenCount: number;
   showingHidden: boolean;
-  /** "current": only tickets in their project's current sprint (the default when any are). */
-  sprint: { mode: "current" | "all"; inSprint: number; names: string[] };
+  /** "current": only tickets in their project's current sprint (the default when any are). `unreadable`: projects whose sprint could not be read. */
+  sprint: { mode: "current" | "all"; inSprint: number; names: string[]; unreadable: string[] };
   /** Finished tickets (closed in the last days): listed only when included. */
   closed: { included: boolean; count: number };
   /** Tickets that need something from me (in view before filters); `only` when the list shows just those. */
   attention: { only: boolean; count: number };
   facets: { types: FilterOption[]; states: FilterOption[]; priorities: FilterOption[]; sop: FilterOption[] };
+  /** The ticket list was cut at `cap` (most recently changed kept). */
+  workItemsTruncated: { cap: number } | null;
+  /** "Bug in Alpha" pairs whose states could not be read (open/closed guessed). */
+  stateLookupFailed: string[];
+}
+
+/** Each project's current sprint; kept in the snapshot only when every one was read, so a failed one is read again on the next page. */
+async function readSprintsInto(client: AzureClient, snapshot: MyWorkSnapshot, items: WorkItemSummary[]): Promise<Map<string, CurrentSprint | null>> {
+  const read = await currentSprints(client, items.map((item) => item.projectName));
+  snapshot.sprintFailures = read.failed;
+  if (read.failed.length === 0) snapshot.sprints = read.sprints;
+  return read.sprints;
 }
 
 export async function getMyWorkPage(
@@ -280,8 +327,7 @@ export async function getMyWorkPage(
   const showingHidden = input.hidden && hiddenCount > 0;
   const visible = candidates.filter((item) => hidden(item) === showingHidden);
 
-  snapshot.sprints ??= await currentSprints(client, candidates.map((item) => item.projectName));
-  const sprints = snapshot.sprints;
+  const sprints = snapshot.sprints ?? (await readSprintsInto(client, snapshot, candidates));
   const inSprint = visible.filter((item) => inCurrentSprint(item, sprints));
   const hasSprints = [...sprints.values()].some((sprint) => sprint !== null);
   // Current sprint by default when some project has sprints and something open of mine is in one.
@@ -338,10 +384,12 @@ export async function getMyWorkPage(
     poolTotal: openPool.length,
     hiddenCount,
     showingHidden,
-    sprint: { mode, inSprint: hasSprints ? inSprint.filter(isOpen).length : 0, names },
+    sprint: { mode, inSprint: hasSprints ? inSprint.filter(isOpen).length : 0, names, unreadable: snapshot.sprintFailures },
     closed: { included: includeClosed, count: sectionCount(matching, "done") },
     attention: { only: attentionOnly, count: openPool.filter(needsMe).length },
     facets: { types: facets.types, states: facets.states, priorities: facets.priorities, sop: facets.sop },
+    workItemsTruncated: snapshot.workItemsTruncated,
+    stateLookupFailed: snapshot.stateLookupFailed,
   };
 }
 
@@ -349,6 +397,8 @@ export async function getMyWorkPage(
 export interface TeamWorkPage extends Page<WorkItemGroup<WorkItemSummary>> {
   ticketCount: number;
   poolTotal: number;
+  /** The ticket list was cut at `cap` (most recently changed kept). */
+  workItemsTruncated: { cap: number } | null;
   facets: { types: FilterOption[]; states: FilterOption[]; priorities: FilterOption[]; assignees: FilterOption[] };
 }
 
@@ -357,7 +407,7 @@ export async function getTeamWorkPage(
   client: AzureClient,
   input: { projectName: string; scope: "open" | "all"; filters: WorkItemFilters; page: number }
 ): Promise<TeamWorkPage> {
-  const [records, identity] = await Promise.all([
+  const [{ items: records, truncated, cap }, identity] = await Promise.all([
     listAssignedWorkItemRecords(client, { projectName: input.projectName, scope: input.scope, assignee: "any" }),
     getIdentity(client),
   ]);
@@ -372,5 +422,6 @@ export async function getTeamWorkPage(
     ticketCount: matching.length,
     poolTotal: pool.length,
     facets: { types: facets.types, states: facets.states, priorities: facets.priorities, assignees: facets.assignees },
+    workItemsTruncated: truncated ? { cap } : null,
   };
 }

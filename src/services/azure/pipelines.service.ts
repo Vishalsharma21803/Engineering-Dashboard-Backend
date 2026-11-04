@@ -18,7 +18,8 @@ import { toBuildSummary } from "./mappers.js";
 
 const MAX_DEFINITIONS = 200;
 const RECENT_BUILD_DAYS = 7;
-const RECENT_BUILDS_TOP = 100;
+/** My runs read per project for the last week; more means older ones of mine were not read. */
+export const RECENT_BUILDS_TOP = 200;
 
 function pipelineHealth(definition: RawBuildDefinition): PipelineSummary["health"] {
   const latest = definition.latestBuild;
@@ -87,6 +88,8 @@ export async function listBuilds(
     resultFilter?: string | undefined;
     minTime?: string | undefined;
     top?: number | undefined;
+    /** Only runs requested for this identity (its id). */
+    requestedFor?: string | undefined;
   }
 ): Promise<BuildSummary[]> {
   const data = await client.get<RawList<RawBuild>>(
@@ -97,6 +100,7 @@ export async function listBuilds(
         statusFilter: filter.statusFilter,
         resultFilter: filter.resultFilter,
         minTime: filter.minTime,
+        requestedFor: filter.requestedFor,
         $top: filter.top ?? 20,
         queryOrder: "queueTimeDescending",
       },
@@ -123,18 +127,22 @@ export async function getBuild(
 /**
  * Latest build per (pipeline, branch) requested by the user in the last
  * week. A failure only counts while no newer run on that branch passed.
+ * `truncated`: the user had more runs than were read (older ones missing).
  */
 export async function listMyLatestBuilds(
   client: AzureClient,
   identity: AzureIdentity,
   projectId: string,
   now = new Date()
-): Promise<BuildSummary[]> {
+): Promise<{ builds: BuildSummary[]; truncated: boolean }> {
   const minTime = new Date(now.getTime() - RECENT_BUILD_DAYS * 24 * 60 * 60 * 1000);
-  const builds = await listBuilds(client, projectId, {
+  // Asked of Azure by requester, so other people's runs never push mine out of the read. One more than kept detects a cut.
+  const read = await listBuilds(client, projectId, {
     minTime: minTime.toISOString(),
-    top: RECENT_BUILDS_TOP,
+    top: RECENT_BUILDS_TOP + 1,
+    requestedFor: identity.id,
   });
+  const builds = read.slice(0, RECENT_BUILDS_TOP);
 
   const latest = new Map<string, BuildSummary>();
 
@@ -151,9 +159,10 @@ export async function listMyLatestBuilds(
     }
   }
 
-  return [...latest.values()].sort((a, b) =>
-    (b.queueTime ?? "").localeCompare(a.queueTime ?? "")
-  );
+  return {
+    builds: [...latest.values()].sort((a, b) => (b.queueTime ?? "").localeCompare(a.queueTime ?? "")),
+    truncated: read.length > RECENT_BUILDS_TOP,
+  };
 }
 
 function toNode(record: RawTimelineRecord): TimelineNode {

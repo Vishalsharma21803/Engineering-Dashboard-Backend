@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkItemSummary } from "../../src/types/azure.types.js";
 import { WORK_ITEM_FIELDS } from "../../src/services/azure/work-items.service.js";
 import { localDay, mentionsDate, runCodeCheck } from "../../src/services/sop/code-checker.js";
-import type { TicketDossier } from "../../src/services/sop/dossier.js";
+import { buildStageHistory, type TicketDossier } from "../../src/services/sop/dossier.js";
 import { profileFromSettings, projectSettingsSchema } from "../../src/services/sop/project-settings.js";
 import { parseRulebook } from "../../src/services/sop/rulebook.parser.js";
 import type { CodeRuleCard, ProjectProfile, RuleCard } from "../../src/services/sop/rulebook.types.js";
@@ -81,6 +81,7 @@ function dossier(overrides: Partial<TicketDossier> = {}): TicketDossier {
     comments: [],
     pullRequests: [],
     relatedItems: [],
+    historyTruncated: false,
     ...overrides,
   };
 }
@@ -274,6 +275,69 @@ describe("links and pull requests", () => {
     expect(run("merged-before-stage", dossier(), { stage: "testing" }).status).toBe("skip");
   });
 
+  it("merged-before-stage uses the latest move into the stage after rework", () => {
+    const step = (value: string, stage: "active" | "testing", at: string) => ({ value, stage, at: new Date(at), by: ME, initial: false });
+    const reworked = [
+      step("Active", "active", "2025-10-06T05:00:00Z"),
+      step("Testing", "testing", "2025-10-08T05:00:00Z"),
+      step("Active", "active", "2025-10-09T05:00:00Z"),
+      step("Testing", "testing", "2025-10-12T05:00:00Z"),
+    ];
+    const check = (history: TicketDossier["stageHistory"], status: string, closedDate: string | null) =>
+      run("merged-before-stage", dossier({ stage: "testing", stageHistory: history, pullRequests: [pr({ status, closedDate: closedDate ? new Date(closedDate) : null })] }), { stage: "testing" }).status;
+
+    // Testing → Active → PR merged → Testing: in time for the latest move.
+    expect(check(reworked, "completed", "2025-10-10T05:00:00Z")).toBe("pass");
+    // Still open when the ticket moved to Testing: late.
+    expect(check(reworked.slice(0, 2), "active", null)).toBe("fail");
+    // No stage moves in the history read: the current stage's date, as before; history unavailable: skipped, as before.
+    expect(check([], "completed", "2025-10-05T05:00:00Z")).toBe("pass");
+    expect(check([], "completed", "2025-10-07T05:00:00Z")).toBe("fail");
+    expect(check(null, "completed", "2025-10-05T05:00:00Z")).toBe("skip");
+  });
+
+  it("merged-before-stage does not take the first move after unread history (very long ticket) as a new entry", () => {
+    const step = (value: string, stage: "active" | "testing", at: string, afterGap = false) => ({ value, stage, at: new Date(at), by: ME, initial: false, ...(afterGap ? { afterGap } : {}) });
+    // First page: Testing on the 8th, back to Active on the 9th. Revisions were skipped; the newest pages start with a Testing move on the 12th.
+    const cut = [
+      step("Active", "active", "2025-10-06T05:00:00Z"),
+      step("Testing", "testing", "2025-10-08T05:00:00Z"),
+      step("Active", "active", "2025-10-09T05:00:00Z"),
+      step("Testing", "testing", "2025-10-12T05:00:00Z", true),
+    ];
+    const check = (history: TicketDossier["stageHistory"]) =>
+      run("merged-before-stage", dossier({ stage: "testing", stageHistory: history, historyTruncated: true, pullRequests: [pr({ status: "completed", closedDate: new Date("2025-10-10T05:00:00Z") })] }), { stage: "testing" }).status;
+
+    // Merged on the 10th: late for the entry on the 8th; the move on the 12th may not have been a new entry.
+    expect(check(cut)).toBe("fail");
+    // A real move from below inside the newest pages (Active → Testing on the 14th) still counts.
+    expect(check([...cut, step("Active", "active", "2025-10-13T05:00:00Z"), step("Testing", "testing", "2025-10-14T05:00:00Z")])).toBe("pass");
+  });
+
+  it("marks the first stage move after skipped revisions, only when the history was cut", () => {
+    const update = (id: number, value: string, day: number) => ({ id, revisedDate: `2025-10-${String(day).padStart(2, "0")}T05:00:00Z`, fields: { "System.State": { oldValue: "x", newValue: value } } });
+    const updates = [update(1, "New", 1), update(2, "Active", 2), update(801, "Testing", 8), update(802, "Active", 9)];
+    const profile = dossier().profile;
+    expect(buildStageHistory(profile, updates, { truncated: true }).map((entry) => entry.afterGap ?? false)).toEqual([false, false, true, false]);
+    expect(buildStageHistory(profile, updates).some((entry) => entry.afterGap)).toBe(false);
+  });
+
+  it("merged-before-stage passes through states the SOP does not map (Testing → On Hold → Testing is no new entry)", () => {
+    const step = (value: string, stage: "active" | "testing" | null, at: string) => ({ value, stage, at: new Date(at), by: ME, initial: false });
+    const held = [
+      step("Active", "active", "2025-10-06T05:00:00Z"),
+      step("Testing", "testing", "2025-10-08T05:00:00Z"),
+      step("On Hold", null, "2025-10-09T05:00:00Z"),
+      step("Testing", "testing", "2025-10-12T05:00:00Z"),
+    ];
+    const check = (closedDate: string) =>
+      run("merged-before-stage", dossier({ stage: "testing", stageHistory: held, pullRequests: [pr({ status: "completed", closedDate: new Date(closedDate) })] }), { stage: "testing" }).status;
+
+    // Merged during the hold: after the ticket first reached Testing, so late.
+    expect(check("2025-10-10T05:00:00Z")).toBe("fail");
+    expect(check("2025-10-07T05:00:00Z")).toBe("pass");
+  });
+
   it("parent-link and linked-bugs-closed use related items", () => {
     const withParent = (type: string, kind: "story" | "epic") =>
       run("parent-link", dossier({ workItem: workItem({ links: { ...workItem().links, parentId: 9 } }), relatedItems: [{ id: 9, relation: "parent", type, state: "Active", kind }] })).status;
@@ -384,7 +448,10 @@ when: always
     const closedAt = (at: string) => ({
       workItem: workItem({ state: "Closed", stateCategory: "Completed", remainingWork: 2 }),
       stage: "done" as const,
-      stageHistory: [{ value: "Closed", stage: "done" as const, at: new Date(at), by: ME, initial: false }],
+      stageHistory: [
+        { value: "Active", stage: "active" as const, at: new Date("2025-10-06T05:00:00Z"), by: ME, initial: false },
+        { value: "Closed", stage: "done" as const, at: new Date(at), by: ME, initial: false },
+      ],
     });
 
     expect(evaluateDossier(dossier(closedAt("2025-10-15T02:00:00Z")), rules, NOW)).toMatchObject({ violations: [], todos: [expect.objectContaining({ ruleId: "D-02" })] });
@@ -443,7 +510,10 @@ when: always
     const closed = {
       workItem: workItem({ state: "Closed", stateCategory: "Completed" }),
       stage: "done" as const,
-      stageHistory: [{ value: "Closed", stage: "done" as const, at: new Date("2025-10-10T05:00:00Z"), by: ME, initial: false }],
+      stageHistory: [
+        { value: "Active", stage: "active" as const, at: new Date("2025-10-06T05:00:00Z"), by: ME, initial: false },
+        { value: "Closed", stage: "done" as const, at: new Date("2025-10-10T05:00:00Z"), by: ME, initial: false },
+      ],
     };
     const openPr = { pullRequestId: 7, title: "x", status: "active", createdBy: ME, closedDate: null, targetBranch: "develop", reviewers: [], unresolvedThreads: null };
 
@@ -454,6 +524,69 @@ when: always
     const unmerged = evaluateDossier(dossier({ ...closed, pullRequests: [openPr] as TicketDossier["pullRequests"] }), { ...effective, cards: rules }, NOW);
     expect(unmerged.notices).toEqual([]);
     expect(unmerged.violations).toEqual([expect.objectContaining({ ruleId: "D-01", severity: "medium" })]);
+  });
+
+  it("skips stage rules on a ticket closed straight from New, but still checks Always rules", () => {
+    const rules = parseRulebook(
+      "---\nid: F-01\ntitle: Flags\nchecker: code\nuses: title-flag-format\napplies_to: all\nwhen: always\n---\n**Rule:** x\n",
+      "default"
+    ).cards as RuleCard[];
+    const closedFromNew = {
+      workItem: workItem({ title: "BLOCKED: duplicate", state: "Closed", stateCategory: "Completed", originalEstimate: null, completedWork: null }),
+      stage: "done" as const,
+      stageHistory: [
+        { value: "New", stage: "ready" as const, at: new Date("2025-10-01T05:00:00Z"), by: ME, initial: true },
+        { value: "Closed", stage: "done" as const, at: new Date("2025-10-02T05:00:00Z"), by: ME, initial: false },
+      ],
+    };
+    const result = evaluateDossier(dossier(closedFromNew), { ...effective, cards: [...(effective.cards as RuleCard[]), ...rules] }, NOW);
+    expect(result.violations).toEqual([expect.objectContaining({ ruleId: "F-01" })]);
+    expect(result.skippedRules).toEqual(
+      expect.arrayContaining([{ ruleId: "A-01", ruleTitle: "Estimate exists", reason: "Closed without work starting" }])
+    );
+
+    // New → Active → Closed: the estimate rule is a gap as before.
+    const worked = { ...closedFromNew, stageHistory: [closedFromNew.stageHistory[0]!, { value: "Active", stage: "active" as const, at: new Date("2025-10-01T09:00:00Z"), by: ME, initial: false }, closedFromNew.stageHistory[1]!] };
+    expect(evaluateDossier(dossier(worked), effective, NOW).violations).toEqual([expect.objectContaining({ ruleId: "A-01" })]);
+    // History unavailable: nothing is skipped for this reason.
+    expect(evaluateDossier(dossier({ ...closedFromNew, stageHistory: null }), effective, NOW).skippedRules.map((rule) => rule.reason)).not.toContain("Closed without work starting");
+    // Closed from New, but a pull request is linked or hours were logged: work was done, so the rules apply.
+    const withPr = { ...closedFromNew, workItem: { ...closedFromNew.workItem, links: { ...closedFromNew.workItem.links, pullRequests: [{ projectId: "p", repositoryId: "r", pullRequestId: 7 }] } } };
+    expect(evaluateDossier(dossier(withPr), effective, NOW).violations).toEqual([expect.objectContaining({ ruleId: "A-01" })]);
+    const withHours = { ...closedFromNew, workItem: { ...closedFromNew.workItem, completedWork: 2 } };
+    expect(evaluateDossier(dossier(withHours), effective, NOW).violations).toEqual([expect.objectContaining({ ruleId: "A-01" })]);
+  });
+
+  it("on a ticket closed straight from New, skips only the stages it never entered: Done rules still run", () => {
+    const rules = parseRulebook(
+      ["at-done", "at-testing", "while-active", "before-active"]
+        .map((when, index) => `---\nid: W-0${index + 1}\ntitle: Flags ${when}\nchecker: code\nuses: title-flag-format\napplies_to: all\nwhen: ${when}\n---\n**Rule:** x\n`)
+        .join(""),
+      "default"
+    ).cards as RuleCard[];
+    const closedFromNew = dossier({
+      workItem: workItem({ title: "BLOCKED: duplicate", state: "Closed", stateCategory: "Completed", completedWork: null }),
+      stage: "done",
+      stageHistory: [
+        { value: "New", stage: "ready", at: new Date("2025-10-01T05:00:00Z"), by: ME, initial: true },
+        { value: "Closed", stage: "done", at: new Date("2025-10-02T05:00:00Z"), by: ME, initial: false },
+      ],
+    });
+    const result = evaluateDossier(closedFromNew, { ...effective, cards: rules }, NOW);
+    // The Done rule is checked (past its 24 h grace: a gap); the others are skipped.
+    expect(result.violations.map((violation) => violation.ruleId)).toEqual(["W-01"]);
+    expect(result.skippedRules.map((rule) => [rule.ruleId, rule.reason])).toEqual([
+      ["W-02", "Closed without work starting"],
+      ["W-03", "Closed without work starting"],
+      ["W-04", "Closed without work starting"],
+    ]);
+  });
+
+  it("notes when part of a long history was not read, without changing any result", () => {
+    const full = evaluateDossier(dossier({ workItem: workItem({ originalEstimate: null }) }), effective, NOW);
+    const cut = evaluateDossier(dossier({ workItem: workItem({ originalEstimate: null }), historyTruncated: true }), effective, NOW);
+    expect(full.historyTruncated).toBeUndefined();
+    expect(cut).toEqual({ ...full, historyTruncated: true });
   });
 });
 

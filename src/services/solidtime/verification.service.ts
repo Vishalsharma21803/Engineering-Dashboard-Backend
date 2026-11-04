@@ -7,7 +7,7 @@ import { getSupportedFields } from "../azure/work-items.service.js";
 import type { SolidtimeConnectionDto } from "./connection.service.js";
 import { aggregateByDescription } from "./read.service.js";
 import { zoneOf } from "./reports.service.js";
-import { candidateTicketIds } from "./ticket-ids.js";
+import { candidateTicketIds, shareSeconds } from "./ticket-ids.js";
 import { compareWithEstimate, getTicketTimes } from "./ticket-time.service.js";
 import { isFinished, lookUpTickets } from "./tickets.service.js";
 
@@ -80,20 +80,30 @@ export async function verifyTime(
   const timeZone = await zoneOf(client);
   const range = { start: startOfZonedDay(input.from, timeZone), end: startOfZonedDay(addDays(input.to, 1), timeZone), memberId: connection.memberId };
   const period = await aggregateByDescription(client, connection.organizationId, range, false);
-  const periodSeconds = new Map<number, number>();
+  // Numbers that might be tickets, with the time of every description naming them (for `notFound`).
+  const candidateSeconds = new Map<number, number>();
   let unlinkedSeconds = 0;
 
   for (const group of period.grouped_data ?? []) {
     const ids = candidateTicketIds(group.key);
     if (ids.length === 0) unlinkedSeconds += group.seconds;
-    for (const id of ids) periodSeconds.set(id, (periodSeconds.get(id) ?? 0) + group.seconds);
+    for (const id of ids) candidateSeconds.set(id, (candidateSeconds.get(id) ?? 0) + group.seconds);
   }
 
-  const lookup = await lookUpTickets(azure, [...periodSeconds.keys()]);
+  const lookup = await lookUpTickets(azure, [...candidateSeconds.keys()]);
 
   // Without Azure every ticket would look missing; say so instead.
   if (!lookup.checked) {
     throw new AppError(502, "AZURE_UNAVAILABLE", "Azure DevOps could not be read, so the time cannot be checked. Try again.");
+  }
+
+  // My time per real ticket; a description naming two tickets is split between them.
+  const periodSeconds = new Map<number, number>();
+
+  for (const group of period.grouped_data ?? []) {
+    for (const [id, seconds] of shareSeconds(group.key, group.seconds, (candidate) => lookup.tickets.has(candidate))) {
+      periodSeconds.set(id, (periodSeconds.get(id) ?? 0) + seconds);
+    }
   }
 
   const ticketIds = [...lookup.tickets.keys()];
@@ -157,7 +167,7 @@ export async function verifyTime(
   items.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.ticketId - b.ticketId);
 
   const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, items.filter((item) => item.status === status).length])) as Record<VerificationStatus, number>;
-  const notFound = [...periodSeconds.entries()]
+  const notFound = [...candidateSeconds.entries()]
     .filter(([id]) => !lookup.tickets.has(id))
     .map(([ticketId, seconds]) => ({ ticketId, periodHours: hours(seconds) }))
     .sort((a, b) => a.ticketId - b.ticketId);

@@ -125,6 +125,25 @@ describe("notifications", () => {
     expect(rows.has(pipelineKey)).toBe(true);
   });
 
+  it("keeps a closed ticket's notification when its type's states could not be read, and says open/closed is guessed", async () => {
+    const userId = (await prisma.credential.findUniqueOrThrow({ where: { id: credentialId } })).userId;
+    await prisma.notification.create({
+      data: { userId, credentialId, key: "closed:wi:104", kind: "closedTicket", projectName: "Beta", title: "#104 Profile page", reasons: ["No estimate"], target: { type: "workItem", projectName: "Beta", id: 104 }, signals: ["SOP:T-01"], readSignals: [] },
+    });
+    fake.failStatesFor.add("User Story");
+
+    const dashboard = (await agent.get(azurePath(credentialId, "/dashboard")).expect(200)).body.dashboard;
+    expect(dashboard.stateLookupFailed).toEqual(["User Story in Beta"]);
+    // Closed by its state name: still done, not to do.
+    expect(dashboard.sections.workItems.data.map((item: { id: number }) => item.id)).not.toContain(104);
+    expect((await list()).map((row) => row.key)).toContain("closed:wi:104");
+
+    // Read again with its states: judged as usual.
+    fake.failStatesFor.clear();
+    clearAzureCache();
+    expect((await agent.get(azurePath(credentialId, "/dashboard")).expect(200)).body.dashboard.stateLookupFailed).toEqual([]);
+  });
+
   it("lists one project's notifications plus those tied to none", async () => {
     await loadDashboard();
     await prisma.notification.create({ data: { userId: (await prisma.credential.findUniqueOrThrow({ where: { id: credentialId } })).userId, credentialId, key: "time:day:2026-11-02", kind: "timeDay", projectName: null, title: "Only 6 h tracked on Mon, Nov 2", reasons: [], target: { type: "time", projectName: null, id: 0 }, signals: ["TIME:DAY:2026-11-02"], readSignals: [] } });

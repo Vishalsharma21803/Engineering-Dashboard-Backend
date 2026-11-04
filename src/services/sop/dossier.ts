@@ -3,14 +3,15 @@ import type { RawWorkItem, RawWorkItemUpdate } from "../../lib/azure/azure-api.t
 import { parseArtifactLink } from "../../lib/azure/artifact-links.js";
 import { AzureApiError } from "../../lib/azure/errors.js";
 import { htmlToText } from "../../lib/html-to-text.js";
+import { logFallback } from "../../lib/log-fallback.js";
 import type { IdentityRef, WorkItemComment, WorkItemSummary } from "../../types/azure.types.js";
 import { asNumber, asString, requireIdentityRef, stripRefPrefix, toIdentityRef } from "../azure/mappers.js";
 import { countUnresolvedThreads, getPullRequest, getThreads } from "../azure/pull-requests.service.js";
 import {
   WORK_ITEM_FIELDS,
-  getWorkItemComments,
-  getWorkItemUpdates,
   getWorkItemsByIds,
+  readWorkItemComments,
+  readWorkItemUpdates,
   updateDate,
   workItemProjectName,
   workItemType,
@@ -29,6 +30,8 @@ export interface StageEntry {
   by: IdentityRef | null;
   /** The creation revision; not a transition anyone comments on. */
   initial: boolean;
+  /** Revisions just before this one were not read (very long history): the state it came from is unknown. */
+  afterGap?: boolean;
 }
 
 export interface FieldChange {
@@ -77,6 +80,11 @@ export interface TicketDossier {
   comments: WorkItemComment[] | null;
   pullRequests: DossierPullRequest[] | null;
   relatedItems: RelatedItem[] | null;
+  /**
+   * Part of a very long ticket's history (the middle revisions) or its oldest
+   * comments were not read. Verdicts are not changed; the ticket says so.
+   */
+  historyTruncated: boolean;
 }
 
 /** Field changes the checks care about (besides the stage field). */
@@ -117,11 +125,17 @@ function toDate(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function buildStageHistory(profile: ProjectProfile, updates: RawWorkItemUpdate[]): StageEntry[] {
+/** `truncated`: the middle of the history was skipped (see readWorkItemUpdates); the first move after the skipped revisions is marked `afterGap`. */
+export function buildStageHistory(profile: ProjectProfile, updates: RawWorkItemUpdate[], options: { truncated?: boolean } = {}): StageEntry[] {
   const field = stageField(profile);
   const entries: StageEntry[] = [];
+  let previousId: number | null = null;
+  let gap = false;
 
-  for (const update of updates) {
+  for (const update of [...updates].sort((a, b) => a.id - b.id)) {
+    // Update ids count the revisions one by one: a jump is where revisions were not read.
+    if (options.truncated && previousId !== null && update.id > previousId + 1) gap = true;
+    previousId = update.id;
     const change = update.fields?.[field];
     const value = asString(change?.newValue);
     const at = toDate(updateDate(update));
@@ -133,7 +147,9 @@ export function buildStageHistory(profile: ProjectProfile, updates: RawWorkItemU
         at,
         by: toIdentityRef(update.revisedBy),
         initial: change.oldValue === undefined || change.oldValue === null,
+        ...(gap ? { afterGap: true } : {}),
       });
+      gap = false;
     }
   }
 
@@ -273,12 +289,18 @@ export async function buildDossier(
   const relations = raw.relations ?? [];
   const description = htmlToText(asString(fields[WORK_ITEM_FIELDS.description]));
 
-  const [updates, comments, pullRequests, relatedItems] = await Promise.all([
-    optional(needs.has("updates"), `history of #${workItem.id}`, () => getWorkItemUpdates(client, projectName, workItem.id)),
-    optional(needs.has("comments"), `comments of #${workItem.id}`, () => getWorkItemComments(client, projectName, workItem.id)),
+  const [history, commentRead, pullRequests, relatedItems] = await Promise.all([
+    optional(needs.has("updates"), `history of #${workItem.id}`, () => readWorkItemUpdates(client, projectName, workItem.id, { rev: raw.rev })),
+    optional(needs.has("comments"), `comments of #${workItem.id}`, () => readWorkItemComments(client, projectName, workItem.id)),
     optional(needs.has("pullRequests"), `pull requests of #${workItem.id}`, () => loadPullRequests(client, workItem, needs.has("prThreads"))),
     optional(needs.has("relatedItems"), `linked items of #${workItem.id}`, () => loadRelatedItems(client, profile, raw)),
   ]);
+  const updates = history?.updates ?? null;
+  const historyTruncated = Boolean(history?.truncated || commentRead?.truncated);
+
+  if (historyTruncated) {
+    logFallback(`SOP dossier: #${workItem.id} has a very long history`, new Error("part of its revisions or comments was not read; its SOP results may miss them"));
+  }
 
   return {
     workItem,
@@ -305,11 +327,12 @@ export async function buildDossier(
         ? [{ refName: stripRefPrefix(artifact.refName) ?? artifact.refName, linkedAt: toDate(relation.attributes?.authorizedDate) }]
         : [];
     }),
-    stageHistory: updates ? buildStageHistory(profile, updates) : null,
+    stageHistory: updates ? buildStageHistory(profile, updates, { truncated: history?.truncated ?? false }) : null,
     fieldChanges: updates ? buildFieldChanges(profile, updates) : null,
-    comments,
+    comments: commentRead?.comments ?? null,
     pullRequests,
     relatedItems,
+    historyTruncated,
   };
 }
 

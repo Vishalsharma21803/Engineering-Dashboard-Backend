@@ -1,4 +1,7 @@
-export type Limiter = <T>(task: () => Promise<T>) => Promise<T>;
+export type Limiter = (<T>(task: () => Promise<T>) => Promise<T>) & {
+  /** Nothing running and nothing waiting. */
+  readonly isIdle: () => boolean;
+};
 
 export function createLimiter(concurrency: number): Limiter {
   let active = 0;
@@ -17,7 +20,7 @@ export function createLimiter(concurrency: number): Limiter {
     }
   }
 
-  return <T>(task: () => Promise<T>) =>
+  const limit = <T>(task: () => Promise<T>) =>
     new Promise<T>((resolve, reject) => {
       queue.push(() => {
         task()
@@ -29,6 +32,8 @@ export function createLimiter(concurrency: number): Limiter {
       });
       next();
     });
+
+  return Object.assign(limit, { isIdle: () => active === 0 && queue.length === 0 });
 }
 
 export async function mapWithLimit<T, R>(

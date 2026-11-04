@@ -26,16 +26,20 @@ export async function checkCompliance(
   );
 }
 
+/** `truncated`: more tickets existed than the list reads (the most recently changed are checked). */
 export async function listCompliance(
   client: AzureClient,
   userId: string,
   projectName: string | undefined
-): Promise<ComplianceResult[]> {
-  const records = await listAssignedWorkItemRecords(client, {
+): Promise<{ results: ComplianceResult[]; truncated: boolean }> {
+  const { items: records, truncated } = await listAssignedWorkItemRecords(client, {
     projectName,
     scope: "compliance",
   });
 
   const results = await checkCompliance(client, userId, records);
-  return applyAiReviews(userId, client.credentialId, results, new Map(records.map(({ summary }) => [summary.id, summary.rev])));
+  return {
+    results: await applyAiReviews(userId, client.credentialId, results, new Map(records.map(({ summary }) => [summary.id, summary.rev]))),
+    truncated,
+  };
 }

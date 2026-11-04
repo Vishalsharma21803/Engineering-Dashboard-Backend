@@ -51,12 +51,18 @@ function workItemRecommendation(
   }
 
   if (open && workItem.dueDate) {
+    // Azure stores a due date as the midnight that starts the due day: the whole day is still in time.
     const msUntilDue = new Date(workItem.dueDate).getTime() - now.getTime();
 
-    if (msUntilDue < 0) {
+    if (msUntilDue <= -DAY_MS) {
       score += 30;
       reasons.push("Overdue");
       signals.push("OVERDUE");
+      signal = true;
+    } else if (msUntilDue <= 0) {
+      score += 20;
+      reasons.push("Due today");
+      signals.push("DUE_SOON");
       signal = true;
     } else if (msUntilDue <= DUE_SOON_DAYS * DAY_MS) {
       score += 20;

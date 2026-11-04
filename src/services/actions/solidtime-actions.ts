@@ -1,5 +1,6 @@
 import { AppError } from "../../lib/app-error.js";
 import { SolidtimeWriteError, type SolidtimeClient } from "../../lib/solidtime/client.js";
+import { SolidtimeApiError } from "../../lib/solidtime/errors.js";
 import type { SolidtimeTimeEntry, TimeEntryInput } from "../../lib/solidtime/types.js";
 import { solidtimeTime } from "../../lib/zoned-time.js";
 import type { SolidtimeActionVariant } from "../../schemas/action.schema.js";
@@ -81,6 +82,38 @@ function entryPreview(names: Names, entry: { start: Date; end: Date | null; desc
   ];
 }
 
+/** Entries read around new time to find overlaps: from a day before the earliest start (an entry may run into it) to the latest end. */
+const OVERLAP_LOOKBACK_MS = 86_400_000;
+
+/**
+ * My existing entries overlapping any of these times (touching ends do not count; a running timer runs until now).
+ * Null when Solidtime returned more entries than are read, so overlaps cannot be ruled out.
+ */
+async function overlappingEntries(client: SolidtimeClient, connection: Connection, times: Array<{ start: Date; end: Date }>, now = new Date()): Promise<SolidtimeTimeEntry[] | null> {
+  const start = new Date(Math.min(...times.map((time) => time.start.getTime())) - OVERLAP_LOOKBACK_MS);
+  const end = new Date(Math.max(...times.map((time) => time.end.getTime())));
+  const { entries, truncated } = await listEntries(client, connection.organizationId, { memberId: connection.memberId, start, end });
+
+  if (truncated) {
+    return null;
+  }
+
+  return entries.filter((entry) => {
+    const entryStart = Date.parse(entry.start);
+    const entryEnd = entry.end ? Date.parse(entry.end) : now.getTime();
+    return times.some((time) => entryStart < time.end.getTime() && entryEnd > time.start.getTime());
+  });
+}
+
+/** Preview rows warning about existing entries the new time overlaps (allowed: overlaps can be intended). */
+function overlapPreview(overlaps: SolidtimeTimeEntry[]): PreviewChange[] {
+  return overlaps.map((entry) => ({
+    field: "Overlaps existing entry",
+    before: `${entry.description ?? "(no description)"} (${entry.start.slice(11, 16)}–${entry.end ? entry.end.slice(11, 16) : "running"} UTC)`,
+    after: null,
+  }));
+}
+
 /** Stored params are plain JSON; times are kept as Solidtime UTC strings. */
 function storedEntry(entry: { start: Date; end: Date; description: string | null; projectId: string | null; taskId: string | null; tags: string[]; billable: boolean }) {
   return { ...entry, start: solidtimeTime(entry.start), end: solidtimeTime(entry.end) };
@@ -160,11 +193,13 @@ export async function prepareSolidtimeAction(client: SolidtimeClient, connection
     case "SOLIDTIME_ENTRY_CREATE": {
       const names = await loadNames(client, connection);
       const entry = { ...action.params, start: whole(action.params.start), end: whole(action.params.end) };
+      const overlaps = await overlapsAtPreview(client, connection, [entry]);
       return {
         ...base,
         target: {},
-        params: storedEntry(entry),
-        preview: entryPreview(names, entry),
+        // The overlaps seen now: at approval, any other overlap means time was added meanwhile (maybe this same change).
+        params: { ...storedEntry(entry), overlapAtPreview: overlaps.map((existing) => existing.id) },
+        preview: [...entryPreview(names, entry), ...overlapPreview(overlaps)],
         summary: `Add time: ${action.params.description ?? "(no description)"} (${hoursMinutes((entry.end.getTime() - entry.start.getTime()) / 1000)})`.slice(0, 300),
       };
     }
@@ -180,15 +215,19 @@ export async function prepareSolidtimeAction(client: SolidtimeClient, connection
       }
 
       const total = entries.reduce((sum, entry) => sum + (entry.end.getTime() - entry.start.getTime()) / 1000, 0);
+      const overlaps = await overlapsAtPreview(client, connection, entries);
       return {
         ...base,
         target: {},
-        params: { entries: entries.map(storedEntry) },
-        preview: entries.map((entry) => ({
-          field: `${solidtimeTime(entry.start).slice(11, 16)}–${solidtimeTime(entry.end).slice(11, 16)} UTC${entry.projectId ? ` · ${names.project(entry.projectId)}` : ""}`,
-          before: null,
-          after: `${entry.description ?? "(no description)"} (${hoursMinutes((entry.end.getTime() - entry.start.getTime()) / 1000)})`,
-        })),
+        params: { entries: entries.map(storedEntry), overlapAtPreview: overlaps.map((existing) => existing.id) },
+        preview: [
+          ...entries.map((entry) => ({
+            field: `${solidtimeTime(entry.start).slice(11, 16)}–${solidtimeTime(entry.end).slice(11, 16)} UTC${entry.projectId ? ` · ${names.project(entry.projectId)}` : ""}`,
+            before: null,
+            after: `${entry.description ?? "(no description)"} (${hoursMinutes((entry.end.getTime() - entry.start.getTime()) / 1000)})`,
+          })),
+          ...overlapPreview(overlaps),
+        ],
         summary: `Add ${entries.length} time entr${entries.length === 1 ? "y" : "ies"} (${hoursMinutes(total)})`,
       };
     }
@@ -295,6 +334,17 @@ export async function prepareSolidtimeAction(client: SolidtimeClient, connection
   }
 }
 
+/** Overlaps shown in the preview; refused when Solidtime has too many entries there to tell. */
+async function overlapsAtPreview(client: SolidtimeClient, connection: Connection, times: Array<{ start: Date; end: Date }>): Promise<SolidtimeTimeEntry[]> {
+  const overlaps = await overlappingEntries(client, connection, times);
+
+  if (overlaps === null) {
+    throw new AppError(409, "ENTRY_OVERLAP_UNKNOWN", "There are too many time entries around this time to check it against them. Add it in Solidtime instead.");
+  }
+
+  return overlaps;
+}
+
 /* ------------------------------------------------------------------ writes */
 
 /** A Solidtime write failed; `writeSent` says whether it may have been applied. */
@@ -344,8 +394,30 @@ interface ApprovedSolidtimeAction {
   params: Record<string, unknown>;
 }
 
-/** Runs an approved change. Errors are wrapped so the caller knows whether anything reached Solidtime. */
-export async function executeSolidtimeAction(client: SolidtimeClient, connection: Connection, action: ApprovedSolidtimeAction): Promise<ExecutionResult> {
+/** Stops a create when time was added where it goes since the preview (an earlier approval of the same change, or another one). */
+async function assertNoNewOverlap(client: SolidtimeClient, connection: Connection, entries: StoredEntry[], params: Record<string, unknown>): Promise<void> {
+  const seen = new Set(Array.isArray(params.overlapAtPreview) ? (params.overlapAtPreview as unknown[]).filter((id): id is string => typeof id === "string") : []);
+  const overlaps = await overlappingEntries(client, connection, entries.map((entry) => ({ start: new Date(entry.start), end: new Date(entry.end ?? entry.start) })));
+
+  if (overlaps === null) {
+    throw new SolidtimeExecutionFailure(new AppError(409, "ACTION_STALE", "Too many time entries around this time to check for duplicates. Nothing was changed; add it in Solidtime instead."), false);
+  }
+
+  if (overlaps.some((entry) => !seen.has(entry.id))) {
+    throw new SolidtimeExecutionFailure(new AppError(409, "ACTION_STALE", "An entry for this time was added since the preview (possibly this same change). Nothing was changed."), false);
+  }
+}
+
+/**
+ * Runs an approved change. Errors are wrapped so the caller knows whether anything reached Solidtime.
+ * `onProgress` is called after each entry of a batch (the caller shows the run is still alive).
+ */
+export async function executeSolidtimeAction(
+  client: SolidtimeClient,
+  connection: Connection,
+  action: ApprovedSolidtimeAction,
+  onProgress: () => Promise<void> = async () => {}
+): Promise<ExecutionResult> {
   let sent = false;
   // Counts every write attempt: a failure after the first one may leave part of the change applied.
   const write = async <T>(run: () => Promise<T>): Promise<T> => {
@@ -362,6 +434,18 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
     }
   };
 
+  // A create answered without the saved entry: Solidtime took the request, so it may have been saved.
+  const writeWithId = <T extends { data?: { id?: unknown } }>(run: () => Promise<T>) =>
+    write(async () => {
+      const response = await run();
+
+      if (typeof response?.data?.id !== "string") {
+        throw new SolidtimeWriteError(new SolidtimeApiError("SOLIDTIME_UPSTREAM_ERROR", 200, "Solidtime answered without the saved entry"), true);
+      }
+
+      return response as T & { data: { id: string } };
+    });
+
   const ok = (result: Record<string, unknown>, checks: Array<{ check: string; passed: boolean }> = []): ExecutionResult => ({
     result,
     verification: { verified: checks.every((check) => check.passed), checks },
@@ -372,7 +456,13 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
   switch (action.kind) {
     case "SOLIDTIME_TIMER_START": {
       const params = action.params as unknown as StoredEntry & { startedAt: string };
-      const created = await write(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, { ...params, start: params.startedAt, end: null })));
+
+      // Only one timer runs at a time: one started since the proposal would be stopped or refused.
+      if (await getActiveEntry(client)) {
+        throw new SolidtimeExecutionFailure(new AppError(409, "ACTION_STALE", "A timer started since this was proposed. Nothing was changed."), false);
+      }
+
+      const created = await writeWithId(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, { ...params, start: params.startedAt, end: null })));
       return ok({ entryId: created.data.id }, [{ check: "Timer is running", passed: created.data.end === null }]);
     }
 
@@ -385,28 +475,34 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
       }
 
       // The start is sent unchanged so the end can be validated against it.
-      const stopped = await write(() => client.put<{ data: SolidtimeTimeEntry }>(`${path}/time-entries/${encodeURIComponent(entryId)}`, { start: active.start, end: str(action.params, "stoppedAt") }));
+      const stopped = await writeWithId(() => client.put<{ data: SolidtimeTimeEntry }>(`${path}/time-entries/${encodeURIComponent(entryId)}`, { start: active.start, end: str(action.params, "stoppedAt") }));
       return ok({ entryId }, [{ check: "Timer stopped", passed: stopped.data.end !== null }]);
     }
 
     case "SOLIDTIME_ENTRY_CREATE": {
-      const created = await write(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, action.params as unknown as StoredEntry)));
+      const entry = action.params as unknown as StoredEntry;
+      await assertNoNewOverlap(client, connection, [entry], action.params);
+      const created = await writeWithId(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, entry)));
       return ok({ entryId: created.data.id }, [{ check: "Entry saved", passed: Boolean(created.data.id) }]);
     }
 
     case "SOLIDTIME_ENTRIES_CREATE": {
       const entries = (action.params.entries ?? []) as StoredEntry[];
       const ids: string[] = [];
+      // Checked once, before the first write (the batch's own entries must not count against it).
+      await assertNoNewOverlap(client, connection, entries, action.params);
 
       for (const entry of entries) {
         try {
-          const created = await write(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, entry)));
+          const created = await writeWithId(() => client.post<{ data: SolidtimeTimeEntry }>(`${path}/time-entries`, storedToInput(connection, entry)));
           ids.push(created.data.id);
         } catch (error) {
-          // Keep what was saved so it can be seen (and not added twice).
-          const failure = error as SolidtimeExecutionFailure;
+          // Keep what was saved so it can be seen (and not added twice). Anything else failing after a POST counts as sent.
+          const failure = error instanceof SolidtimeExecutionFailure ? error : new SolidtimeExecutionFailure(error, true);
           throw new SolidtimeExecutionFailure(failure.error, failure.writeSent, { entryIds: ids, savedCount: ids.length, totalCount: entries.length });
         }
+
+        await onProgress();
       }
 
       return ok({ entryIds: ids }, [{ check: `${ids.length} of ${entries.length} entries saved`, passed: ids.length === entries.length }]);
@@ -429,12 +525,12 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
 
       const next = action.params.next as StoredEntry;
       const input = storedToInput(connection, next);
-      const updated = await write(() => client.put<{ data: SolidtimeTimeEntry }>(`${path}/time-entries/${encodeURIComponent(entryId)}`, input));
+      const updated = await writeWithId(() => client.put<{ data: SolidtimeTimeEntry }>(`${path}/time-entries/${encodeURIComponent(entryId)}`, input));
       return ok({ entryId }, [{ check: "Entry saved with the new values", passed: updated.data.description === next.description && updated.data.start === next.start }]);
     }
 
     case "SOLIDTIME_PROJECT_CREATE": {
-      const created = await write(() =>
+      const created = await writeWithId(() =>
         client.post<{ data: { id: string } }>(`${path}/projects`, {
           name: str(action.params, "name"),
           color: str(action.params, "color"),
@@ -447,7 +543,7 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
 
     case "SOLIDTIME_TASK_CREATE": {
       const hours = typeof action.params.estimatedHours === "number" ? action.params.estimatedHours : null;
-      const created = await write(() =>
+      const created = await writeWithId(() =>
         client.post<{ data: { id: string } }>(`${path}/tasks`, {
           name: str(action.params, "name"),
           project_id: str(action.params, "projectId"),
@@ -458,12 +554,12 @@ export async function executeSolidtimeAction(client: SolidtimeClient, connection
     }
 
     case "SOLIDTIME_TAG_CREATE": {
-      const created = await write(() => client.post<{ data: { id: string } }>(`${path}/tags`, { name: str(action.params, "name") }));
+      const created = await writeWithId(() => client.post<{ data: { id: string } }>(`${path}/tags`, { name: str(action.params, "name") }));
       return ok({ tagId: created.data.id }, [{ check: "Tag created", passed: Boolean(created.data.id) }]);
     }
 
     case "SOLIDTIME_CLIENT_CREATE": {
-      const created = await write(() => client.post<{ data: { id: string } }>(`${path}/clients`, { name: str(action.params, "name") }));
+      const created = await writeWithId(() => client.post<{ data: { id: string } }>(`${path}/clients`, { name: str(action.params, "name") }));
       return ok({ clientId: created.data.id }, [{ check: "Client created", passed: Boolean(created.data.id) }]);
     }
 

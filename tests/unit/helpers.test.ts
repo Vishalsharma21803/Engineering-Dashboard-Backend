@@ -6,6 +6,9 @@ import { workingDaysBetween } from "../../src/lib/working-days.js";
 import { computePayloadHash } from "../../src/services/actions/action.service.js";
 import { buildTimelineFromRecords } from "../../src/services/azure/pipelines.service.js";
 import { countUnresolvedThreads } from "../../src/services/azure/pull-requests.service.js";
+import { readWorkItemComments, readWorkItemUpdates, toWorkItemSummary } from "../../src/services/azure/work-items.service.js";
+import type { AzureClient } from "../../src/lib/azure/client.js";
+import type { RawWorkItem } from "../../src/lib/azure/azure-api.types.js";
 
 describe("htmlToText", () => {
   it("strips markup, scripts and decodes entities", () => {
@@ -114,5 +117,96 @@ describe("countUnresolvedThreads", () => {
         { id: 5, status: "active", isDeleted: true, comments: [{ id: 1, commentType: "text" }] },
       ])
     ).toBe(2);
+  });
+});
+
+describe("ticket states that could not be read", () => {
+  const raw = (state: string) => ({ id: 1, rev: 1, fields: { "System.TeamProject": "Alpha", "System.WorkItemType": "Bug", "System.State": state } }) as RawWorkItem;
+  const guessed = (state: string) => {
+    const summary = toWorkItemSummary(raw(state), null, "https://dev.azure.com/org");
+    return [summary.stateCategory, summary.stateCategorySource];
+  };
+
+  it("guesses closed and removed from the state name, and says it was guessed", () => {
+    expect(guessed("Closed")).toEqual(["Completed", "guessed"]);
+    expect(guessed("Done")).toEqual(["Completed", "guessed"]);
+    expect(guessed("Removed")).toEqual(["Removed", "guessed"]);
+    expect(guessed("Cut")).toEqual(["Removed", "guessed"]);
+    expect(guessed("Active")).toEqual(["Unknown", "guessed"]);
+    // Read states always win, even for a custom name.
+    expect(toWorkItemSummary(raw("Shipped"), [{ name: "Shipped", category: "Completed" }], "https://dev.azure.com/org")).toMatchObject({ stateCategory: "Completed", stateCategorySource: "azure" });
+  });
+});
+
+describe("long work item history", () => {
+  /** A client whose updates endpoint holds `count` updates (ids 1..count) and records the pages asked for. */
+  function historyClient(count: number) {
+    const skips: number[] = [];
+    const client = {
+      get: async (_segments: string[], options: { query: { $top: number; $skip: number } }) => {
+        const { $top, $skip } = options.query;
+        skips.push($skip);
+        const ids = Array.from({ length: Math.max(0, Math.min($top, count - $skip)) }, (_, index) => $skip + index + 1);
+        return { value: ids.map((id) => ({ id, rev: id })) };
+      },
+    } as unknown as AzureClient;
+    return { client, skips };
+  }
+
+  it("reads short histories from the start, and says when one was cut", async () => {
+    const short = historyClient(450);
+    const read = await readWorkItemUpdates(short.client, "Alpha", 7, { rev: 450 });
+    expect(short.skips).toEqual([0, 200, 400]);
+    expect(read).toMatchObject({ truncated: false });
+    expect(read.updates).toHaveLength(450);
+
+    // Without the revision count, more than 5 pages cannot all be read: the newest are missing, and that is said.
+    const unknown = historyClient(1500);
+    expect((await readWorkItemUpdates(unknown.client, "Alpha", 7)).truncated).toBe(true);
+    // The fifth page was full: one more update is asked for, to tell a cut from exactly 1000.
+    expect(unknown.skips).toEqual([0, 200, 400, 600, 800, 1000]);
+  });
+
+  it("does not call a history of exactly 1000 revisions cut", async () => {
+    for (const options of [{ rev: 1000 }, {}]) {
+      const exact = historyClient(1000);
+      const read = await readWorkItemUpdates(exact.client, "Alpha", 7, options);
+      expect(read.truncated).toBe(false);
+      expect(read.updates).toHaveLength(1000);
+    }
+
+    expect((await readWorkItemUpdates(historyClient(1001).client, "Alpha", 7, { rev: 1000 })).truncated).toBe(true);
+  });
+
+  it("reads the first page and the newest pages of a long history, skipping the middle", async () => {
+    const long = historyClient(1500);
+    const read = await readWorkItemUpdates(long.client, "Alpha", 7, { rev: 1500 });
+    expect(long.skips).toEqual([0, 800, 1000, 1200, 1400]);
+    expect(read.truncated).toBe(true);
+    expect(read.updates[0]?.id).toBe(1);
+    expect(read.updates.at(-1)?.id).toBe(1500);
+    expect(read.updates.map((update) => update.id)).toEqual([...read.updates.map((update) => update.id)].sort((a, b) => a - b));
+  });
+
+  it("follows the comments' continuation, at most 5 pages", async () => {
+    const tokens: Array<string | undefined> = [];
+    const pages = (last: number) =>
+      ({
+        get: async (_segments: string[], options: { query: { continuationToken?: string } }) => {
+          const page = Number(options.query.continuationToken ?? 0);
+          tokens.push(options.query.continuationToken);
+          return {
+            comments: [{ id: page + 1, text: `c${page}`, createdBy: { id: "me", displayName: "Me" }, createdDate: `2025-10-0${page + 1}T00:00:00Z` }],
+            continuationToken: page < last ? String(page + 1) : null,
+          };
+        },
+      }) as unknown as AzureClient;
+
+    const three = await readWorkItemComments(pages(2), "Alpha", 7);
+    expect(three).toMatchObject({ truncated: false });
+    expect(three.comments.map((comment) => comment.text)).toEqual(["c2", "c1", "c0"]);
+    expect(tokens).toEqual([undefined, "1", "2"]);
+
+    expect(await readWorkItemComments(pages(9), "Alpha", 7)).toMatchObject({ truncated: true, comments: expect.any(Array) });
   });
 });

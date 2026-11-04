@@ -1,13 +1,14 @@
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { clearAzureCache } from "../../src/lib/azure/cache.js";
+import { setSolidtimeResolverForTests } from "../../src/lib/solidtime/address-guard.js";
 import { clearSolidtimeCache } from "../../src/lib/solidtime/client.js";
 import { server } from "../setup.js";
 import { VALID_CLAUDE_KEY, createFakeAi, fakeAiHandlers, type FakeAi } from "../support/fake-ai.js";
 import type { FakeAzure } from "../support/fake-azure.js";
-import { ME, writeRequests } from "../support/fake-azure.js";
+import { ME, OTHER, addFakeTasks, writeRequests } from "../support/fake-azure.js";
 import {
   EMPLOYEE,
   EMPLOYEE_TOKEN,
@@ -21,6 +22,7 @@ import {
   type FakeSolidtime,
 } from "../support/fake-solidtime.js";
 import { azurePath, connectSolidtime, installFakeAzure, installFakeSolidtime, resetDatabase, setupUser, type Agent } from "../support/harness.js";
+import { myWorkRows } from "../support/my-work.js";
 import { useAlphaRulebook } from "../support/test-rulebook.js";
 
 let azure: FakeAzure;
@@ -86,6 +88,21 @@ describe("connecting Solidtime", () => {
     process.env.SOLIDTIME_ALLOWED_HOSTS = "time.example.com";
     const blocked = await agent.post("/api/solidtime/connections").send({ baseUrl: SOLIDTIME_URL, token: EMPLOYEE_TOKEN }).expect(400);
     expect(JSON.stringify(blocked.body)).toContain("SOLIDTIME_ALLOWED_HOSTS");
+    delete process.env.SOLIDTIME_ALLOWED_HOSTS;
+  });
+
+  it("refuses an address that resolves to an internal network, before sending anything to it", async () => {
+    setSolidtimeResolverForTests(async () => ["10.0.0.5"]);
+    const refused = await agent.post("/api/solidtime/connections").send({ baseUrl: SOLIDTIME_URL, token: EMPLOYEE_TOKEN }).expect(422);
+    expect(refused.body).toEqual({
+      message: "This Solidtime address points to a private or internal network. Ask the Cockpit owner to allow it (SOLIDTIME_ALLOWED_HOSTS).",
+      reason: "SOLIDTIME_ADDRESS_BLOCKED",
+    });
+    expect(solidtime.requests).toEqual([]);
+
+    // The owner can allow it explicitly.
+    process.env.SOLIDTIME_ALLOWED_HOSTS = "solidtime.test";
+    await agent.post("/api/solidtime/connections").send({ baseUrl: SOLIDTIME_URL, token: EMPLOYEE_TOKEN }).expect(201);
     delete process.env.SOLIDTIME_ALLOWED_HOSTS;
   });
 
@@ -231,6 +248,69 @@ describe("timer and entries through approval", () => {
     const failed = await approve(batch, 502);
     expect(failed.message).toContain("1 of 2 entries were saved");
     expect(failed.action.result).toMatchObject({ writeSent: true, savedCount: 1, entryIds: [solidtime.entries[0]!.id] });
+  });
+
+  it("treats a gateway error on a write as an unknown outcome, never as not applied", async () => {
+    const connection = await connectSolidtime(agent);
+    const create = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params: { start: hoursAgo(3), end: hoursAgo(2), description: "#101 a", projectId: null, taskId: null } });
+    solidtime.failNextWrite = 502;
+
+    const failed = await approve(create, 502);
+    expect(failed).toMatchObject({ reason: "OUTCOME_UNKNOWN", action: { status: "FAILED", result: { writeSent: true } } });
+    expect(failed.message).toBe("Solidtime did not confirm the change. Check Solidtime before proposing it again.");
+  });
+
+  it("counts a create Solidtime answered without the entry as maybe saved, also part-way through a batch", async () => {
+    const connection = await connectSolidtime(agent);
+    const create = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params: { start: hoursAgo(3), end: hoursAgo(2), description: "#101 a", projectId: null, taskId: null } });
+    solidtime.createsBeforeMalformed = 0;
+    expect(await approve(create, 502)).toMatchObject({ reason: "OUTCOME_UNKNOWN", action: { result: { writeSent: true } } });
+
+    const batch = await propose(connection, {
+      kind: "SOLIDTIME_ENTRIES_CREATE",
+      params: {
+        entries: [
+          { start: hoursAgo(7), end: hoursAgo(6), description: "#101 b", projectId: null, taskId: null },
+          { start: hoursAgo(6), end: hoursAgo(5), description: "#102 c", projectId: null, taskId: null },
+        ],
+      },
+    });
+    solidtime.createsBeforeMalformed = 1;
+    const failed = await approve(batch, 502);
+    expect(failed.reason).toBe("OUTCOME_UNKNOWN");
+    expect(failed.message).toContain("1 of 2 entries were saved");
+    expect(failed.action.result).toMatchObject({ writeSent: true, savedCount: 1 });
+  });
+
+  it("refuses a timer start when a timer started since the proposal, writing nothing", async () => {
+    const connection = await connectSolidtime(agent);
+    const start = await propose(connection, { kind: "SOLIDTIME_TIMER_START", params: { startedAt: new Date(Date.now() - 60_000).toISOString(), description: "#101", projectId: null, taskId: null } });
+    addEntry(solidtime, { start: hoursAgo(0.05), end: null, description: "started elsewhere" });
+
+    const failed = await approve(start, 409);
+    expect(failed).toMatchObject({ reason: "ACTION_STALE", message: "A timer started since this was proposed. Nothing was changed." });
+    expect(solidtimeWrites(solidtime)).toEqual([]);
+  });
+
+  it("refuses a second approval of the same time, and shows (but allows) an overlap seen when proposing", async () => {
+    const connection = await connectSolidtime(agent);
+    const params = { start: hoursAgo(3), end: hoursAgo(2), description: "#101 a", projectId: null, taskId: null };
+    const first = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params });
+    const second = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params });
+    await approve(first);
+
+    const refused = await approve(second, 409);
+    expect(refused.reason).toBe("ACTION_STALE");
+    expect(refused.message).toContain("added since the preview");
+    expect(solidtime.entries).toHaveLength(1);
+
+    // Touching ends are no overlap; one seen when proposing is shown and can be approved.
+    const after = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params: { ...params, start: hoursAgo(2), end: hoursAgo(1) } });
+    expect(after.preview.map((row: { field: string }) => row.field)).not.toContain("Overlaps existing entry");
+    const overlapping = await propose(connection, { kind: "SOLIDTIME_ENTRY_CREATE", params: { ...params, description: "#102 b" } });
+    expect(overlapping.preview).toEqual(expect.arrayContaining([{ field: "Overlaps existing entry", before: expect.stringContaining("#101 a"), after: null }]));
+    await approve(overlapping);
+    expect(solidtime.entries).toHaveLength(2);
   });
 
   it("lets only team roles create projects and tags (an employee gets a clear refusal)", async () => {
@@ -462,6 +542,67 @@ describe("AI hours for a draft", () => {
     });
   });
 
+  it("does not count Remaining Work zeroed in one change and the ticket closed in another, nor when Azure's states cannot be read", async () => {
+    const connection = await connectSolidtime(agent);
+    const row101 = async () => (await agent.get(st(connection, `/draft?day=${day()}&refresh=true`)).expect(200)).body.draft.rows.find((row: { ticketId: number }) => row.ticketId === 101);
+    azure.updates.set(101, [
+      { id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 16, newValue: 0 } } },
+      { id: 2, rev: 10, revisedBy: OTHER, fields: { "System.ChangedDate": { newValue: at("17:30") }, "System.State": { oldValue: "Active", newValue: "Closed" } } },
+    ]);
+    expect(await row101()).toMatchObject({ hoursSource: "activity", remainingWorkLowered: 0, note: null });
+
+    // A type whose states Azure does not answer for: the zeroing is not counted, and the row says why.
+    azure.updates.set(101, [{ id: 1, rev: 9, revisedBy: ME, fields: { "System.ChangedDate": { newValue: at("17:00") }, "Microsoft.VSTS.Scheduling.RemainingWork": { oldValue: 8, newValue: 0 } } }]);
+    azure.workItems.get(101)!.fields["System.WorkItemType"] = "Chore";
+    clearAzureCache();
+    expect(await row101()).toMatchObject({ hoursSource: "activity", remainingWorkLowered: 0, note: expect.stringContaining("Azure states could not be read; Remaining Work set to 0 was not counted.") });
+  });
+
+  it("finds a ticket I changed that day among many changed later, and says why a draft was cut", async () => {
+    const connection = await connectSolidtime(agent);
+    // 60 tickets come before mine in the query's order (changed later by others): they used to fill the 50 slots.
+    const mine = [...azure.workItems];
+    azure.workItems.clear();
+    addFakeTasks(azure, 60, 2001, OTHER);
+    for (const [id, item] of mine) azure.workItems.set(id, item);
+
+    const draft = (await agent.get(st(connection, `/draft?day=${day()}`)).expect(200)).body.draft;
+    expect(draft.rows.map((row: { ticketId: number }) => row.ticketId)).toEqual(expect.arrayContaining([101, 102, 103]));
+    expect(draft).toMatchObject({ truncated: false, truncatedReason: null, warnings: [] });
+
+    // More tickets than are read: the draft says it was cut and why.
+    addFakeTasks(azure, 150, 3001, OTHER);
+    const cut = (await agent.get(st(connection, `/draft?day=${day()}&refresh=true`)).expect(200)).body.draft;
+    expect(cut).toMatchObject({ truncated: true, truncatedReason: "scan" });
+  });
+
+  it("warns, instead of staying silent, when Solidtime projects or a ticket's comments cannot be read", async () => {
+    const connection = await connectSolidtime(agent);
+    server.use(
+      http.get(`${SOLIDTIME_URL}/api/v1/organizations/:organization/projects`, () => HttpResponse.json({ message: "Server Error" }, { status: 500 })),
+      http.get(/\/_apis\/wit\/workItems\/102\/comments/i, () => HttpResponse.json({ message: "Not found" }, { status: 404 }))
+    );
+
+    const draft = (await agent.get(st(connection, `/draft?day=${day()}`)).expect(200)).body.draft;
+    expect(draft.warnings).toEqual(
+      expect.arrayContaining(["Solidtime projects could not be read; choose projects yourself.", "Comments on #102 could not be read; its activity may be incomplete."])
+    );
+    expect(draft.rows.find((row: { ticketId: number }) => row.ticketId === 102)).toMatchObject({ solidtimeProjectId: null, hoursSource: "completed-work" });
+  });
+
+  it("counts a timer running since the evening before only from midnight", async () => {
+    const connection = await connectSolidtime(agent);
+    const today = new Date().toISOString().slice(0, 10);
+    addEntry(solidtime, { start: at("23:00"), end: null, description: "#101 Implement login" });
+
+    const todayDraft = (await agent.get(st(connection, `/draft?day=${today}`)).expect(200)).body.draft;
+    expect(todayDraft.busy[0]).toMatchObject({ start: `${today}T00:00:00.000Z` });
+    // Yesterday: the 08:00 standup (0.5 h) and the timer's last hour.
+    const yesterday = (await agent.get(st(connection, `/draft?day=${day()}`)).expect(200)).body.draft;
+    expect(yesterday.trackedHours).toBe(1.5);
+    expect(yesterday.busy).toContainEqual({ start: new Date(at("23:00")).toISOString(), end: `${today}T00:00:00.000Z` });
+  });
+
   it("checks the rule hours (within half to one and a half times), places the entries and records the cost, writing nothing", async () => {
     const connection = await connectSolidtime(agent);
     await useClaude();
@@ -493,9 +634,10 @@ describe("AI hours for a draft", () => {
     // One call, about the asked tickets only, without comment text; usage recorded under its own purpose.
     expect(judgeCalls()).toHaveLength(1);
     const prompt = String((judgeCalls()[0]!.body!.messages as Array<{ content: string }>)[0]!.content);
-    expect(prompt).toContain("Suggested: 1 h (1 change at 15:00, capped at its 1 h Remaining Work).");
+    expect(prompt).toContain("- ticketId 103: suggested 1 h.");
+    expect(prompt).toContain("How the suggested hours were worked out: 1 change at 15:00, capped at its 1 h Remaining Work\n");
     expect(prompt).not.toContain("target");
-    expect(prompt).toContain('- ticketId 103: "Crash on save"');
+    expect(prompt).toContain("<<<\nTitle: Crash on save\n");
     expect(prompt).not.toContain("ticketId 102");
     expect(await prisma.aiUsage.findMany({ select: { purpose: true } })).toEqual([{ purpose: "time-draft" }]);
     expect(solidtimeWrites(solidtime)).toEqual([]);
@@ -529,6 +671,27 @@ describe("AI hours for a draft", () => {
 
     // Once it finished, the next one runs.
     await estimate(connection, { day: day(), ticketIds: [103] }).expect(200);
+  });
+
+  it("still returns a paid estimate when recording its cost fails, keeping the held amount as the record", async () => {
+    const connection = await connectSolidtime(agent);
+    await useClaude();
+    ai.timeEstimates = (tickets) => tickets.map((ticketId) => ({ ticketId, hours: 1, confidence: "medium", reason: "x" }));
+    // Settling (delete the reservation + add the usage row, one batch transaction) fails, also when tried again.
+    const transaction = prisma.$transaction.bind(prisma);
+    const failing = vi.spyOn(prisma, "$transaction").mockImplementation(((arg: unknown, ...rest: unknown[]) =>
+      Array.isArray(arg) ? Promise.reject(new Error("database unavailable")) : transaction(...([arg, ...rest] as [never]))) as typeof prisma.$transaction);
+    const loud = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = (await estimate(connection, { day: day(), ticketIds: [103] }).expect(200)).body.estimate;
+    const settleTries = failing.mock.calls.filter(([arg]) => Array.isArray(arg)).length;
+    failing.mockRestore();
+    expect(response.estimates).toHaveLength(1);
+    expect(judgeCalls()).toHaveLength(1);
+    expect(settleTries).toBe(2);
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true } })).toEqual([{ purpose: "reserved:time-draft" }]);
+    expect(String(loud.mock.calls[0]?.[0])).toContain("Recording AI spend failed twice");
+    loud.mockRestore();
   });
 
   it("reports bad answers, saying what was wrong, after counting their cost", async () => {
@@ -568,6 +731,15 @@ describe("time verification", () => {
     addEntry(solidtime, { start: hoursAgo(20), end: hoursAgo(19), description: "Fix the 404 page" });
     addEntry(solidtime, { start: hoursAgo(22), end: hoursAgo(21.5), description: "Standup" });
   }
+
+  it("splits an entry naming two tickets between them", async () => {
+    addEntry(solidtime, { start: hoursAgo(6), end: hoursAgo(4), description: "#101 and #102 pairing" });
+    const connection = await connectSolidtime(agent);
+    const result = await verify(connection);
+    const item = (id: number) => result.items.find((candidate: { ticketId: number }) => candidate.ticketId === id);
+    expect([item(101).periodHours, item(102).periodHours]).toEqual([1, 1]);
+    expect([item(101).trackedHours, item(102).trackedHours]).toEqual([1, 1]);
+  });
 
   it("compares each ticket's all-time Solidtime total with Azure and sorts the problems first, writing nothing", async () => {
     seedTicketsInEveryState();
@@ -737,7 +909,99 @@ describe("time verification", () => {
   });
 });
 
+describe("time batches Azure may have partly applied", () => {
+  it("says, ticket by ticket, what may have changed when a write was not confirmed", async () => {
+    const action = await propose(credentialId, {
+      kind: "WORK_ITEMS_UPDATE_TIME",
+      params: { items: [{ projectId: "Alpha", workItemId: 102, completedWork: 2 }, { projectId: "Alpha", workItemId: 103, completedWork: 1 }] },
+    });
+    azure.workItems.get(102)!.fields["Microsoft.VSTS.Scheduling.CompletedWork"] = 9;
+    azure.dropWrites = true;
+
+    const failed = await approve(action, 502);
+    expect(failed.reason).toBe("OUTCOME_UNKNOWN");
+    expect(failed.message).toBe(
+      "Azure DevOps may have applied part of this change. Check the tickets before proposing it again. #102: changed in Azure DevOps since the check, not updated · #103: Azure DevOps did not confirm; check the ticket"
+    );
+    expect(failed.action.result).toMatchObject({ writeSent: true, items: [{ workItemId: 102, status: "stale" }, { workItemId: 103, status: "unknown" }] });
+  });
+
+  it("keeps a clear refusal (403 on the write) as that refusal and learns the missing write scope", async () => {
+    const action = await propose(credentialId, {
+      kind: "WORK_ITEMS_UPDATE_TIME",
+      params: { items: [{ projectId: "Alpha", workItemId: 102, completedWork: 2 }, { projectId: "Alpha", workItemId: 103, completedWork: 1 }] },
+    });
+    azure.missingScopes.add("workWrite");
+
+    const failed = await approve(action, 403);
+    expect(failed.reason).toBe("AZURE_INSUFFICIENT_SCOPE");
+    expect(failed.action).toMatchObject({ status: "FAILED", errorCode: "AZURE_INSUFFICIENT_SCOPE" });
+    // Each ticket's outcome is still stored: refused, and the rest not attempted.
+    expect(failed.action.result).toMatchObject({ writeSent: true, items: [{ workItemId: 102, status: "failed" }, { workItemId: 103, status: "not-attempted" }] });
+
+    const capabilities = await agent.get(azurePath(credentialId, "/capabilities")).expect(200);
+    expect(capabilities.body.capabilities.writeScopes.work).toBe("missing");
+  });
+
+  it("still marks the PAT invalid when a later ticket finds it refused, after another error came first", async () => {
+    const action = await propose(credentialId, {
+      kind: "WORK_ITEMS_UPDATE_TIME",
+      params: { items: [{ projectId: "Alpha", workItemId: 102, completedWork: 2 }, { projectId: "Alpha", workItemId: 103, completedWork: 1 }] },
+    });
+    // #102: a rule refuses the write (400). Then the PAT stops working, so #103 is refused (401).
+    azure.failNextWrite = 400;
+    azure.beforeWrite = async () => {
+      azure.patValid = false;
+    };
+
+    const failed = await approve(action, 422);
+    expect(failed.reason).toBe("AZURE_BAD_REQUEST");
+    expect((await prisma.credential.findUniqueOrThrow({ where: { id: credentialId } })).lastValidationStatus).toBe("INVALID");
+  });
+
+  it("still learns a missing write scope from a later ticket when an earlier write was unconfirmed", async () => {
+    const action = await propose(credentialId, {
+      kind: "WORK_ITEMS_UPDATE_TIME",
+      params: { items: [{ projectId: "Alpha", workItemId: 102, completedWork: 2 }, { projectId: "Alpha", workItemId: 103, completedWork: 1 }] },
+    });
+    // #102's write gets no answer; #103's write is refused for scope (403).
+    let writes = 0;
+    azure.beforeWrite = async () => {
+      writes += 1;
+      azure.dropWrites = writes === 1;
+      if (writes === 2) {
+        azure.scopeErrorStatus = 403;
+        azure.missingScopes.add("workWrite");
+      }
+    };
+
+    const failed = await approve(action, 502);
+    expect(failed.reason).toBe("OUTCOME_UNKNOWN");
+    expect(failed.action.result).toMatchObject({ items: [{ workItemId: 102, status: "unknown" }, { workItemId: 103, status: "failed" }] });
+    azure.missingScopes.clear();
+    const capabilities = await agent.get(azurePath(credentialId, "/capabilities")).expect(200);
+    expect(capabilities.body.capabilities.writeScopes.work).toBe("missing");
+  });
+});
+
 describe("nudges and reports", () => {
+  it("shows the same needs on a ticket in My work whether the dashboard or My work read it first", async () => {
+    await useAlphaRulebook();
+    await connectSolidtime(agent);
+    azure.workItems.get(102)!.fields["System.ChangedDate"] = new Date().toISOString();
+    azure.workItems.get(102)!.fields["System.ChangedBy"] = ME;
+    const needsOf102 = async (query: string) =>
+      myWorkRows<{ workItem: { id: number }; attention: { reasons: string[] } | null }>((await agent.get(azurePath(credentialId, `/my-work?sprint=all${query}`)).expect(200)).body.myWork).find(
+        (row) => row.workItem.id === 102
+      )?.attention;
+
+    await agent.get(azurePath(credentialId, "/dashboard")).expect(200);
+    const fromDashboard = await needsOf102("");
+    expect(fromDashboard?.reasons).toContain("You worked on this today but tracked no time on it");
+    // Read cold by My work itself: the same.
+    expect(await needsOf102("&refresh=1")).toEqual(fromDashboard);
+  });
+
   it("adds time nudges to the dashboard's prioritized actions", async () => {
     await useAlphaRulebook();
     const connection = await connectSolidtime(agent);
@@ -754,6 +1018,19 @@ describe("nudges and reports", () => {
 
     // Snoozing a time nudge uses its own key.
     await agent.put("/api/triage").send({ credentialId, itemKey: "time:timer", status: "ABANDONED", signals: [] }).expect(200);
+  });
+
+  it("says when Solidtime could not be read for an SOP report, instead of showing 0 h", async () => {
+    await useAlphaRulebook();
+    await connectSolidtime(agent);
+    server.use(http.get(`${SOLIDTIME_URL}/api/v1/organizations/:organization/time-entries/aggregate`, () => HttpResponse.json({ message: "Server Error" }, { status: 500 })));
+
+    const run = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    expect(run.timeScope).toBe("unavailable");
+    const view = (await agent.get(`/api/sop/reports/${credentialId}/Alpha/${run.id}`).expect(200)).body.report;
+    expect(view.trackedHours).toBeNull();
+    expect(view.byPerson.items.every((person: { trackedHours: number | null }) => person.trackedHours === null)).toBe(true);
+    expect((await agent.get(`/api/sop/reports/${credentialId}/Alpha`).expect(200)).body.runs.items[0].timeScope).toBe("unavailable");
   });
 
   it("reports estimate compliance (total time at most the estimate), a range CSV and team time in the SOP report", async () => {

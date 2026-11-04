@@ -101,15 +101,9 @@ const ENTRIES: PlatformEntry[] = [
     connect: async (userId, { label, fields }) => {
       const input = parseWith(createCredentialSchema, { platform: "AZURE", organizationUrl: fields.organizationUrl ?? "", patToken: fields.patToken ?? "", ...labelPart(label) });
 
-      try {
-        const credential = await createCredential(userId, input);
-        return { kind: "credential", id: credential.id, name: credential.label ?? credential.organizationUrl, record: credential };
-      } catch (error) {
-        if (error instanceof Error && error.message === "CREDENTIAL_ALREADY_EXISTS") {
-          throw new AppError(409, "CREDENTIAL_ALREADY_EXISTS", "A credential for this Azure DevOps organization already exists");
-        }
-        throw error;
-      }
+      // A duplicate organization is a 409 AppError (CREDENTIAL_ALREADY_EXISTS) from createCredential.
+      const credential = await createCredential(userId, input);
+      return { kind: "credential", id: credential.id, name: credential.label ?? credential.organizationUrl, record: credential };
     },
   },
   {

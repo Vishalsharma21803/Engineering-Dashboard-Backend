@@ -90,12 +90,18 @@ export async function listTeams(client: AzureClient, projectId: string): Promise
   return (data.value ?? []).map((team) => ({ id: team.id, name: team.name }));
 }
 
+/** Pull requests and pipelines the project overview counts at most (one more is read to detect a cut). */
+const OVERVIEW_COUNT_CAP = 500;
+
 export async function getProjectOverview(
   client: AzureClient,
   projectId: string
 ): Promise<ProjectOverview> {
   const raw = await getProject(client, projectId);
   const defaultTeam = raw.defaultTeam ?? null;
+  let myOpenWorkItemsTruncated = false;
+  let activePullRequestsTruncated = false;
+  let failingPipelinesTruncated = false;
 
   const [currentIteration, repositories, myOpenWorkItems, activePullRequests, failingPipelines] =
     await Promise.all([
@@ -116,21 +122,28 @@ export async function getProjectOverview(
           projectName: raw.name,
           scope: "open",
         });
-        return ids.length;
+        myOpenWorkItemsTruncated = ids.truncated;
+        return ids.items.length;
       }),
       toSection(async () => {
+        // One more than counted is asked for, so a cut is known.
         const data = await client.get<RawList<RawPullRequest>>(
           [raw.id, "_apis", "git", "pullrequests"],
-          { query: { "searchCriteria.status": "active", $top: 500 } }
+          { query: { "searchCriteria.status": "active", $top: OVERVIEW_COUNT_CAP + 1 } }
         );
-        return data.value?.length ?? 0;
+        const count = data.value?.length ?? 0;
+        activePullRequestsTruncated = count > OVERVIEW_COUNT_CAP;
+        return Math.min(count, OVERVIEW_COUNT_CAP);
       }),
       toSection(async () => {
         const data = await client.get<RawList<RawBuildDefinition>>(
           [raw.id, "_apis", "build", "definitions"],
-          { query: { includeLatestBuilds: true, $top: 500 } }
+          { query: { includeLatestBuilds: true, $top: OVERVIEW_COUNT_CAP + 1 } }
         );
-        return (data.value ?? []).filter(
+        const definitions = data.value ?? [];
+        // More pipelines than read: failing ones among the rest are not counted.
+        failingPipelinesTruncated = definitions.length > OVERVIEW_COUNT_CAP;
+        return definitions.slice(0, OVERVIEW_COUNT_CAP).filter(
           (definition) => definition.latestCompletedBuild?.result === "failed"
         ).length;
       }),
@@ -149,5 +162,8 @@ export async function getProjectOverview(
       activePullRequests,
       failingPipelines,
     },
+    myOpenWorkItemsTruncated,
+    activePullRequestsTruncated,
+    failingPipelinesTruncated,
   };
 }

@@ -149,7 +149,32 @@ export interface ProjectSetUp {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Whether the viewer may change or remove it: its creator or an SOP owner. */
+  canEdit: boolean;
 }
+
+/** Who is looking at set-ups, for `canEdit`. */
+export interface SetUpViewer {
+  userId: string;
+  isAdmin: boolean;
+}
+
+/** Set-ups imported from the old rulebook have no creator: only SOP owners may change them. */
+const mayChange = (createdBy: string | null, viewer: SetUpViewer) => viewer.isAdmin || (createdBy !== null && createdBy === viewer.userId);
+
+function assertMayChange(createdBy: string | null, viewer: SetUpViewer): void {
+  if (!mayChange(createdBy, viewer)) {
+    throw new AppError(
+      403,
+      "PROJECT_SETUP_NOT_YOURS",
+      createdBy === null
+        ? "Only an SOP owner can change this project's set-up (it was set up before owners were recorded)"
+        : "Only the person who set up this project or an SOP owner can change it"
+    );
+  }
+}
+
+const isUniqueConstraintError = (error: unknown) => (error as { code?: unknown } | null)?.code === "P2002";
 
 async function userNames(ids: Array<string | null>): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter((id): id is string => id !== null))];
@@ -162,7 +187,8 @@ function readSettings(value: unknown): ProjectSettings {
   return projectSettingsSchema.parse(value);
 }
 
-export async function listProjectSetUps(): Promise<ProjectSetUp[]> {
+/** Every set-up; `canEdit` is false for all when no viewer is given. */
+export async function listProjectSetUps(viewer?: SetUpViewer): Promise<ProjectSetUp[]> {
   await ensureProjectsMoved();
   const rows = await prisma.sopProject.findMany({ orderBy: { projectName: "asc" } });
   const names = await userNames(rows.flatMap((row) => [row.createdBy, row.updatedBy]));
@@ -174,6 +200,7 @@ export async function listProjectSetUps(): Promise<ProjectSetUp[]> {
     updatedBy: row.updatedBy ? (names.get(row.updatedBy) ?? null) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    canEdit: viewer ? mayChange(row.createdBy, viewer) : false,
   }));
 }
 
@@ -203,38 +230,54 @@ export async function getSharedProjectProfile(projectName: string): Promise<Proj
 }
 
 /**
- * Anyone may set a project up or change it; every change is recorded. The branch
- * pattern is a regular expression run in everyone's checks, so only SOP owners may
- * change it (others keep the current one).
+ * Anyone may set a new project up; only its creator or an SOP owner may change
+ * it later. Every change is recorded. The branch pattern is a regular
+ * expression run in everyone's checks, so only SOP owners may change it (others
+ * keep the current one).
  */
 export async function saveProjectSetUp(
   userId: string,
   projectName: string,
   input: unknown,
-  options: { canSetBranchPattern: boolean }
+  options: { canSetBranchPattern: boolean; isAdmin: boolean }
 ): Promise<ProjectSetUp> {
   await ensureProjectsMoved();
   const requested = projectSettingsSchema.parse(input);
   const nameKey = nameKeyOf(projectName);
+  const viewer = { userId, isAdmin: options.isAdmin };
 
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.sopProject.findUnique({ where: { nameKey }, select: { id: true, settings: true } });
-    const settings: ProjectSettings = options.canSetBranchPattern
-      ? requested
-      : { ...requested, branchPattern: existing ? readSettings(existing.settings).branchPattern : DEFAULT_BRANCH_PATTERN };
-    // upsert: two people setting up the same project at once both succeed (the later one wins).
-    const saved = await tx.sopProject.upsert({
-      where: { nameKey },
-      update: { settings: settings as object, updatedBy: userId, projectName: projectName.trim() },
-      create: { nameKey, projectName: projectName.trim(), settings: settings as object, createdBy: userId, updatedBy: userId },
+  const save = () =>
+    prisma.$transaction(async (tx) => {
+      const existing = await tx.sopProject.findUnique({ where: { nameKey }, select: { id: true, settings: true, createdBy: true } });
+
+      if (existing) {
+        assertMayChange(existing.createdBy, viewer);
+      }
+
+      const settings: ProjectSettings = options.canSetBranchPattern
+        ? requested
+        : { ...requested, branchPattern: existing ? readSettings(existing.settings).branchPattern : DEFAULT_BRANCH_PATTERN };
+      const saved = existing
+        ? await tx.sopProject.update({ where: { nameKey }, data: { settings: settings as object, updatedBy: userId, projectName: projectName.trim() } })
+        : await tx.sopProject.create({ data: { nameKey, projectName: projectName.trim(), settings: settings as object, createdBy: userId, updatedBy: userId } });
+
+      await tx.sopProjectChange.create({
+        data: { sopProjectId: saved.id, projectName: saved.projectName, kind: existing ? "UPDATED" : "CREATED", settings: settings as object, changedBy: userId },
+      });
     });
 
-    await tx.sopProjectChange.create({
-      data: { sopProjectId: saved.id, projectName: saved.projectName, kind: existing ? "UPDATED" : "CREATED", settings: settings as object, changedBy: userId },
-    });
-  });
+  try {
+    await save();
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) {
+      throw error;
+    }
 
-  const saved = (await listProjectSetUps()).find((setUp) => nameKeyOf(setUp.projectName) === nameKey);
+    // Someone else set the same project up at the same moment: run again, now as a change to theirs (owner check included).
+    await save();
+  }
+
+  const saved = (await listProjectSetUps(viewer)).find((setUp) => nameKeyOf(setUp.projectName) === nameKey);
 
   if (!saved) {
     throw new AppError(500, "PROJECT_SAVE_FAILED", "The project set-up could not be read back");
@@ -243,8 +286,8 @@ export async function saveProjectSetUp(
   return saved;
 }
 
-/** Removes a set-up for everyone (its history stays). */
-export async function removeProjectSetUp(userId: string, projectName: string): Promise<void> {
+/** Removes a set-up for everyone (its history stays). Only its creator or an SOP owner may. */
+export async function removeProjectSetUp(userId: string, projectName: string, options: { isAdmin: boolean }): Promise<void> {
   await ensureProjectsMoved();
   const nameKey = nameKeyOf(projectName);
 
@@ -254,6 +297,8 @@ export async function removeProjectSetUp(userId: string, projectName: string): P
     if (!existing) {
       throw new AppError(404, "PROJECT_NOT_SET_UP", "This project is not set up for SOP checks");
     }
+
+    assertMayChange(existing.createdBy, { userId, isAdmin: options.isAdmin });
 
     await tx.sopProjectChange.create({
       data: { sopProjectId: null, projectName: existing.projectName, kind: "REMOVED", settings: existing.settings as object, changedBy: userId },

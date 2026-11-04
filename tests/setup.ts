@@ -3,9 +3,11 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 
 import { clearAzureCache } from "../src/lib/azure/cache.js";
+import { setSolidtimeResolverForTests } from "../src/lib/solidtime/address-guard.js";
 import { clearSolidtimeCache } from "../src/lib/solidtime/client.js";
 import { clearDashboardLists } from "../src/services/work-item-list/dashboard-lists.service.js";
 import { clearMyWorkSnapshots } from "../src/services/work-item-list/my-work.service.js";
+import { solidtimeTestResolver } from "./support/fake-solidtime.js";
 
 /**
  * Intercepts outgoing calls. Test handlers (server.use) win; anything else
@@ -27,6 +29,7 @@ beforeEach(() => {
   clearMyWorkSnapshots();
   clearDashboardLists();
   clearSolidtimeCache();
+  setSolidtimeResolverForTests(solidtimeTestResolver);
 });
 
 afterEach(() => {

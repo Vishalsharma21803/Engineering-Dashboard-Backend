@@ -47,6 +47,7 @@ export type SopReportRunMinAggregateOutputType = {
   itemsChecked: number | null
   itemsWithGaps: number | null
   timeScope: string | null
+  truncated: boolean | null
   createdAt: Date | null
 }
 
@@ -59,6 +60,7 @@ export type SopReportRunMaxAggregateOutputType = {
   itemsChecked: number | null
   itemsWithGaps: number | null
   timeScope: string | null
+  truncated: boolean | null
   createdAt: Date | null
 }
 
@@ -74,6 +76,7 @@ export type SopReportRunCountAggregateOutputType = {
   roles: number
   tickets: number
   timeScope: number
+  truncated: number
   createdAt: number
   _all: number
 }
@@ -100,6 +103,7 @@ export type SopReportRunMinAggregateInputType = {
   itemsChecked?: true
   itemsWithGaps?: true
   timeScope?: true
+  truncated?: true
   createdAt?: true
 }
 
@@ -112,6 +116,7 @@ export type SopReportRunMaxAggregateInputType = {
   itemsChecked?: true
   itemsWithGaps?: true
   timeScope?: true
+  truncated?: true
   createdAt?: true
 }
 
@@ -127,6 +132,7 @@ export type SopReportRunCountAggregateInputType = {
   roles?: true
   tickets?: true
   timeScope?: true
+  truncated?: true
   createdAt?: true
   _all?: true
 }
@@ -229,6 +235,7 @@ export type SopReportRunGroupByOutputType = {
   roles: runtime.JsonValue
   tickets: runtime.JsonValue
   timeScope: string | null
+  truncated: boolean
   createdAt: Date
   _count: SopReportRunCountAggregateOutputType | null
   _avg: SopReportRunAvgAggregateOutputType | null
@@ -267,6 +274,7 @@ export type SopReportRunWhereInput = {
   roles?: Prisma.JsonFilter<"SopReportRun">
   tickets?: Prisma.JsonFilter<"SopReportRun">
   timeScope?: Prisma.StringNullableFilter<"SopReportRun"> | string | null
+  truncated?: Prisma.BoolFilter<"SopReportRun"> | boolean
   createdAt?: Prisma.DateTimeFilter<"SopReportRun"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   credential?: Prisma.XOR<Prisma.CredentialScalarRelationFilter, Prisma.CredentialWhereInput>
@@ -284,6 +292,7 @@ export type SopReportRunOrderByWithRelationInput = {
   roles?: Prisma.SortOrder
   tickets?: Prisma.SortOrder
   timeScope?: Prisma.SortOrderInput | Prisma.SortOrder
+  truncated?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   credential?: Prisma.CredentialOrderByWithRelationInput
@@ -304,6 +313,7 @@ export type SopReportRunWhereUniqueInput = Prisma.AtLeast<{
   roles?: Prisma.JsonFilter<"SopReportRun">
   tickets?: Prisma.JsonFilter<"SopReportRun">
   timeScope?: Prisma.StringNullableFilter<"SopReportRun"> | string | null
+  truncated?: Prisma.BoolFilter<"SopReportRun"> | boolean
   createdAt?: Prisma.DateTimeFilter<"SopReportRun"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   credential?: Prisma.XOR<Prisma.CredentialScalarRelationFilter, Prisma.CredentialWhereInput>
@@ -321,6 +331,7 @@ export type SopReportRunOrderByWithAggregationInput = {
   roles?: Prisma.SortOrder
   tickets?: Prisma.SortOrder
   timeScope?: Prisma.SortOrderInput | Prisma.SortOrder
+  truncated?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.SopReportRunCountOrderByAggregateInput
   _avg?: Prisma.SopReportRunAvgOrderByAggregateInput
@@ -344,6 +355,7 @@ export type SopReportRunScalarWhereWithAggregatesInput = {
   roles?: Prisma.JsonWithAggregatesFilter<"SopReportRun">
   tickets?: Prisma.JsonWithAggregatesFilter<"SopReportRun">
   timeScope?: Prisma.StringNullableWithAggregatesFilter<"SopReportRun"> | string | null
+  truncated?: Prisma.BoolWithAggregatesFilter<"SopReportRun"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"SopReportRun"> | Date | string
 }
 
@@ -357,6 +369,7 @@ export type SopReportRunCreateInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutSopReportRunsInput
   credential: Prisma.CredentialCreateNestedOneWithoutSopReportRunsInput
@@ -374,6 +387,7 @@ export type SopReportRunUncheckedCreateInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -387,6 +401,7 @@ export type SopReportRunUpdateInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutSopReportRunsNestedInput
   credential?: Prisma.CredentialUpdateOneRequiredWithoutSopReportRunsNestedInput
@@ -404,6 +419,7 @@ export type SopReportRunUncheckedUpdateInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -419,6 +435,7 @@ export type SopReportRunCreateManyInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -432,6 +449,7 @@ export type SopReportRunUpdateManyMutationInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -447,6 +465,7 @@ export type SopReportRunUncheckedUpdateManyInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -472,6 +491,7 @@ export type SopReportRunCountOrderByAggregateInput = {
   roles?: Prisma.SortOrder
   tickets?: Prisma.SortOrder
   timeScope?: Prisma.SortOrder
+  truncated?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -490,6 +510,7 @@ export type SopReportRunMaxOrderByAggregateInput = {
   itemsChecked?: Prisma.SortOrder
   itemsWithGaps?: Prisma.SortOrder
   timeScope?: Prisma.SortOrder
+  truncated?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -502,6 +523,7 @@ export type SopReportRunMinOrderByAggregateInput = {
   itemsChecked?: Prisma.SortOrder
   itemsWithGaps?: Prisma.SortOrder
   timeScope?: Prisma.SortOrder
+  truncated?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -595,6 +617,10 @@ export type SopReportRunUncheckedUpdateManyWithoutCredentialNestedInput = {
   deleteMany?: Prisma.SopReportRunScalarWhereInput | Prisma.SopReportRunScalarWhereInput[]
 }
 
+export type BoolFieldUpdateOperationsInput = {
+  set?: boolean
+}
+
 export type SopReportRunCreateWithoutUserInput = {
   id?: string
   projectName: string
@@ -605,6 +631,7 @@ export type SopReportRunCreateWithoutUserInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
   credential: Prisma.CredentialCreateNestedOneWithoutSopReportRunsInput
 }
@@ -620,6 +647,7 @@ export type SopReportRunUncheckedCreateWithoutUserInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -664,6 +692,7 @@ export type SopReportRunScalarWhereInput = {
   roles?: Prisma.JsonFilter<"SopReportRun">
   tickets?: Prisma.JsonFilter<"SopReportRun">
   timeScope?: Prisma.StringNullableFilter<"SopReportRun"> | string | null
+  truncated?: Prisma.BoolFilter<"SopReportRun"> | boolean
   createdAt?: Prisma.DateTimeFilter<"SopReportRun"> | Date | string
 }
 
@@ -677,6 +706,7 @@ export type SopReportRunCreateWithoutCredentialInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutSopReportRunsInput
 }
@@ -692,6 +722,7 @@ export type SopReportRunUncheckedCreateWithoutCredentialInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -732,6 +763,7 @@ export type SopReportRunCreateManyUserInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -745,6 +777,7 @@ export type SopReportRunUpdateWithoutUserInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   credential?: Prisma.CredentialUpdateOneRequiredWithoutSopReportRunsNestedInput
 }
@@ -760,6 +793,7 @@ export type SopReportRunUncheckedUpdateWithoutUserInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -774,6 +808,7 @@ export type SopReportRunUncheckedUpdateManyWithoutUserInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -788,6 +823,7 @@ export type SopReportRunCreateManyCredentialInput = {
   roles: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: string | null
+  truncated?: boolean
   createdAt?: Date | string
 }
 
@@ -801,6 +837,7 @@ export type SopReportRunUpdateWithoutCredentialInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutSopReportRunsNestedInput
 }
@@ -816,6 +853,7 @@ export type SopReportRunUncheckedUpdateWithoutCredentialInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -830,6 +868,7 @@ export type SopReportRunUncheckedUpdateManyWithoutCredentialInput = {
   roles?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   tickets?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   timeScope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  truncated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -847,6 +886,7 @@ export type SopReportRunSelect<ExtArgs extends runtime.Types.Extensions.Internal
   roles?: boolean
   tickets?: boolean
   timeScope?: boolean
+  truncated?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   credential?: boolean | Prisma.CredentialDefaultArgs<ExtArgs>
@@ -864,6 +904,7 @@ export type SopReportRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   roles?: boolean
   tickets?: boolean
   timeScope?: boolean
+  truncated?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   credential?: boolean | Prisma.CredentialDefaultArgs<ExtArgs>
@@ -881,6 +922,7 @@ export type SopReportRunSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   roles?: boolean
   tickets?: boolean
   timeScope?: boolean
+  truncated?: boolean
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   credential?: boolean | Prisma.CredentialDefaultArgs<ExtArgs>
@@ -898,10 +940,11 @@ export type SopReportRunSelectScalar = {
   roles?: boolean
   tickets?: boolean
   timeScope?: boolean
+  truncated?: boolean
   createdAt?: boolean
 }
 
-export type SopReportRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "credentialId" | "projectName" | "defaultVersion" | "itemsChecked" | "itemsWithGaps" | "rules" | "roles" | "tickets" | "timeScope" | "createdAt", ExtArgs["result"]["sopReportRun"]>
+export type SopReportRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "credentialId" | "projectName" | "defaultVersion" | "itemsChecked" | "itemsWithGaps" | "rules" | "roles" | "tickets" | "timeScope" | "truncated" | "createdAt", ExtArgs["result"]["sopReportRun"]>
 export type SopReportRunInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   credential?: boolean | Prisma.CredentialDefaultArgs<ExtArgs>
@@ -945,6 +988,10 @@ export type $SopReportRunPayload<ExtArgs extends runtime.Types.Extensions.Intern
      * Whose Solidtime hours the run includes: "team", "mine", or null when no Solidtime connection is linked.
      */
     timeScope: string | null
+    /**
+     * More tickets existed than a run checks: only the most recently changed ones were checked.
+     */
+    truncated: boolean
     createdAt: Date
   }, ExtArgs["result"]["sopReportRun"]>
   composites: {}
@@ -1382,6 +1429,7 @@ export interface SopReportRunFieldRefs {
   readonly roles: Prisma.FieldRef<"SopReportRun", 'Json'>
   readonly tickets: Prisma.FieldRef<"SopReportRun", 'Json'>
   readonly timeScope: Prisma.FieldRef<"SopReportRun", 'String'>
+  readonly truncated: Prisma.FieldRef<"SopReportRun", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"SopReportRun", 'DateTime'>
 }
     

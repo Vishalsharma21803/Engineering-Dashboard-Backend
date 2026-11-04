@@ -1,3 +1,5 @@
+import { isProduction } from "../server-config.js";
+
 /**
  * The Solidtime server address a user enters (cloud or self-hosted). The
  * backend calls it with the user's token, so only https is accepted, nothing
@@ -7,7 +9,7 @@
  */
 export type NormalizedSolidtimeUrl = { ok: true; url: string } | { ok: false; message: string };
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export function allowedSolidtimeHosts(): string[] {
   return (process.env.SOLIDTIME_ALLOWED_HOSTS ?? "")
@@ -26,7 +28,7 @@ export function normalizeSolidtimeUrl(value: string): NormalizedSolidtimeUrl {
   }
 
   const host = url.hostname.toLowerCase();
-  const local = LOCAL_HOSTS.has(host) && process.env.NODE_ENV !== "production";
+  const local = LOCAL_HOSTS.has(host) && !isProduction();
 
   if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) {
     return { ok: false, message: "The Solidtime address must use HTTPS" };

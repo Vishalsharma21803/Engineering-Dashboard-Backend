@@ -84,6 +84,15 @@ const failedBuild: BuildSummary = {
 };
 
 describe("buildRecommendations", () => {
+  it("counts the whole due day as in time: due today, overdue only from the next day", () => {
+    const reasonsFor = (dueDate: string) =>
+      buildRecommendations({ workItems: [{ ...baseWorkItem, dueDate }], compliance: [], pullRequests: [], builds: [], now: NOW })[0];
+    // Azure stores the due date as the midnight that starts the due day.
+    expect(reasonsFor("2026-10-23T00:00:00Z")).toMatchObject({ reasons: ["Priority 2", "Due today"], signals: ["DUE_SOON"] });
+    expect(reasonsFor(new Date(NOW.getTime() - DAY - 3_600_000).toISOString())).toMatchObject({ reasons: ["Priority 2", "Overdue"], signals: ["OVERDUE"] });
+    expect(reasonsFor(new Date(NOW.getTime() + 36 * 3_600_000).toISOString())).toMatchObject({ reasons: ["Priority 2", "Due within 2 days"], signals: ["DUE_SOON"] });
+  });
+
   it("ignores items without any signal", () => {
     expect(
       buildRecommendations({ workItems: [baseWorkItem], compliance: [], pullRequests: [basePr], builds: [], now: NOW })

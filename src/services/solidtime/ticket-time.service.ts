@@ -3,7 +3,7 @@ import { SolidtimeApiError } from "../../lib/solidtime/errors.js";
 import type { SolidtimeAggregate } from "../../lib/solidtime/types.js";
 import type { SolidtimeConnectionDto } from "./connection.service.js";
 import { aggregateByDescription, getActiveEntry, listMembers } from "./read.service.js";
-import { candidateTicketIds } from "./ticket-ids.js";
+import { candidateTicketIds, shareSeconds, ticketIdsOf, type IsTicket } from "./ticket-ids.js";
 import type { TicketInfo } from "./tickets.service.js";
 import { fallbackTo } from "../../lib/log-fallback.js";
 
@@ -23,14 +23,17 @@ export interface TicketTime {
   running: boolean;
 }
 
-/** Seconds per ticket id from a by-description aggregate (a description naming two tickets counts for both). */
+/** The asked-for ids are tickets; any other id counts only when written as "#123" or with 4+ digits (see ticketIdsOf). */
+const wantedAsTickets = (wanted: Set<number>): IsTicket => (id) => (wanted.has(id) ? true : null);
+
+/** Seconds per ticket id from a by-description aggregate (a description naming two tickets is split between them). */
 function secondsByTicket(aggregate: SolidtimeAggregate, wanted: Set<number>): Map<number, number> {
   const totals = new Map<number, number>();
 
   for (const group of aggregate.grouped_data ?? []) {
-    for (const id of candidateTicketIds(group.key)) {
+    for (const [id, seconds] of shareSeconds(group.key, group.seconds, wantedAsTickets(wanted))) {
       if (wanted.has(id)) {
-        totals.set(id, (totals.get(id) ?? 0) + group.seconds);
+        totals.set(id, (totals.get(id) ?? 0) + seconds);
       }
     }
   }
@@ -42,13 +45,15 @@ function peopleByTicket(aggregate: SolidtimeAggregate, wanted: Set<number>, name
   const result = new Map<number, Map<string, number>>();
 
   for (const group of aggregate.grouped_data ?? []) {
-    for (const id of candidateTicketIds(group.key)) {
+    const ids = ticketIdsOf(group.key, wantedAsTickets(wanted));
+
+    for (const id of ids) {
       if (!wanted.has(id)) continue;
       const people = result.get(id) ?? new Map<string, number>();
 
       for (const person of group.grouped_data ?? []) {
         const name = (person.key && names.get(person.key)) ?? "Someone";
-        people.set(name, (people.get(name) ?? 0) + person.seconds);
+        people.set(name, (people.get(name) ?? 0) + person.seconds / ids.length);
       }
 
       result.set(id, people);
@@ -96,9 +101,10 @@ export async function getTicketTimes(
       id,
       {
         ticketId: id,
-        mySeconds: myTotals.get(id) ?? 0,
-        teamSeconds: teamTotals ? (teamTotals.get(id) ?? 0) : null,
-        people: people ? [...(people.get(id) ?? new Map<string, number>()).entries()].map(([name, seconds]) => ({ name, seconds })).sort((a, b) => b.seconds - a.seconds) : null,
+        // Whole seconds: time split between tickets can leave fractions.
+        mySeconds: Math.round(myTotals.get(id) ?? 0),
+        teamSeconds: teamTotals ? Math.round(teamTotals.get(id) ?? 0) : null,
+        people: people ? [...(people.get(id) ?? new Map<string, number>()).entries()].map(([name, seconds]) => ({ name, seconds: Math.round(seconds) })).sort((a, b) => b.seconds - a.seconds) : null,
         running: runningIds.has(id),
       },
     ])

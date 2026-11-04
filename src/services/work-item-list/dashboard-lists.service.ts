@@ -2,7 +2,7 @@ import { AppError } from "../../lib/app-error.js";
 import type { AzureClient } from "../../lib/azure/client.js";
 import { paginate, type Page } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
-import type { BuildSummary, PullRequestSummary, Recommendation, RecommendationCategory } from "../../types/azure.types.js";
+import type { BuildSummary, PullRequestSummary, ReadCompleteness, Recommendation, RecommendationCategory } from "../../types/azure.types.js";
 import { matchesPullRequest, pullRequestFacets, type PullRequestFilters } from "./pull-request-filters.js";
 import {
   buildSignalIndex,
@@ -29,6 +29,8 @@ export interface DashboardLists {
   /** Null when the dashboard could not read this section (the list then reports an error, not "none"). */
   pullRequests: PullRequestSummary[] | null;
   builds: BuildSummary[] | null;
+  /** What each read left out (a cap, projects that could not be read); null when the section was not read. */
+  completeness?: { pullRequests: ReadCompleteness | null; pipelines: ReadCompleteness | null };
 }
 
 const snapshots = new Map<string, { expiresAt: number; lists: DashboardLists }>();
@@ -116,6 +118,7 @@ async function loadLists(client: AzureClient, userId: string, project: { id: str
         recommendations: dashboard.recommendations,
         pullRequests: dashboard.sections.pullRequests.data,
         builds: dashboard.sections.pipelines.data,
+        completeness: dashboard.completeness,
       }
     );
   })();
@@ -214,6 +217,8 @@ export async function getRecommendationPage(
 export interface PullRequestPage extends Page<PullRequestSummary> {
   poolTotal: number;
   facets: ReturnType<typeof pullRequestFacets>;
+  /** What the read left out (pull requests past the cap, projects that could not be read). */
+  completeness?: ReadCompleteness;
 }
 
 /** Any list of pull requests, filtered and paged (Project overview uses it without triage). */
@@ -243,7 +248,13 @@ export async function getDashboardPullRequestPage(
   );
 
   // Filter options count every pull request, hidden ones included (as before paging moved here).
-  return { ...pagePullRequests(pool, input.filters, false, input.page), facets: pullRequestFacets(all, false), hiddenCount, showingHidden };
+  return {
+    ...pagePullRequests(pool, input.filters, false, input.page),
+    facets: pullRequestFacets(all, false),
+    hiddenCount,
+    showingHidden,
+    ...(lists.completeness?.pullRequests ? { completeness: lists.completeness.pullRequests } : {}),
+  };
 }
 
 /* -------------------------------------------------------------- pipeline runs */
@@ -259,6 +270,8 @@ export function buildLabel(build: Pick<BuildSummary, "status" | "result">): stri
 
 export interface PipelineRunPage extends Page<BuildSummary>, HiddenAware {
   facets: { results: FilterOption[] };
+  /** What the read left out (runs past the cap, projects that could not be read). */
+  completeness?: ReadCompleteness;
 }
 
 export async function getDashboardPipelineRunPage(
@@ -272,5 +285,12 @@ export async function getDashboardPipelineRunPage(
   const results = [...new Set(pool.map(buildLabel))].map((value) => ({ value, label: value, count: pool.filter((build) => buildLabel(build) === value).length }));
   const matching = input.result ? pool.filter((build) => buildLabel(build) === input.result) : pool;
 
-  return { ...paginate(matching, input.page), poolTotal: pool.length, hiddenCount, showingHidden, facets: { results } };
+  return {
+    ...paginate(matching, input.page),
+    poolTotal: pool.length,
+    hiddenCount,
+    showingHidden,
+    facets: { results },
+    ...(lists.completeness?.pipelines ? { completeness: lists.completeness.pipelines } : {}),
+  };
 }

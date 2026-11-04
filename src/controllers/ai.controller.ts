@@ -44,7 +44,10 @@ function parse<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
 function aiRoute(label: string, status: number, handler: (req: Request, userId: string) => Promise<unknown>) {
   return async (req: Request, res: Response): Promise<void> => {
     if (!req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 

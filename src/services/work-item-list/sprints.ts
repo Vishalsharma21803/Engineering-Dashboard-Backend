@@ -13,27 +13,39 @@ export interface CurrentSprint {
   finishDate: string | null;
 }
 
+/** Azure answers 404 (CurrentIterationDoesNotExistException) when no iteration covers today, e.g. between sprints: no current sprint, not a failed read. */
+async function currentIterationOrNone(client: AzureClient, projectId: string, teamId: string) {
+  try {
+    return await getCurrentIteration(client, projectId, teamId);
+  } catch (error) {
+    if (error instanceof AzureApiError && error.reason === "AZURE_NOT_FOUND") return null;
+    throw error;
+  }
+}
+
 /**
  * The current sprint of each project, from its default team. A project
- * without one (or that cannot be read) has none: its tickets then only show
- * under "All sprints".
+ * without one (or that cannot be read) has none: its tickets then show in
+ * every view. `failed` names the projects whose sprint could not be read.
  */
-export async function currentSprints(client: AzureClient, projectNames: string[]): Promise<Map<string, CurrentSprint | null>> {
+export async function currentSprints(client: AzureClient, projectNames: string[]): Promise<{ sprints: Map<string, CurrentSprint | null>; failed: string[] }> {
   const limit = createLimiter(4);
+  const failed: string[] = [];
   const entries = await mapWithLimit([...new Set(projectNames)], limit, async (projectName): Promise<[string, CurrentSprint | null]> => {
     try {
       const project = await getProject(client, projectName);
       const team = project.defaultTeam;
-      const iteration = team ? await getCurrentIteration(client, project.id, team.id) : null;
+      const iteration = team ? await currentIterationOrNone(client, project.id, team.id) : null;
       return [projectName, iteration ? { name: iteration.name, path: iteration.path, startDate: iteration.startDate, finishDate: iteration.finishDate } : null];
     } catch (error) {
       if (error instanceof AzureApiError && error.reason === "AZURE_PAT_INVALID") throw error;
       logFallback(`Reading the current sprint of ${projectName} failed; its tickets show in every view`, error);
+      failed.push(projectName);
       return [projectName, null];
     }
   });
 
-  return new Map(entries);
+  return { sprints: new Map(entries), failed: failed.sort() };
 }
 
 /**

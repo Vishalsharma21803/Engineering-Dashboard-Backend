@@ -2,6 +2,8 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { ApprovalTicket, isTicketConsumed } from "../../src/lib/azure/approval-ticket.js";
+import { azureCacheStatsForTests, clearAzureCache, getCached, setCached } from "../../src/lib/azure/cache.js";
+import { createLimiter } from "../../src/lib/azure/limiter.js";
 import { AzureClient, toReleaseManagementUrl } from "../../src/lib/azure/client.js";
 import { AzureApiError } from "../../src/lib/azure/errors.js";
 import { server } from "../setup.js";
@@ -34,6 +36,50 @@ async function reasonOf(promise: Promise<unknown>) {
 
   return "resolved";
 }
+
+describe("Azure read cache", () => {
+  const MB = 1024 * 1024;
+
+  it("keeps the cached text within its size budget, oldest out first, and never caches one huge response", () => {
+    for (let index = 0; index < 16; index += 1) setCached("cred-size", `k${index}`, index, 60_000, 4 * MB);
+    expect(azureCacheStatsForTests()).toEqual({ entries: 16, totalBytes: 64 * MB });
+
+    setCached("cred-size", "k16", 16, 60_000, 4 * MB);
+    expect(getCached("cred-size", "k0")).toBeUndefined();
+    expect(getCached("cred-size", "k16")).toBe(16);
+    expect(azureCacheStatsForTests().totalBytes).toBe(64 * MB);
+
+    setCached("cred-size", "huge", "x", 60_000, 5 * MB);
+    expect(getCached("cred-size", "huge")).toBeUndefined();
+
+    // Replacing an entry counts it once; a value without a size (a flag) costs nothing.
+    setCached("cred-size", "k16", 16, 60_000, 4 * MB);
+    setCached("cred-size", "flag", true, 60_000);
+    expect(azureCacheStatsForTests().totalBytes).toBe(64 * MB);
+
+    clearAzureCache("cred-size");
+    expect(azureCacheStatsForTests()).toEqual({ entries: 0, totalBytes: 0 });
+  });
+
+  it("counts each cached response by the size of its text", async () => {
+    const body = { value: [{ id: "p", name: "Project" }] };
+    server.use(http.get(`${ORG}/_apis/projects`, () => HttpResponse.json(body)));
+    await client("cred-sized").get(["_apis", "projects"]);
+    expect(azureCacheStatsForTests().totalBytes).toBe(JSON.stringify(body).length);
+  });
+
+  it("tells when a request limiter has nothing running or waiting (only then is it dropped)", async () => {
+    const limit = createLimiter(1);
+    let release = () => {};
+    expect(limit.isIdle()).toBe(true);
+    const running = limit(() => new Promise<void>((resolve) => (release = resolve)));
+    const waiting = limit(async () => undefined);
+    expect(limit.isIdle()).toBe(false);
+    release();
+    await Promise.all([running, waiting]);
+    expect(limit.isIdle()).toBe(true);
+  });
+});
 
 describe("AzureClient", () => {
   it("sends Basic auth with the PAT and the api-version", async () => {

@@ -199,7 +199,10 @@ export interface NotificationScope {
   /** The project the dashboard was narrowed to (tickets), or undefined for all of them. */
   projectName: string | undefined;
   workItemsRead: boolean;
-  /** Ticket ids read now (their closed-ticket notification is fixed when it is not a candidate). */
+  /**
+   * Ticket ids read now whose open/closed state Azure confirmed (their closed-ticket notification is fixed when it
+   * is not a candidate). A ticket whose type's states could not be read is left out, so it is re-checked instead.
+   */
   readTicketIds: Set<number>;
   /**
    * Pull requests read now (pr:<repositoryId>:<id>), with whether their comment threads could be counted

@@ -82,7 +82,21 @@ describe("withAiReview", () => {
     ],
     aiReview: null,
   } as unknown as ComplianceResult;
-  const verdict = (ruleId: string, review: string | undefined, value: string) => ({ ruleId, ruleTitle: ruleId, severity: "medium", review, verdict: value, reason: "because", quotes: ["q"], advice: null, fix: null, note: null });
+  const verdict = (ruleId: string, review: string | undefined, value: string, extra: Record<string, unknown> = {}) => ({
+    ruleId,
+    ruleTitle: ruleId,
+    severity: "medium",
+    review,
+    verdict: value,
+    reason: "because",
+    quotes: ["q"],
+    advice: null,
+    fix: null,
+    note: null,
+    codeMessage: "x",
+    verifier: 2,
+    ...extra,
+  });
   const check = (results: unknown[], ticketRev: number | null = 5) => ({ status: "DONE" as const, results, ticketRev, finishedAt: new Date("2025-10-15T00:00:00Z") });
 
   it("clears gaps and to-dos the AI showed are met, and adds failed AI-only rules as to-dos or gaps", () => {
@@ -108,5 +122,18 @@ describe("withAiReview", () => {
 
     const advice = withAiReview(result, check([verdict("STR-08", "quality", "fail"), verdict("ACT-06", "draft", "pass")]), 5);
     expect(advice).toMatchObject({ violations: result.violations, todos: result.todos, cleared: [] });
+  });
+
+  it("ignores results of an older verifier and shows the review as outdated", () => {
+    const old = withAiReview(result, check([verdict("STR-08", "gap", "pass", { verifier: undefined }), verdict("MY-01", "ai-rule", "pass", { verifier: 1 })]), 5);
+    expect(old).toMatchObject({ violations: result.violations, cleared: [], aiReview: { outdated: true } });
+    expect(old.aiPassed).toBeUndefined();
+  });
+
+  it("does not clear a gap when code now describes it differently (a PR merged or got votes without a new revision)", () => {
+    const next = withAiReview(result, check([verdict("STR-08", "gap", "pass", { codeMessage: "PR 7 is active" }), verdict("ACT-06", "gap", "pass")]), 5);
+    expect(next.violations.map((violation) => violation.ruleId)).toEqual(["STR-08"]);
+    expect(next.cleared.map((rule) => rule.ruleId)).toEqual(["ACT-06"]);
+    expect(next.aiReview?.outdated).toBe(true);
   });
 });

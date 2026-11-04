@@ -13,6 +13,7 @@ import notificationRoutes from "./routes/notification.routes.js";
 import triageRoutes from "./routes/triage.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import sopRoutes from "./routes/sop.routes.js";
+import { refuseWhileShuttingDown, trackRequests } from "./lib/lifecycle.js";
 import { prisma } from "./lib/prisma.js";
 import { logFailedRequests, noteFailureCause } from "./middleware/failure-log.middleware.js";
 
@@ -36,11 +37,34 @@ function handleUnexpectedError(error: unknown, _req: Request, res: Response, nex
     return;
   }
 
-  // Logged with its stack by logFailedRequests.
+  // Logged (with the stack when unexpected) by logFailedRequests.
   noteFailureCause(res, error);
+
+  if (type === "encoding.unsupported" || type === "charset.unsupported") {
+    res.status(415).json({ message: "The request body's encoding or charset is not supported", reason: "UNSUPPORTED_MEDIA_TYPE" });
+    return;
+  }
+
+  if (type === "request.aborted") {
+    res.status(400).json({ message: "The request was cancelled before its body arrived", reason: "REQUEST_ABORTED" });
+    return;
+  }
+
+  if (type === "request.size.invalid") {
+    res.status(400).json({ message: "The request body does not match its Content-Length", reason: "INVALID_BODY" });
+    return;
+  }
+
+  // Client errors raised by Express or its parsers (http-errors) carry a message meant for the caller.
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    const exposed = (error as { expose?: unknown }).expose === true && error instanceof Error && error.message;
+    res.status(status).json({ message: exposed || "The request could not be processed", reason: "BAD_REQUEST" });
+    return;
+  }
+
   res
-    .status(typeof status === "number" && status >= 400 && status < 600 ? status : 500)
-    .json({ message: "Something went wrong", reason: "INTERNAL_ERROR" });
+    .status(typeof status === "number" && status >= 500 && status < 600 ? status : 500)
+    .json({ message: "The request failed because of an unexpected server error. The details are in the server log.", reason: "INTERNAL_ERROR" });
 }
 
 export interface AppOptions {
@@ -53,6 +77,8 @@ export interface AppOptions {
 export function createApp(options: AppOptions = {}) {
   const app = express();
 
+  // Counted from the very first middleware, so shutdown waits for every running request.
+  app.use(trackRequests);
   app.disable("x-powered-by");
   // Security headers (HSTS, nosniff, frame and referrer policies, a strict CSP). The API serves only JSON.
   app.use(helmet());
@@ -76,6 +102,7 @@ export function createApp(options: AppOptions = {}) {
       credentials: true,
     })
   );
+  app.use(refuseWhileShuttingDown);
   if (options.logFailures ?? true) app.use(logFailedRequests);
   app.use(express.json());
   app.use(cookieParser());
@@ -106,6 +133,10 @@ export function createApp(options: AppOptions = {}) {
   app.use("/api/sop", sopRoutes);
   app.use("/api/solidtime", solidtimeRoutes);
 
+  // Only under /api: anything mounted after createApp (e.g. the e2e server's test routes) still answers.
+  app.use("/api", (req: Request, res: Response) => {
+    res.status(404).json({ message: `No API endpoint ${req.method} ${req.baseUrl}${req.path}`, reason: "ROUTE_NOT_FOUND" });
+  });
   app.use(handleUnexpectedError);
 
   return app;

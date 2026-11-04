@@ -103,7 +103,7 @@ describe("My work pagination", () => {
         // Judged on the ticket as it is now (a newer ticket makes the review outdated).
         ticketRev: fake.workItems.get(101)!.rev,
         finishedAt: new Date(),
-        results: [{ ruleId: "T-05", ruleTitle: "Approach is described", severity: "medium", review: "ai-rule", verdict: "fail", reason: "No plan.", advice: null, quotes: [], fix: null, note: null }],
+        results: [{ ruleId: "T-05", ruleTitle: "Approach is described", severity: "medium", review: "ai-rule", verdict: "fail", reason: "No plan.", advice: null, quotes: [], fix: null, note: null, codeMessage: null, verifier: 2 }],
       },
     });
 

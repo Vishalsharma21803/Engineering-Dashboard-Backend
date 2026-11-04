@@ -82,7 +82,10 @@ function azureRead(label: string, handler: AzureHandler) {
     const azure = req.azure;
 
     if (!azure || !req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 
@@ -104,14 +107,14 @@ function azureRead(label: string, handler: AzureHandler) {
 
 const projectParam = (req: Request) => parse(azureProjectIdSchema, req.params.projectId);
 
-async function projectIdsFor(client: AzureClient, projectId: string | undefined) {
+async function projectsFor(client: AzureClient, projectId: string | undefined) {
   if (projectId !== undefined) {
     const project = await getProject(client, projectId);
-    return [project.id];
+    return [{ id: project.id, name: project.name }];
   }
 
   const { projects } = await listProjects(client);
-  return projects.slice(0, MAX_DASHBOARD_PROJECTS).map((project) => project.id);
+  return projects.slice(0, MAX_DASHBOARD_PROJECTS).map((project) => ({ id: project.id, name: project.name }));
 }
 
 export const getCapabilitiesController = azureRead(
@@ -141,13 +144,13 @@ export const listWorkItemsController = azureRead(
       projectName = (await getProject(client, query.projectId)).name;
     }
 
-    return {
-      workItems: await listAssignedWorkItems(client, {
-        projectName,
-        scope: query.state,
-        assignee: query.assignee,
-      }),
-    };
+    const { items: workItems, truncated } = await listAssignedWorkItems(client, {
+      projectName,
+      scope: query.state,
+      assignee: query.assignee,
+    });
+
+    return { workItems, truncated };
   }
 );
 
@@ -167,7 +170,8 @@ export const listComplianceController = azureRead(
     const projectName =
       projectId === undefined ? undefined : (await getProject(client, projectId)).name;
 
-    return { items: await listCompliance(client, userId, projectName) };
+    const { results, truncated } = await listCompliance(client, userId, projectName);
+    return { items: results, truncated };
   }
 );
 
@@ -176,12 +180,12 @@ export const listPullRequestsController = azureRead(
   async (req, client) => {
     const { projectId, role, page, ...filters } = parse(pullRequestsQuerySchema, req.query);
     const identity = await getIdentity(client);
-    const projectIds = await projectIdsFor(client, projectId);
-    const pullRequests = await listMyPullRequests(client, identity, projectIds, role);
+    const projects = await projectsFor(client, projectId);
+    const { pullRequests, completeness } = await listMyPullRequests(client, identity, projects, role);
 
     // Filtered and paged here, 10 per page; "everyone" lists the whole team's pull requests.
     return {
-      pullRequests: pagePullRequests(pullRequests, filters, role === "everyone", page),
+      pullRequests: { ...pagePullRequests(pullRequests, filters, role === "everyone", page), completeness },
     };
   }
 );

@@ -1,4 +1,5 @@
 import { SolidtimeApiError, reasonForSolidtimeStatus, solidtimeErrorText } from "./errors.js";
+import { assertPublicHost } from "./address-guard.js";
 import { networkFailure } from "../log-fallback.js";
 
 const TIMEOUT_MS = 15_000;
@@ -40,6 +41,15 @@ function toSearch(query: Query): string {
 
   const text = search.toString();
   return text ? `?${text}` : "";
+}
+
+/** Network failures that happen before the request reaches Solidtime (nothing can have been applied). */
+const NOT_CONNECTED_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"]);
+
+/** Whether a failed fetch may have delivered the request: only a failure to connect at all proves it did not. */
+function mayHaveBeenSent(error: unknown): boolean {
+  const code = error instanceof Error ? (error as { cause?: { code?: unknown } }).cause?.code : undefined;
+  return !(typeof code === "string" && NOT_CONNECTED_CODES.has(code));
 }
 
 /** Thrown when a write may have reached Solidtime before failing, so the outcome is unknown. */
@@ -124,6 +134,9 @@ export class SolidtimeClient {
   }
 
   async #send<T>(method: string, url: string, body: unknown, retryOnLimit: boolean): Promise<T> {
+    // Outside the try: a refused or unresolvable address is never "may have been sent".
+    await assertPublicHost(new URL(url).hostname);
+
     let response: Response;
 
     try {
@@ -140,8 +153,8 @@ export class SolidtimeClient {
       });
     } catch (error) {
       const failure = new SolidtimeApiError("SOLIDTIME_UPSTREAM_ERROR", null, networkFailure(error));
-      // A write that timed out may still have been applied.
-      throw method === "GET" ? failure : new SolidtimeWriteError(failure, error instanceof Error && error.name === "TimeoutError");
+      // A write that timed out or lost its connection may still have been applied; one that never connected was not.
+      throw method === "GET" ? failure : new SolidtimeWriteError(failure, mayHaveBeenSent(error));
     }
 
     if (response.status === 429 && retryOnLimit) {
@@ -157,7 +170,16 @@ export class SolidtimeClient {
       return undefined as T;
     }
 
-    const text = await response.text();
+    let text: string;
+
+    try {
+      text = await response.text();
+    } catch (error) {
+      const failure = new SolidtimeApiError("SOLIDTIME_UPSTREAM_ERROR", response.status, networkFailure(error));
+      // The answer was cut off: a write Solidtime accepted or failed inside may have been applied.
+      throw method === "GET" ? failure : new SolidtimeWriteError(failure, response.ok || response.status >= 500 || response.status === 408);
+    }
+
     let parsed: unknown = null;
 
     try {
@@ -174,8 +196,8 @@ export class SolidtimeClient {
         solidtimeErrorText(parsed),
         Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null
       );
-      // Solidtime answered with an error: the write was not applied.
-      throw method === "GET" ? failure : new SolidtimeWriteError(failure, false);
+      // A refusal (4xx) was not applied; a server or gateway error (5xx, 408) may have been, after the write ran.
+      throw method === "GET" ? failure : new SolidtimeWriteError(failure, response.status >= 500 || response.status === 408);
     }
 
     if (parsed === null) {

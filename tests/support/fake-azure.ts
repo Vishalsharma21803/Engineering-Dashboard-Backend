@@ -343,6 +343,12 @@ export function createFakeAzure() {
     failNextWrite: null as null | number,
     /** Make every write time out (connection dropped after send). */
     dropWrites: false,
+    /** Work item types whose states endpoint fails (503), e.g. "Task". */
+    failStatesFor: new Set<string>(),
+    /** Projects (by name) whose pull request searches fail (500). */
+    failPullRequestsIn: new Set<string>(),
+    /** Make the team iterations (current sprint) endpoint fail (500). */
+    failSprints: false,
     workItems,
     comments,
     updates,
@@ -509,6 +515,7 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
     }
 
     if (rest[0] === "work" && rest[1] === "teamsettings") {
+      if (fake.failSprints) return json({ message: "Server error" }, 500);
       return json({ value: [{ id: "it-1", name: "Sprint 12", path: "Alpha\\Sprint 12", attributes: { startDate: ago(5), finishDate: ago(-5) } }] });
     }
 
@@ -531,8 +538,9 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
           .filter((item) => !project || item.fields["System.TeamProject"] === project.name)
           .filter((item) => !openOnly || !["Closed", "Done", "Removed"].includes(String(item.fields["System.State"])))
           .map((item) => ({ id: item.id }));
+        const top = url.searchParams.get("$top");
 
-        return json({ workItems: ids });
+        return json({ workItems: top === null ? ids : ids.slice(0, Number(top)) });
       }
 
       if (rest[1] === "workitemsbatch" && method === "POST") {
@@ -548,6 +556,7 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
         }
 
         if (rest[3] === "states") {
+          if (fake.failStatesFor.has(type)) return json({ message: "Service unavailable" }, 503);
           return STATES[type] ? json({ value: STATES[type] }) : notFound();
         }
 
@@ -651,6 +660,12 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
         const status = url.searchParams.get("searchCriteria.status");
         const creatorId = url.searchParams.get("searchCriteria.creatorId");
         const reviewerId = url.searchParams.get("searchCriteria.reviewerId");
+        const skip = Number(url.searchParams.get("$skip") ?? 0);
+        const top = url.searchParams.get("$top");
+
+        if (project && fake.failPullRequestsIn.has(project.name)) {
+          return json({ message: "Server error" }, 500);
+        }
 
         const matches = fake.pullRequests
           .filter((pr) => !project || pr.repository.project.id === project.id)
@@ -659,7 +674,7 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
           .filter((pr) => !reviewerId || (pr.reviewers ?? []).some((reviewer) => reviewer.id === reviewerId))
           .map(({ threads: _threads, workItemIds: _ids, ...rawPr }) => rawPr);
 
-        return json({ value: matches });
+        return json({ value: top === null ? matches.slice(skip) : matches.slice(skip, skip + Number(top)) });
       }
     }
 
@@ -686,7 +701,10 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
           };
         };
 
-        if (rest.length === 2) return json({ value: fake.definitions.map(withLatest) });
+        if (rest.length === 2) {
+          const top = url.searchParams.get("$top");
+          return json({ value: (top === null ? fake.definitions : fake.definitions.slice(0, Number(top))).map(withLatest) });
+        }
 
         const definition = fake.definitions.find((candidate) => candidate.id === Number(rest[2]));
         return definition ? json(withLatest(definition)) : notFound();
@@ -709,11 +727,13 @@ export function fakeAzureHandlers(fake: FakeAzure): HttpHandler[] {
         if (rest.length === 2) {
           const definitionsFilter = url.searchParams.get("definitions");
           const statusFilter = url.searchParams.get("statusFilter")?.split(",");
+          const requestedFor = url.searchParams.get("requestedFor");
           const top = Number(url.searchParams.get("$top") ?? 50);
 
           const matches = fake.builds
             .filter((candidate) => !definitionsFilter || String(candidate.definition?.id) === definitionsFilter)
             .filter((candidate) => !statusFilter || statusFilter.includes(candidate.status ?? ""))
+            .filter((candidate) => !requestedFor || candidate.requestedFor?.id === requestedFor)
             .sort((a, b) => (b.queueTime ?? "").localeCompare(a.queueTime ?? ""))
             .slice(0, top);
 

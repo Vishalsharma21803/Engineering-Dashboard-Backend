@@ -1,3 +1,4 @@
+import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 import { encryptSecret } from "../lib/encryption.js";
 import { Platform, ValidationStatus } from "../generated/prisma/enums.js";
@@ -7,6 +8,7 @@ import type {
   UpdateCredentialInput,
 } from "../types/credential.types.js";
 import { clearAzureCache } from "../lib/azure/cache.js";
+import { forgetCredentialLimiter } from "../lib/azure/client.js";
 import { forgetDashboardLists } from "./work-item-list/dashboard-lists.service.js";
 import { forgetMyWorkSnapshots } from "./work-item-list/my-work.service.js";
 
@@ -47,7 +49,7 @@ export async function createCredential(
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new Error("CREDENTIAL_ALREADY_EXISTS");
+      throw new AppError(409, "CREDENTIAL_ALREADY_EXISTS", "A credential for this Azure DevOps organization already exists");
     }
 
     throw error;
@@ -57,6 +59,7 @@ export async function createCredential(
 /** A new organization or token reads differently: nothing cached under the old one may be served. */
 function forgetCredentialReads(userId: string, credentialId: string): void {
   clearAzureCache(credentialId);
+  forgetCredentialLimiter(credentialId);
   forgetMyWorkSnapshots(userId, credentialId);
   forgetDashboardLists(userId, credentialId);
 }
@@ -116,7 +119,7 @@ export async function updateCredential(
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new Error("CREDENTIAL_ALREADY_EXISTS");
+      throw new AppError(409, "CREDENTIAL_ALREADY_EXISTS", "A credential for this Azure DevOps organization already exists");
     }
 
     throw error;

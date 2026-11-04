@@ -48,6 +48,8 @@ export interface WriteOptions extends RequestOptions {
 export interface AzurePage<T> {
   data: T;
   continuationToken: string | null;
+  /** Length of the response text (what caching it costs); 0 when there was none. */
+  sizeBytes?: number;
 }
 
 export interface AzureClientConfig {
@@ -63,6 +65,16 @@ export interface AzureClientConfig {
 }
 
 const limiters = new Map<string, Limiter>();
+
+/**
+ * Drops a credential's request limiter (after it is changed or removed) so the map does not grow
+ * forever; kept while requests are running or waiting, which still need it.
+ */
+export function forgetCredentialLimiter(credentialId: string): void {
+  if (limiters.get(credentialId)?.isIdle() ?? false) {
+    limiters.delete(credentialId);
+  }
+}
 
 function limiterFor(credentialId: string): Limiter {
   let limiter = limiters.get(credentialId);
@@ -283,7 +295,7 @@ export class AzureClient {
     const page = await this.#readWithRetry<T>(method, url, body);
 
     if (ttl > 0) {
-      setCached(this.credentialId, cacheKey, page, ttl);
+      setCached(this.credentialId, cacheKey, page, ttl, page.sizeBytes ?? 0);
     }
 
     return page;
@@ -422,7 +434,8 @@ export class AzureClient {
       }
 
       try {
-        return { data: (await response.json()) as T, continuationToken };
+        const text = await response.text();
+        return { data: JSON.parse(text) as T, continuationToken, sizeBytes: text.length };
       } catch {
         if (isWrite) {
           return { data: undefined as T, continuationToken };

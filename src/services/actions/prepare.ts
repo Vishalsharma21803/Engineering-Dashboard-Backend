@@ -1,8 +1,10 @@
 import { AppError } from "../../lib/app-error.js";
 import type { AzureClient } from "../../lib/azure/client.js";
+import { AzureApiError } from "../../lib/azure/errors.js";
 import type { RawRepository, RawWorkItem } from "../../lib/azure/azure-api.types.js";
 import { htmlToText } from "../../lib/html-to-text.js";
 import { hasPlaceholder } from "../../lib/placeholders.js";
+import { redactSecrets } from "../../lib/redact.js";
 import type { ActionVariant, EditableTextField, UpdatableWorkField } from "../../schemas/action.schema.js";
 import type { StateCategory } from "../../types/azure.types.js";
 import { asNumber, asString, stripRefPrefix } from "../azure/mappers.js";
@@ -143,6 +145,78 @@ export function pickClosedState(
     completed[0]?.name ??
     null
   );
+}
+
+export const LINKED_PRS_UNREADABLE = "Linked pull requests could not be checked; nothing was changed. Try again.";
+
+/**
+ * Closing after merge is allowed: the project's SOP has no Testing stage after merge, the ticket has linked
+ * pull requests, and every one not abandoned is completed. Checked when proposing and again before the write.
+ * A linked pull request that cannot be read (404, or the read fails) may not be completed, so it always blocks
+ * the close: when proposing, naming the pull request; `refuseUnreadable` (before the write) with "try again".
+ */
+export async function assertCloseAfterMerge(client: AzureClient, workItem: RawWorkItem, options: { refuseUnreadable?: boolean } = {}): Promise<void> {
+  const projectName = workItemProjectName(workItem);
+  const links = extractLinks(workItem).pullRequests;
+
+  if (!(await isCloseAfterMergeAllowed(projectName))) {
+    throw invalid(
+      "CLOSE_AFTER_MERGE_DISABLED",
+      `${projectName} has a Testing stage in the SOP rulebook; merged work moves to Testing, not Closed`
+    );
+  }
+
+  if (links.length === 0) {
+    throw invalid("NO_LINKED_PRS", "The work item has no linked pull requests");
+  }
+
+  const read = await Promise.all(
+    links.map(async (link) => {
+      try {
+        const pr = (await getLinkedPullRequests(client, [link]))[0]!;
+        // getLinkedPullRequests answers a 404 (deleted, or not visible to the PAT) as "unavailable" instead of throwing.
+        return pr.status === "unavailable" ? { ...pr, missing: true } : pr;
+      } catch (error) {
+        // The PAT itself refused: kept as it is, so the credential is marked invalid.
+        if (!(error instanceof AzureApiError) || error.reason === "AZURE_PAT_INVALID") {
+          throw error;
+        }
+
+        console.warn(
+          `Reading pull request ${link.pullRequestId} linked to #${workItem.id} failed; closing after merge is refused: ${redactSecrets(
+            `${error.message}${error.upstreamMessage ? ` · Azure details: ${error.upstreamMessage}` : ""}`
+          )}`
+        );
+        return { pullRequestId: link.pullRequestId, status: "unavailable", missing: error.reason === "AZURE_NOT_FOUND" };
+      }
+    })
+  );
+  const unreadable = read.filter((pr) => pr.status === "unavailable");
+
+  if (unreadable.length > 0) {
+    const names = (prs: typeof unreadable) => `${prs.length === 1 ? "Pull request" : "Pull requests"} ${prs.map((pr) => pr.pullRequestId).join(", ")}`;
+    // Gone (404) needs the user to act; any other failure may pass, so it only asks to try again.
+    const missing = unreadable.filter((pr) => "missing" in pr && pr.missing);
+    const failed = unreadable.filter((pr) => !("missing" in pr && pr.missing));
+    throw new AppError(
+      409,
+      "ACTION_LINKED_PRS_UNREADABLE",
+      options.refuseUnreadable
+        ? LINKED_PRS_UNREADABLE
+        : [
+            missing.length > 0 ? `${names(missing)} could not be found (deleted, or not visible to your PAT). Close the ticket in Azure DevOps yourself or unlink the PR.` : null,
+            failed.length > 0 ? `${names(failed)} could not be checked right now; nothing was proposed. Try again in a moment.` : null,
+          ]
+            .filter(Boolean)
+            .join(" ")
+    );
+  }
+
+  const linked = read.filter((pr) => pr.status !== "abandoned");
+
+  if (linked.length === 0 || linked.some((pr) => pr.status !== "completed")) {
+    throw invalid("PRS_NOT_MERGED", "Not every linked pull request has been completed");
+  }
 }
 
 export async function prepareAction(
@@ -374,26 +448,7 @@ export async function prepareAction(
         action.target.workItemId
       );
       const projectName = workItemProjectName(workItem);
-      const links = extractLinks(workItem).pullRequests;
-
-      if (!(await isCloseAfterMergeAllowed(projectName))) {
-        throw invalid(
-          "CLOSE_AFTER_MERGE_DISABLED",
-          `${projectName} has a Testing stage in the SOP rulebook; merged work moves to Testing, not Closed`
-        );
-      }
-
-      if (links.length === 0) {
-        throw invalid("NO_LINKED_PRS", "The work item has no linked pull requests");
-      }
-
-      const linked = (await getLinkedPullRequests(client, links)).filter(
-        (pr) => pr.status !== "abandoned" && pr.status !== "unavailable"
-      );
-
-      if (linked.length === 0 || linked.some((pr) => pr.status !== "completed")) {
-        throw invalid("PRS_NOT_MERGED", "Not every linked pull request has been completed");
-      }
+      await assertCloseAfterMerge(client, workItem);
 
       const type = workItemType(workItem);
       const [states, supported] = await Promise.all([

@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { HttpResponse, http } from "msw";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { EXECUTION_STALE_MS, recoverInterruptedActions } from "../../src/services/actions/action.service.js";
-import { ALPHA_REPO, writeRequests, type FakeAzure } from "../support/fake-azure.js";
+import { ALPHA, ALPHA_REPO, writeRequests, type FakeAzure } from "../support/fake-azure.js";
 import { ALPHA_RULEBOOK, ALPHA_SETTINGS, useAlphaRulebook } from "../support/test-rulebook.js";
 import {
   azurePath,
@@ -12,6 +13,7 @@ import {
   signIn,
   type Agent,
 } from "../support/harness.js";
+import { server } from "../setup.js";
 import { myWorkRows } from "../support/my-work.js";
 
 let fake: FakeAzure;
@@ -354,6 +356,67 @@ describe("executing each action kind", () => {
     });
   });
 
+  it("refuses to close when an unmerged pull request was linked since the proposal, writing nothing", async () => {
+    const action = await propose({ kind: "WORK_ITEM_CLOSE_AFTER_MERGE", target: { projectId: "Alpha", workItemId: 103 }, params: {} });
+    const ticket = fake.workItems.get(103)!;
+    ticket.relations = [...(ticket.relations ?? []), { rel: "ArtifactLink", url: `vstfs:///Git/PullRequestId/${ALPHA.id}%2F${ALPHA_REPO.id}%2F1`, attributes: { name: "Pull Request" } }];
+
+    const response = await approve(action).expect(409);
+    expect(response.body).toMatchObject({ reason: "ACTION_STALE", action: { status: "FAILED", errorCode: "ACTION_STALE" } });
+    expect(response.body.message).toBe("A linked pull request is not completed (it was linked or reopened since the proposal). Nothing was changed.");
+    expect(writeRequests(fake)).toEqual([]);
+    expect(fake.workItems.get(103)?.fields["System.State"]).toBe("Resolved");
+  });
+
+  it("refuses to close when a linked pull request cannot be read at execution, writing nothing", async () => {
+    const quiet = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const linkTo = (pullRequestId: number) => ({ rel: "ArtifactLink", url: `vstfs:///Git/PullRequestId/${ALPHA.id}%2F${ALPHA_REPO.id}%2F${pullRequestId}`, attributes: { name: "Pull Request" } });
+
+    // A link to a pull request Azure no longer shows (404).
+    const missing = await propose({ kind: "WORK_ITEM_CLOSE_AFTER_MERGE", target: { projectId: "Alpha", workItemId: 103 }, params: {} });
+    const ticket = fake.workItems.get(103)!;
+    const relations = ticket.relations ?? [];
+    ticket.relations = [...relations, linkTo(9999)];
+    const gone = await approve(missing).expect(409);
+    expect(gone.body).toMatchObject({ reason: "ACTION_LINKED_PRS_UNREADABLE", message: "Linked pull requests could not be checked; nothing was changed. Try again." });
+
+    // The pull request read fails outright.
+    ticket.relations = relations;
+    const failing = await propose({ kind: "WORK_ITEM_CLOSE_AFTER_MERGE", target: { projectId: "Alpha", workItemId: 103 }, params: {} });
+    server.use(http.get(/\/pullrequests\/\d+$/, () => HttpResponse.json({ message: "Server error" }, { status: 500 })));
+    const down = await approve(failing).expect(409);
+    expect(down.body).toMatchObject({ reason: "ACTION_LINKED_PRS_UNREADABLE", action: { status: "FAILED", errorCode: "ACTION_LINKED_PRS_UNREADABLE" } });
+
+    expect(writeRequests(fake)).toEqual([]);
+    expect(fake.workItems.get(103)?.fields["System.State"]).toBe("Resolved");
+    quiet.mockRestore();
+  });
+
+  it("refuses to propose closing when a linked pull request cannot be read, naming it", async () => {
+    const quiet = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const ticket = fake.workItems.get(103)!;
+    const relations = ticket.relations ?? [];
+    const body = { credentialId, kind: "WORK_ITEM_CLOSE_AFTER_MERGE", target: { projectId: "Alpha", workItemId: 103 }, params: {} };
+
+    // Deleted, or in a repository the PAT cannot see (404).
+    ticket.relations = [...relations, { rel: "ArtifactLink", url: `vstfs:///Git/PullRequestId/${ALPHA.id}%2F${ALPHA_REPO.id}%2F9999`, attributes: { name: "Pull Request" } }];
+    const gone = await agent.post("/api/actions").send(body).expect(409);
+    expect(gone.body).toEqual({
+      reason: "ACTION_LINKED_PRS_UNREADABLE",
+      message: "Pull request 9999 could not be found (deleted, or not visible to your PAT). Close the ticket in Azure DevOps yourself or unlink the PR.",
+    });
+
+    // The read fails outright.
+    ticket.relations = relations;
+    server.use(http.get(/\/pullrequests\/\d+$/, () => HttpResponse.json({ message: "Server error" }, { status: 500 })));
+    const down = await agent.post("/api/actions").send(body).expect(409);
+    expect(down.body.reason).toBe("ACTION_LINKED_PRS_UNREADABLE");
+    // A passing failure must not suggest unlinking a pull request that is fine.
+    expect(down.body.message).toMatch(/^Pull request \d+ could not be checked right now; nothing was proposed\. Try again in a moment\.$/);
+    expect(await prisma.proposedAction.count()).toBe(0);
+    quiet.mockRestore();
+  });
+
   it("refuses to close after merge when the project's SOP has a Testing stage", async () => {
     await useAlphaRulebook(ALPHA_RULEBOOK, { stages: { ...ALPHA_SETTINGS.stages, testing: ["Testing"] } });
 
@@ -628,32 +691,99 @@ describe("hardening", () => {
 });
 
 describe("interrupted executions and fresh lists", () => {
+  /** Approved long ago, and (unless `alive`) no sign of progress since then either. */
+  async function executingSince(actionId: string, now: Date, alive = false) {
+    const long = new Date(now.getTime() - EXECUTION_STALE_MS - 1000);
+    await prisma.proposedAction.update({ where: { id: actionId }, data: { status: "EXECUTING", decidedAt: long } });
+    if (!alive) await prisma.$executeRaw`UPDATE "ProposedAction" SET "updatedAt" = ${long} WHERE "id" = ${actionId}`;
+  }
+
   it("marks actions cut off mid-execution as failed with an audit entry, and leaves running ones alone", async () => {
     const old = await propose(comment("old"));
     const recent = await propose(comment("recent"));
+    const progressing = await propose(comment("long batch, still making progress"));
     const now = new Date();
-    await prisma.proposedAction.update({ where: { id: old.id }, data: { status: "EXECUTING", decidedAt: new Date(now.getTime() - EXECUTION_STALE_MS - 1000) } });
+    await executingSince(old.id, now);
+    await executingSince(progressing.id, now, true);
     await prisma.proposedAction.update({ where: { id: recent.id }, data: { status: "EXECUTING", decidedAt: new Date(now.getTime() - 60_000) } });
 
     expect(await recoverInterruptedActions(now)).toBe(1);
     expect(await prisma.proposedAction.findUnique({ where: { id: old.id } })).toMatchObject({ status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", result: { writeSent: "unknown" } });
     expect(await auditEvents(old.id)).toEqual(["PROPOSED", "EXECUTION_FAILED"]);
     expect((await prisma.proposedAction.findUnique({ where: { id: recent.id } }))?.status).toBe("EXECUTING");
+    expect((await prisma.proposedAction.findUnique({ where: { id: progressing.id } }))?.status).toBe("EXECUTING");
     // Run again: nothing more to do.
     expect(await recoverInterruptedActions(now)).toBe(0);
   });
 
-  it("keeps the interrupted outcome if a very long run finishes after the sweep", async () => {
+  it("never ends a run this process is still executing, however old it looks", async () => {
     const action = await propose(comment("slow"));
-    // The sweep ends the run while Azure is still answering.
+    let recoveredMeanwhile: number | null = null;
     fake.beforeWrite = async () => {
-      await prisma.proposedAction.update({ where: { id: action.id }, data: { decidedAt: new Date(Date.now() - EXECUTION_STALE_MS - 1000) } });
-      await recoverInterruptedActions();
+      await executingSince(action.id, new Date());
+      recoveredMeanwhile = await recoverInterruptedActions();
     };
 
     const response = await approve(action);
     expect(response.status).toBe(200);
-    expect(response.body.action).toMatchObject({ status: "FAILED", errorCode: "EXECUTION_INTERRUPTED" });
+    expect(recoveredMeanwhile).toBe(0);
+    expect(response.body.action).toMatchObject({ status: "SUCCEEDED" });
+  });
+
+  it("records a change as succeeded when it finishes after another process ended it as interrupted", async () => {
+    const action = await propose(comment("slow"));
+    // Another Cockpit process's sweep ends the run while Azure is still answering.
+    fake.beforeWrite = async () => {
+      await prisma.proposedAction.update({
+        where: { id: action.id },
+        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Cockpit stopped before this change finished.", result: { writeSent: "unknown" } },
+      });
+    };
+
+    const response = await approve(action);
+    expect(response.status).toBe(200);
+    expect(response.body.action).toMatchObject({ status: "SUCCEEDED", errorCode: null, errorMessage: null, result: { workItemId: 102 } });
+    expect(await auditEvents(action.id)).toEqual(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_SUCCEEDED"]);
+  });
+
+  it("keeps the run guarded until its success is written", async () => {
+    const action = await propose(comment("slow"));
+    let written = false;
+    let recoveredMeanwhile: number | null = null;
+    fake.beforeWrite = async () => {
+      written = true;
+    };
+    // The next transaction after the write is the one recording the success: a sweep runs right before it.
+    const transaction = prisma.$transaction.bind(prisma);
+    const spy = vi.spyOn(prisma, "$transaction").mockImplementation((async (...args: Parameters<typeof prisma.$transaction>) => {
+      if (written && recoveredMeanwhile === null) {
+        await executingSince(action.id, new Date());
+        recoveredMeanwhile = await recoverInterruptedActions();
+      }
+      return transaction(...(args as [never]));
+    }) as typeof prisma.$transaction);
+
+    const response = await approve(action);
+    spy.mockRestore();
+    expect(response.status).toBe(200);
+    expect(recoveredMeanwhile).toBe(0);
+    expect(await auditEvents(action.id)).toEqual(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_SUCCEEDED"]);
+  });
+
+  it("records the real failure when a run another process ended as interrupted then fails", async () => {
+    const action = await propose(comment("refused"));
+    fake.missingScopes.add("workWrite");
+    fake.beforeWrite = async () => {
+      await prisma.proposedAction.update({
+        where: { id: action.id },
+        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Cockpit stopped before this change finished.", result: { writeSent: "unknown" } },
+      });
+    };
+
+    const response = await approve(action).expect(403);
+    // The stored row says what the answer says.
+    expect(response.body).toMatchObject({ reason: "AZURE_INSUFFICIENT_SCOPE", action: { status: "FAILED", errorCode: "AZURE_INSUFFICIENT_SCOPE" } });
+    expect(await prisma.proposedAction.findUnique({ where: { id: action.id } })).toMatchObject({ status: "FAILED", errorCode: "AZURE_INSUFFICIENT_SCOPE" });
     expect(await auditEvents(action.id)).toEqual(["PROPOSED", "APPROVED", "EXECUTION_STARTED", "EXECUTION_FAILED"]);
   });
 

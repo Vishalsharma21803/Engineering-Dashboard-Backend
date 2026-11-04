@@ -23,7 +23,10 @@ export async function requireSopAdmin(req: Request, res: Response, next: NextFun
     : null;
 
   if (!user) {
-    res.status(401).json({ message: "Authentication required" });
+    res.status(401).json({
+      message: "Authentication required",
+      reason: "AUTH_REQUIRED",
+    });
     return;
   }
 

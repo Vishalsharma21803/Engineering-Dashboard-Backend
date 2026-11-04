@@ -4,9 +4,11 @@ import { createClaudeClient, toClaudeError } from "./claude.js";
 import { OPENCODE_CHAT_PATH, openCodeFetch, toOpenCodeError } from "./opencode.js";
 import { openRouterFetch, toOpenRouterError } from "./openrouter.js";
 import type { TokenUsage } from "./pricing.js";
-import { AiProviderError, type AiEffort, type AiProvider, type BilledUsage } from "./types.js";
+import { networkFailure } from "../log-fallback.js";
+import { AiProviderError, providerMessage, type AiEffort, type AiProvider, type BilledUsage } from "./types.js";
 
-const MAX_OUTPUT_TOKENS = 16_000;
+/** The longest answer a call may produce (also the worst case the spend reservation assumes). */
+export const MAX_OUTPUT_TOKENS = 16_000;
 const EFFORT: Record<AiEffort, "low" | "medium" | "high"> = { LOW: "low", MEDIUM: "medium", HIGH: "high" };
 
 /**
@@ -108,9 +110,32 @@ async function judgeWithClaude<T>(request: JudgeRequest<T>): Promise<JudgeRespon
 }
 
 interface ChatCompletion {
+  /** OpenRouter reports some provider failures inside a 200 answer. */
+  error?: { code?: number | string; message?: string };
   model?: string;
   choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null; refusal?: string | null } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
+}
+
+/** A 200 answer that carries an error (or no choices): the reason comes from the error's code. */
+function chatCompletionError(payload: ChatCompletion, billed: BilledUsage | null): AiProviderError {
+  const code = Number(payload.error?.code);
+  const detail = providerMessage(JSON.stringify(payload));
+  const diagnosis = payload.error ? null : "the provider's reply had no answer in it";
+
+  switch (code) {
+    case 429:
+      return new AiProviderError("AI_RATE_LIMITED", null, billed, detail, diagnosis);
+    case 402:
+      return new AiProviderError("AI_NO_CREDIT", null, billed, detail, diagnosis);
+    case 401:
+      return new AiProviderError("AI_KEY_INVALID", null, billed, detail, diagnosis);
+    case 400:
+    case 422:
+      return new AiProviderError("AI_REQUEST_REJECTED", null, billed, detail, diagnosis);
+    default:
+      return new AiProviderError("AI_UPSTREAM_ERROR", null, billed, detail, diagnosis);
+  }
 }
 
 /** OpenAI-compatible chat completions with schema-checked JSON (OpenRouter, OpenCode). */
@@ -142,7 +167,12 @@ async function judgeWithChatCompletions<T>(
 
   try {
     payload = (await response.json()) as ChatCompletion;
-  } catch {
+  } catch (error) {
+    // The answer stopped arriving (the request timeout also covers reading the body): retryable, not a bad answer.
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new AiProviderError("AI_UPSTREAM_ERROR", null, null, null, networkFailure(error));
+    }
+
     throw new AiProviderError("AI_BAD_OUTPUT", null, null, null, "the provider's reply was not JSON");
   }
 
@@ -157,6 +187,10 @@ async function judgeWithChatCompletions<T>(
     },
     servedBy: payload.model ?? request.model,
   };
+
+  if (payload.error || !payload.choices) {
+    throw chatCompletionError(payload, payload.usage ? billed : null);
+  }
 
   if (choice?.message?.refusal) {
     throw new AiProviderError("AI_REFUSED", null, billed);

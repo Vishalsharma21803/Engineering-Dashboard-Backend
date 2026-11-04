@@ -22,6 +22,7 @@ import type {
   WorkItemLinks,
   WorkItemSummary,
 } from "../../types/azure.types.js";
+import { logFallback } from "../../lib/log-fallback.js";
 import { complianceConfig } from "../compliance/compliance.config.js";
 import { asNumber, asString, requireIdentityRef, toIdentityRef } from "./mappers.js";
 
@@ -56,12 +57,21 @@ export const WORK_ITEM_FIELDS = {
 } as const;
 
 const METADATA_CACHE_TTL_MS = 10 * 60_000;
-const WIQL_TOP = 200;
+/**
+ * Tickets a list reads at most. Lists whose tickets all get SOP checks keep 200 (each check costs
+ * several Azure calls); plain lists read more. One more is asked for, so a cut is known.
+ */
+const SOP_CHECKED_CAP = 200;
+const PLAIN_LIST_CAP = { me: 500, any: 1000 } as const;
 const BATCH_SIZE = 200;
 const UPDATES_PAGE_SIZE = 200;
+/** Pages of history read per ticket: the first (creation) and the newest ones; a longer middle is skipped. */
 const UPDATES_MAX_PAGES = 5;
+const COMMENTS_PAGE_SIZE = 200;
+const COMMENTS_MAX_PAGES = 5;
 const COMMENTS_API_VERSION = "7.1-preview.4";
 const COMPLETED_STATE_NAMES = ["Closed", "Done", "Removed", "Completed", "Cut"];
+const REMOVED_STATE_NAMES = ["Removed", "Cut"];
 const STATE_CATEGORIES: StateCategory[] = [
   "Proposed",
   "InProgress",
@@ -108,30 +118,45 @@ function buildAssignedWiql(query: WorkItemQuery, recentDays: number): string {
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(" AND ")} ORDER BY [System.ChangedDate] DESC`;
 }
 
+/** How many tickets this list reads at most (see SOP_CHECKED_CAP). */
+export function workItemListCap(query: WorkItemQuery): number {
+  return query.scope === "compliance" ? SOP_CHECKED_CAP : PLAIN_LIST_CAP[query.assignee ?? "me"];
+}
+
+/** A list of tickets, most recently changed first; `truncated` when more existed than `cap`. */
+export interface CappedList<T> {
+  truncated: boolean;
+  cap: number;
+  items: T[];
+}
+
 export async function listAssignedWorkItemIds(
   client: AzureClient,
   query: WorkItemQuery,
   recentDays = complianceConfig.recentlyClosedDays
-): Promise<number[]> {
+): Promise<CappedList<number>> {
   const segments =
     query.projectName === undefined
       ? ["_apis", "wit", "wiql"]
       : [query.projectName, "_apis", "wit", "wiql"];
+  const cap = workItemListCap(query);
 
   const result = await client.readPost<RawWiqlResult>(
     segments,
     { query: buildAssignedWiql(query, recentDays) },
-    { query: { $top: WIQL_TOP } }
+    { query: { $top: cap + 1 } }
   );
+  const ids = (result.workItems ?? []).map((item) => item.id);
 
-  return (result.workItems ?? []).map((item) => item.id);
+  return { items: ids.slice(0, cap), truncated: ids.length > cap, cap };
 }
 
 /**
- * Tickets I may have worked on since a day (YYYY-MM-DD): assigned to me or
- * ever changed by me, and changed since then. Callers check each revision.
+ * Tickets changed since a day (YYYY-MM-DD) that I ever changed (a comment is a
+ * revision by me too), newest change first, at most `top`. Callers check each
+ * revision. Being assigned is not enough: it says nothing about that day.
  */
-export async function listTouchedWorkItemIds(client: AzureClient, sinceDay: string): Promise<number[]> {
+export async function listWorkItemIdsChangedByMeSince(client: AzureClient, sinceDay: string, top: number): Promise<number[]> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sinceDay)) {
     throw new Error("INVALID_DAY");
   }
@@ -139,9 +164,9 @@ export async function listTouchedWorkItemIds(client: AzureClient, sinceDay: stri
   const result = await client.readPost<RawWiqlResult>(
     ["_apis", "wit", "wiql"],
     {
-      query: `SELECT [System.Id] FROM WorkItems WHERE [System.ChangedDate] >= '${sinceDay}' AND ([System.AssignedTo] = @Me OR [System.ChangedBy] EVER @Me) ORDER BY [System.ChangedDate] DESC`,
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.ChangedDate] >= '${sinceDay}' AND [System.ChangedBy] EVER @Me ORDER BY [System.ChangedDate] DESC`,
     },
-    { query: { $top: WIQL_TOP } }
+    { query: { $top: top } }
   );
 
   return (result.workItems ?? []).map((item) => item.id);
@@ -157,13 +182,11 @@ export async function getWorkItemsByIds(
     chunks.push(ids.slice(index, index + BATCH_SIZE));
   }
 
-  const results = await Promise.all(
-    chunks.map((chunk) =>
-      client.readPost<RawList<RawWorkItem | null>>(
-        ["_apis", "wit", "workitemsbatch"],
-        // $expand cannot be combined with an explicit field list.
-        { ids: chunk, $expand: "relations", errorPolicy: "omit" }
-      )
+  const results = await mapWithLimit(chunks, createLimiter(4), (chunk) =>
+    client.readPost<RawList<RawWorkItem | null>>(
+      ["_apis", "wit", "workitemsbatch"],
+      // $expand cannot be combined with an explicit field list.
+      { ids: chunk, $expand: "relations", errorPolicy: "omit" }
     )
   );
 
@@ -311,9 +334,16 @@ export function extractLinks(raw: RawWorkItem): WorkItemLinks {
   return links;
 }
 
+/** When a type's states could not be read: closed and removed by their usual names, anything else unknown. */
+function guessedCategory(state: string): StateCategory {
+  if (REMOVED_STATE_NAMES.includes(state)) return "Removed";
+  return COMPLETED_STATE_NAMES.includes(state) ? "Completed" : "Unknown";
+}
+
+/** `states` null: the type's states could not be read, so the category is guessed from the state name. */
 export function toWorkItemSummary(
   raw: RawWorkItem,
-  states: Array<{ name: string; category: StateCategory }>,
+  states: Array<{ name: string; category: StateCategory }> | null,
   organizationUrl: string
 ): WorkItemSummary {
   const fields = raw.fields;
@@ -332,7 +362,8 @@ export function toWorkItemSummary(
     title: asString(fields[WORK_ITEM_FIELDS.title]) ?? "(untitled)",
     state,
     stateCategory:
-      states.find((candidate) => candidate.name === state)?.category ?? "Unknown",
+      states === null ? guessedCategory(state) : (states.find((candidate) => candidate.name === state)?.category ?? "Unknown"),
+    stateCategorySource: states === null ? "guessed" : "azure",
     reason: asString(fields[WORK_ITEM_FIELDS.reason]),
     priority: asNumber(fields[WORK_ITEM_FIELDS.priority]),
     assignedTo: toIdentityRef(fields[WORK_ITEM_FIELDS.assignedTo]),
@@ -377,7 +408,7 @@ export async function toWorkItemSummaries(
   const stateEntries = await mapWithLimit(
     [...pairs.entries()],
     metadataLimit,
-    async ([key, pair]): Promise<[string, StateList]> => {
+    async ([key, pair]): Promise<[string, StateList | null]> => {
       try {
         return [key, await getWorkItemTypeStates(client, pair.projectName, pair.type)];
       } catch (error) {
@@ -385,9 +416,9 @@ export async function toWorkItemSummaries(
           throw error;
         }
 
-        // The tickets still show with their state name; only the state's category (open/closed) is unknown.
-        console.warn(`Could not read the states of ${pair.type} in ${pair.projectName}:`, error instanceof AzureApiError ? error.reason : error);
-        return [key, []];
+        // The tickets still show with their state name; open/closed is guessed from it (stateCategorySource "guessed").
+        logFallback(`Reading the states of ${pair.type} in ${pair.projectName} failed; open/closed is guessed from the state name`, error);
+        return [key, null];
       }
     }
   );
@@ -397,10 +428,15 @@ export async function toWorkItemSummaries(
   return rawItems.map((raw) =>
     toWorkItemSummary(
       raw,
-      statesByPair.get(`${workItemProjectName(raw)}\u0000${workItemType(raw)}`) ?? [],
+      statesByPair.get(`${workItemProjectName(raw)}\u0000${workItemType(raw)}`) ?? null,
       client.organizationUrl
     )
   );
+}
+
+/** "Bug in Alpha" for each ticket type whose states could not be read (its tickets' open/closed is guessed). */
+export function stateLookupFailures(items: WorkItemSummary[]): string[] {
+  return [...new Set(items.filter((item) => item.stateCategorySource === "guessed").map((item) => `${item.type} in ${item.projectName}`))].sort();
 }
 
 export interface WorkItemRecord {
@@ -412,18 +448,18 @@ export interface WorkItemRecord {
 export async function listAssignedWorkItemRecords(
   client: AzureClient,
   query: WorkItemQuery
-): Promise<WorkItemRecord[]> {
-  const ids = await listAssignedWorkItemIds(client, query);
+): Promise<CappedList<WorkItemRecord>> {
+  const { items: ids, truncated, cap } = await listAssignedWorkItemIds(client, query);
 
   if (ids.length === 0) {
-    return [];
+    return { items: [], truncated, cap };
   }
 
   const rawItems = await getWorkItemsByIds(client, ids);
   const order = new Map(ids.map((id, index) => [id, index]));
   const summaries = await toWorkItemSummaries(client, rawItems);
 
-  return summaries
+  const items = summaries
     .map((summary, index) => ({ summary, raw: rawItems[index] as RawWorkItem }))
     .filter(
       ({ summary }) =>
@@ -431,27 +467,62 @@ export async function listAssignedWorkItemRecords(
         (summary.stateCategory !== "Completed" && summary.stateCategory !== "Removed")
     )
     .sort((a, b) => (order.get(a.summary.id) ?? 0) - (order.get(b.summary.id) ?? 0));
+
+  return { items, truncated, cap };
 }
 
 export async function listAssignedWorkItems(
   client: AzureClient,
   query: WorkItemQuery
-): Promise<WorkItemSummary[]> {
-  return (await listAssignedWorkItemRecords(client, query)).map((record) => record.summary);
+): Promise<CappedList<WorkItemSummary>> {
+  const records = await listAssignedWorkItemRecords(client, query);
+  return { ...records, items: records.items.map((record) => record.summary) };
 }
 
-export async function getWorkItemComments(
+/**
+ * A ticket's comments, newest first, following Azure's continuation up to
+ * COMMENTS_MAX_PAGES pages; `truncated` when older ones were left unread.
+ */
+export async function readWorkItemComments(
   client: AzureClient,
   projectName: string,
   workItemId: number
-): Promise<WorkItemComment[]> {
-  const data = await client.get<RawCommentList>(
-    [projectName, "_apis", "wit", "workItems", String(workItemId), "comments"],
-    { apiVersion: COMMENTS_API_VERSION, query: { $top: 200, order: "desc" } }
-  );
+): Promise<{ comments: WorkItemComment[]; truncated: boolean }> {
+  const raw: NonNullable<RawCommentList["comments"]> = [];
+  let continuationToken: string | null = null;
+  let truncated = false;
 
-  return (data.comments ?? [])
-    .filter((comment) => !comment.isDeleted)
+  for (let page = 0; page < COMMENTS_MAX_PAGES; page += 1) {
+    const data: RawCommentList = await client.get<RawCommentList>(
+      [projectName, "_apis", "wit", "workItems", String(workItemId), "comments"],
+      { apiVersion: COMMENTS_API_VERSION, query: { $top: COMMENTS_PAGE_SIZE, order: "desc", ...(continuationToken ? { continuationToken } : {}) } }
+    );
+    raw.push(...(data.comments ?? []));
+    continuationToken = data.continuationToken ?? null;
+
+    if (!continuationToken) {
+      break;
+    }
+
+    truncated = page === COMMENTS_MAX_PAGES - 1;
+  }
+
+  if (truncated) {
+    logFallback(`Comments of #${workItemId}`, new Error(`more than ${COMMENTS_MAX_PAGES * COMMENTS_PAGE_SIZE} comments; the oldest were not read`));
+  }
+
+  return { comments: toComments(raw), truncated };
+}
+
+/** A ticket's comments, newest first (see readWorkItemComments). */
+export async function getWorkItemComments(client: AzureClient, projectName: string, workItemId: number): Promise<WorkItemComment[]> {
+  return (await readWorkItemComments(client, projectName, workItemId)).comments;
+}
+
+function toComments(raw: NonNullable<RawCommentList["comments"]>): WorkItemComment[] {
+  const seen = new Set<number>();
+  return raw
+    .filter((comment) => !comment.isDeleted && !seen.has(comment.id) && Boolean(seen.add(comment.id)))
     .map((comment) => ({
       id: comment.id,
       text: htmlToText(comment.text),
@@ -473,28 +544,54 @@ function historyValue(value: unknown): string | number | null {
   return typeof value === "string" || typeof value === "number" ? value : null;
 }
 
-/** Every revision's field changes, oldest first. */
-export async function getWorkItemUpdates(
+/**
+ * A ticket's revisions' field changes, oldest first. Up to UPDATES_MAX_PAGES
+ * pages are read: on a ticket with more history (`rev`, its revision count,
+ * says so) the first page (creation, early moves) and the newest pages are
+ * read and the middle is skipped. `truncated`: some history was not read.
+ */
+export async function readWorkItemUpdates(
   client: AzureClient,
   projectName: string,
-  workItemId: number
-): Promise<RawWorkItemUpdate[]> {
+  workItemId: number,
+  options: { rev?: number } = {}
+): Promise<{ updates: RawWorkItemUpdate[]; truncated: boolean }> {
+  const readPage = async (page: number, top = UPDATES_PAGE_SIZE) =>
+    (
+      await client.get<RawList<RawWorkItemUpdate>>([projectName, "_apis", "wit", "workItems", String(workItemId), "updates"], {
+        query: { $top: top, $skip: page * UPDATES_PAGE_SIZE },
+      })
+    ).value ?? [];
+  const rev = options.rev ?? 0;
+  // Each revision is one update, so the revision number tells where the newest pages are.
+  const lastPage = Math.floor((rev - 1) / UPDATES_PAGE_SIZE);
+  const tailStart = rev > UPDATES_PAGE_SIZE * UPDATES_MAX_PAGES ? lastPage - (UPDATES_MAX_PAGES - 2) : 1;
+  // One page past the expected end is read when needed, in case the revision count runs ahead of the reads.
+  const finalPage = tailStart === 1 ? UPDATES_MAX_PAGES - 1 : lastPage + 1;
   const updates: RawWorkItemUpdate[] = [];
+  let page = 0;
+  let full = false;
 
-  for (let page = 0; page < UPDATES_MAX_PAGES; page += 1) {
-    const data = await client.get<RawList<RawWorkItemUpdate>>(
-      [projectName, "_apis", "wit", "workItems", String(workItemId), "updates"],
-      { query: { $top: UPDATES_PAGE_SIZE, $skip: page * UPDATES_PAGE_SIZE } }
-    );
-    const value = data.value ?? [];
+  for (;;) {
+    const value = await readPage(page);
     updates.push(...value);
+    full = value.length === UPDATES_PAGE_SIZE;
 
-    if (value.length < UPDATES_PAGE_SIZE) {
+    if (!full || page >= finalPage) {
       break;
     }
+
+    page = page === 0 ? tailStart : page + 1;
   }
 
-  return updates;
+  // Every page up to the last one read was full: one more update tells a cut from a history of exactly that length.
+  if (full && tailStart === 1) {
+    full = (await readPage(page + 1, 1)).length > 0;
+  }
+
+  const seen = new Set<number>();
+  const unique = updates.filter((update) => !seen.has(update.id) && Boolean(seen.add(update.id))).sort((a, b) => a.id - b.id);
+  return { updates: unique, truncated: full || tailStart > 1 };
 }
 
 /** When a revision happened; the last revision's revisedDate is a far-future placeholder. */
@@ -502,12 +599,14 @@ export function updateDate(update: RawWorkItemUpdate): string {
   return asString(update.fields?.[WORK_ITEM_FIELDS.changedDate]?.newValue) ?? update.revisedDate ?? "";
 }
 
+/** Newest first; `truncated` when part of the middle of a long history was not read (see readWorkItemUpdates). */
 export async function getWorkFieldHistory(
   client: AzureClient,
   projectName: string,
-  workItemId: number
-): Promise<WorkFieldChange[]> {
-  const updates = await getWorkItemUpdates(client, projectName, workItemId);
+  workItemId: number,
+  options: { rev?: number } = {}
+): Promise<{ changes: WorkFieldChange[]; truncated: boolean }> {
+  const { updates, truncated } = await readWorkItemUpdates(client, projectName, workItemId, options);
   const changes: WorkFieldChange[] = [];
 
   for (const update of updates) {
@@ -528,7 +627,7 @@ export async function getWorkFieldHistory(
     }
   }
 
-  return changes.sort((a, b) => b.revisedDate.localeCompare(a.revisedDate));
+  return { changes: changes.sort((a, b) => b.revisedDate.localeCompare(a.revisedDate)), truncated };
 }
 
 export async function getLinkedPullRequests(

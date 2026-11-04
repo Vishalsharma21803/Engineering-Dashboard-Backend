@@ -161,12 +161,16 @@ export const BUILTIN_CHECKS = {
   },
 } as const;
 
-/** Which checks the AI review may clear (the code looks for wording) or only draft a fix for (the gap is a plain fact). */
+/**
+ * Which checks the AI review may clear (the code looks for wording) or only draft a fix for (the gap is a plain fact).
+ * A check whose outcome depends on who wrote something or when must never be "judge": the AI can verify a
+ * quote's text, not its author or timing (tl-approval, stage-comment).
+ */
 export const AI_REVIEW: Partial<Record<BuiltinCheckName, "judge" | "draft">> = {
   "approach-present": "judge",
-  "tl-approval": "judge",
+  "tl-approval": "draft",
   "dod-present": "judge",
-  "stage-comment": "judge",
+  "stage-comment": "draft",
   "field-present": "draft",
   "tags-present": "draft",
   "transition-comment": "draft",

@@ -67,8 +67,11 @@ export async function toOpenRouterError(response: Response): Promise<AiProviderE
       return new AiProviderError("AI_MODEL_UNAVAILABLE", null, null, detail);
     case 429:
       return new AiProviderError("AI_RATE_LIMITED", parseRetryAfter(response.headers.get("retry-after")), null, detail);
+    case 400:
+    case 422:
+      return new AiProviderError("AI_REQUEST_REJECTED", null, null, detail);
     default:
-      return new AiProviderError("AI_UPSTREAM_ERROR", null, null, detail);
+      return new AiProviderError("AI_UPSTREAM_ERROR", null, null, detail, `OpenRouter answered HTTP ${response.status}`);
   }
 }
 

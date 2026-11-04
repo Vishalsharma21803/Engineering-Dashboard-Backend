@@ -19,6 +19,8 @@ import {
 } from "../services/azure.service.js";
 import { decryptSecret } from "../lib/encryption.js";
 import { ValidationStatus } from "../generated/prisma/enums.js";
+import { noteFailureCause } from "../middleware/failure-log.middleware.js";
+import { sendError } from "./controller-helpers.js";
 
 function getAuthenticatedUserId(
   req: Request,
@@ -27,6 +29,7 @@ function getAuthenticatedUserId(
   if (!req.userId) {
     res.status(401).json({
       message: "Authentication required",
+      reason: "AUTH_REQUIRED",
     });
     return null;
   }
@@ -77,25 +80,8 @@ export async function createCredentialController(
       credential,
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "CREDENTIAL_ALREADY_EXISTS"
-    ) {
-      res.status(409).json({
-        message:
-          "A credential for this Azure DevOps organization already exists",
-      });
-      return;
-    }
-
-    console.error(
-      "Creating credential failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    // A duplicate organization is a 409 AppError (CREDENTIAL_ALREADY_EXISTS).
+    await sendError(res, error, "Saving the Azure DevOps connection failed");
   }
 }
 
@@ -139,6 +125,7 @@ export async function updateCredentialController(
     if (!credential) {
       res.status(404).json({
         message: "Credential not found",
+        reason: "CREDENTIAL_NOT_FOUND",
       });
       return;
     }
@@ -148,25 +135,8 @@ export async function updateCredentialController(
       credential,
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "CREDENTIAL_ALREADY_EXISTS"
-    ) {
-      res.status(409).json({
-        message:
-          "A credential for this Azure DevOps organization already exists",
-      });
-      return;
-    }
-
-    console.error(
-      "Updating credential failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    // A duplicate organization is a 409 AppError (CREDENTIAL_ALREADY_EXISTS).
+    await sendError(res, error, "Updating the Azure DevOps connection failed");
   }
 }
 
@@ -185,14 +155,7 @@ export async function listCredentialsController(
 
     res.status(200).json({ credentials });
   } catch (error) {
-    console.error(
-      "Listing credentials failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Loading your connections failed");
   }
 }
 
@@ -223,20 +186,14 @@ export async function validateCredentialController(
       idResult.data
     );
   } catch (error) {
-    console.error(
-      "Fetching credential failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Loading the credential failed");
     return;
   }
 
   if (!credential) {
     res.status(404).json({
       message: "Credential not found",
+      reason: "CREDENTIAL_NOT_FOUND",
     });
     return;
   }
@@ -245,14 +202,12 @@ export async function validateCredentialController(
 
   try {
     patToken = decryptSecret(credential.encryptedPatToken);
-  } catch {
-    console.error(
-      "Decrypting credential failed:",
-      credential.id
-    );
-
+  } catch (error) {
+    // The decryption error goes to the log line; the user gets a stable reason.
+    noteFailureCause(res, error, `Decrypting credential ${credential.id} failed`);
     res.status(500).json({
       message: "Stored credential could not be read",
+      reason: "CREDENTIAL_UNREADABLE",
     });
     return;
   }
@@ -304,12 +259,8 @@ export async function validateCredentialController(
       );
     }
 
-    console.error(
-      "Azure DevOps validation failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
     if (error instanceof AzureDevOpsUpstreamError) {
+      noteFailureCause(res, error, "Validating the credential with Azure DevOps failed");
       res.status(502).json({
         message: "Unable to validate the credential with Azure DevOps",
         reason: "UPSTREAM_ERROR",
@@ -318,9 +269,7 @@ export async function validateCredentialController(
       return;
     }
 
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Validating the credential failed");
   }
 }
 
@@ -347,6 +296,7 @@ export async function deleteCredentialController(
     if (!deleted) {
       res.status(404).json({
         message: "Credential not found",
+        reason: "CREDENTIAL_NOT_FOUND",
       });
       return;
     }
@@ -355,13 +305,6 @@ export async function deleteCredentialController(
       message: "Credential deleted",
     });
   } catch (error) {
-    console.error(
-      "Deleting credential failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Deleting the credential failed");
   }
 }

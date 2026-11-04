@@ -42,7 +42,7 @@ describe.skipIf(!orgUrl || !pat)("live Azure DevOps (read-only)", () => {
   });
 
   it("lists assigned work items", async () => {
-    const workItems = await listAssignedWorkItems(client(), { scope: "open" });
+    const { items: workItems } = await listAssignedWorkItems(client(), { scope: "open" });
     for (const item of workItems) {
       expect(item.stateCategory).not.toBe("Completed");
     }

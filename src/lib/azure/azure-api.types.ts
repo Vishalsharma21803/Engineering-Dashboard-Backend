@@ -91,6 +91,8 @@ export interface RawComment {
 export interface RawCommentList {
   comments?: RawComment[];
   totalCount?: number;
+  /** Set when more comments follow; passed back to read the next page. */
+  continuationToken?: string | null;
 }
 
 export interface RawWorkItemUpdate {

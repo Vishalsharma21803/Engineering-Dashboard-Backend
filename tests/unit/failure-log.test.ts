@@ -1,8 +1,10 @@
+import Anthropic from "@anthropic-ai/sdk";
 import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { sendError } from "../../src/controllers/controller-helpers.js";
+import { toClaudeError } from "../../src/lib/ai/claude.js";
 import { AiProviderError } from "../../src/lib/ai/types.js";
 import { logFailedRequests } from "../../src/middleware/failure-log.middleware.js";
 
@@ -44,6 +46,15 @@ describe("failed request log", () => {
     expect(response.body).toEqual({ message: "Doing the thing failed because of an unexpected server error. The details are in the server log.", reason: "INTERNAL_ERROR" });
     expect(String(error.mock.calls[0]?.[0])).toContain("cause: TypeError: boom");
     expect(String(error.mock.calls[1]?.[0])).toContain("TypeError: boom\n");
+  });
+
+  it("says when the AI provider did not answer in time", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await request(appFailingWith(toClaudeError(new Anthropic.APIConnectionTimeoutError()))).get("/api/fail");
+
+    expect(response.status).toBe(502);
+    expect(response.body.message).toBe("The AI provider could not be reached. (no answer before the timeout (120 s))");
+    expect(String(error.mock.calls[0]?.[0])).toContain("no answer before the timeout");
   });
 
   it("stays quiet for successful requests", async () => {

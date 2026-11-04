@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { RULE_LEVEL_UPDATES } from "../../src/services/sop/rule-levels.js";
@@ -14,6 +14,10 @@ beforeEach(async () => {
   await resetDatabase();
   fake = installFakeAzure();
   ({ agent, credentialId } = await setupUser());
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const compliance = async (as: Agent, cred: string, refresh = false) =>
@@ -178,10 +182,86 @@ describe("project set-ups", () => {
 
   it("removes a set-up for everyone and keeps its history", async () => {
     await useAlphaRulebook();
-    await agent.delete("/api/sop/projects/Alpha").expect(200);
+    // Set up before owners were recorded: only an SOP owner may remove it.
+    process.env.SOP_ADMIN_EMAILS = "owner@example.com";
+    const owner = await setupUser("owner@example.com");
+    await owner.agent.delete("/api/sop/projects/Alpha").expect(200);
+    delete process.env.SOP_ADMIN_EMAILS;
 
     expect((await compliance(agent, credentialId)).get(102)).toMatchObject({ configured: false, sopProject: "not-set-up" });
     expect((await agent.get("/api/sop/projects/Alpha/history").expect(200)).body.changes[0]).toMatchObject({ kind: "REMOVED" });
     await agent.delete("/api/sop/projects/Alpha").expect(404);
+  });
+});
+
+describe("who may change a set-up", () => {
+  const settings = { stages: { active: ["Active"] } };
+  const canEditOf = async (as: Agent) =>
+    Object.fromEntries((await as.get("/api/sop/projects").expect(200)).body.projects.map((setUp: { projectName: string; canEdit: boolean }) => [setUp.projectName, setUp.canEdit]));
+
+  it("lets only its creator or an SOP owner change or remove it, and tells each viewer", async () => {
+    process.env.SOP_ADMIN_EMAILS = "owner@example.com";
+    try {
+      const saved = (await agent.put("/api/sop/projects/Alpha").send({ settings }).expect(200)).body.project;
+      // The save answer already says the creator may edit it.
+      expect(saved).toMatchObject({ projectName: "Alpha", createdBy: "Test User", canEdit: true });
+
+      const other = await setupUser();
+      const refused = await other.agent.put("/api/sop/projects/Alpha").send({ settings: { ...settings, timeZone: "Asia/Kolkata" } }).expect(403);
+      expect(refused.body).toEqual({ message: "Only the person who set up this project or an SOP owner can change it", reason: "PROJECT_SETUP_NOT_YOURS" });
+      expect((await other.agent.delete("/api/sop/projects/Alpha").expect(403)).body.reason).toBe("PROJECT_SETUP_NOT_YOURS");
+      // A new project is open to everyone; switching a project off for oneself too.
+      await other.agent.put("/api/sop/projects/Beta").send({ settings }).expect(200);
+      await other.agent.put("/api/sop/projects/Alpha/checked").send({ checked: false }).expect(200);
+
+      expect(await canEditOf(agent)).toMatchObject({ Alpha: true, Beta: false, automations: false });
+      expect(await canEditOf(other.agent)).toMatchObject({ Alpha: false, Beta: true });
+
+      const owner = await setupUser("owner@example.com");
+      expect(await canEditOf(owner.agent)).toMatchObject({ Alpha: true, Beta: true, automations: true });
+      await owner.agent.put("/api/sop/projects/Alpha").send({ settings: { ...settings, timeZone: "Asia/Kolkata" } }).expect(200);
+      // The creator keeps the right to change it after an owner did.
+      await agent.put("/api/sop/projects/Alpha").send({ settings }).expect(200);
+      await agent.delete("/api/sop/projects/Alpha").expect(200);
+      await owner.agent.delete("/api/sop/projects/Beta").expect(200);
+    } finally {
+      delete process.env.SOP_ADMIN_EMAILS;
+    }
+  });
+
+  it("keeps imported set-ups (no recorded creator) for SOP owners only", async () => {
+    await useAlphaRulebook();
+    const refused = await agent.put("/api/sop/projects/Alpha").send({ settings }).expect(403);
+    expect(refused.body.reason).toBe("PROJECT_SETUP_NOT_YOURS");
+    expect(await canEditOf(agent)).toMatchObject({ Alpha: false });
+  });
+
+  it("applies the ownership check when someone else sets up the same new project at the same moment", async () => {
+    const other = await setupUser();
+    const otherId = (await other.agent.get("/api/auth/me").expect(200)).body.user.id as string;
+    const transaction = prisma.$transaction.bind(prisma) as (run: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+    let raced = false;
+
+    // The first save finds no set-up, and the other person's is saved right then: its insert hits the unique name.
+    vi.spyOn(prisma, "$transaction").mockImplementation(((run: (tx: unknown) => Promise<unknown>) =>
+      transaction((tx) => {
+        if (raced) return run(tx);
+        raced = true;
+        const sopProject = new Proxy((tx as { sopProject: object }).sopProject, {
+          get: (target, key) =>
+            key === "findUnique"
+              ? async () => {
+                  await prisma.sopProject.create({ data: { nameKey: "gamma", projectName: "Gamma", settings, createdBy: otherId, updatedBy: otherId } });
+                  return null;
+                }
+              : (Reflect.get(target, key) as unknown),
+        });
+        return run(new Proxy(tx as object, { get: (target, key) => (key === "sopProject" ? sopProject : Reflect.get(target, key)) }));
+      })) as never);
+
+    const response = await agent.put("/api/sop/projects/Gamma").send({ settings: { ...settings, timeZone: "Asia/Kolkata" } }).expect(403);
+    expect(response.body.reason).toBe("PROJECT_SETUP_NOT_YOURS");
+    expect(raced).toBe(true);
+    expect((await prisma.sopProject.findUnique({ where: { nameKey: "gamma" } }))?.createdBy).toBe(otherId);
   });
 });

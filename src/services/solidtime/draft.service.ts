@@ -4,19 +4,21 @@ import { createLimiter, mapWithLimit } from "../../lib/azure/limiter.js";
 import type { SolidtimeClient } from "../../lib/solidtime/client.js";
 import { addDays, isValidTimeZone, zonedDay, zonedDayRange } from "../../lib/zoned-time.js";
 import { getIdentity } from "../azure/identity.service.js";
-import { WORK_ITEM_FIELDS, getWorkItemComments, getWorkItemUpdates, listTouchedWorkItemIds, updateDate } from "../azure/work-items.service.js";
+import { WORK_ITEM_FIELDS, listWorkItemIdsChangedByMeSince, readWorkItemComments, readWorkItemUpdates, updateDate } from "../azure/work-items.service.js";
 import type { SolidtimeConnectionDto } from "./connection.service.js";
-import type { SolidtimeTimeEntry } from "../../lib/solidtime/types.js";
-import { entrySeconds, getMe, listEntries, listProjects } from "./read.service.js";
-import { candidateTicketIds, ticketDescription } from "./ticket-ids.js";
-import { isFinished, lookUpTickets } from "./tickets.service.js";
-import { fallbackTo } from "../../lib/log-fallback.js";
+import type { SolidtimeProject, SolidtimeTimeEntry } from "../../lib/solidtime/types.js";
+import { getMe, listEntries, listProjects, overlapsRange, secondsWithin } from "./read.service.js";
+import { candidateTicketIds, shareSeconds, ticketDescription } from "./ticket-ids.js";
+import { finishedState, lookUpTickets } from "./tickets.service.js";
+import { logFallback } from "../../lib/log-fallback.js";
 
 type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: string };
 
 /** Drafts can be made for today and the 14 days before it. */
 export const DRAFT_MAX_DAYS_BACK = 14;
-/** At most this many tickets are read (and a day can be approved in one batch of 50). */
+/** At most this many tickets I changed since the day are read for my changes that day. */
+const MAX_SCAN = 200;
+/** At most this many rows (tickets with my activity that day): a day can be approved in one batch of 50. */
 const MAX_TICKETS = 50;
 /** How far back my own Solidtime entries are read to learn which project a ticket goes to. */
 const PROJECT_HISTORY_DAYS = 60;
@@ -86,8 +88,15 @@ export interface DayDraft {
   /** My existing Solidtime entries that day (UTC), so new ones can avoid them. */
   busy: Array<{ start: string; end: string }>;
   rows: DraftRow[];
-  /** More tickets were touched than Cockpit reads at once. */
+  /** Some work may be missing: see truncatedReason. */
   truncated: boolean;
+  /**
+   * "scan": I changed more tickets since that day than Cockpit reads, so the oldest-changed were not checked;
+   * "rows": more tickets had my activity that day than one draft holds (50); null: nothing was cut.
+   */
+  truncatedReason: "scan" | "rows" | null;
+  /** Reads that failed or were cut; the draft is still made, but may be incomplete. */
+  warnings: string[];
 }
 
 const MINUTE = 60_000;
@@ -320,19 +329,22 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
   const range = zonedDayRange(day, timeZone);
   const window: Interval = { start: range.start.getTime(), end: Math.min(range.end.getTime(), now.getTime()) };
   const historyStart = zonedDayRange(addDays(day, -PROJECT_HISTORY_DAYS), timeZone).start;
+  const warnings: string[] = [];
   const [identity, touched, history, projects] = await Promise.all([
     getIdentity(azure),
-    // Azure compares days in its own zone; one day earlier is safe, revisions are checked exactly below.
-    listTouchedWorkItemIds(azure, addDays(day, -1)),
+    // Azure compares days in its own zone; one day earlier is safe, revisions are checked exactly below. One more than read tells whether some were left out.
+    listWorkItemIdsChangedByMeSince(azure, addDays(day, -1), MAX_SCAN + 1),
     // My entries up to the end of the day: that day's (busy time, already tracked) and earlier ones (projects used).
     listEntries(client, connection.organizationId, { memberId: connection.memberId, start: historyStart, end: range.end }),
-    listProjects(client, connection.organizationId).catch(fallbackTo("Reading Solidtime projects for the draft failed", [])),
+    listProjects(client, connection.organizationId).catch((error: unknown): SolidtimeProject[] => {
+      logFallback("Reading Solidtime projects for the draft failed", error);
+      warnings.push("Solidtime projects could not be read; choose projects yourself.");
+      return [];
+    }),
   ]);
-  const existing = history.entries.filter((entry) => {
-    const start = Date.parse(entry.start);
-    return start >= range.start.getTime() && start < range.end.getTime();
-  });
-  const ids = touched.slice(0, MAX_TICKETS);
+  // Entries with time inside the day, including one that started the evening before (only their part of the day counts).
+  const existing = history.entries.filter((entry) => overlapsRange(entry, range, now));
+  const ids = touched.slice(0, MAX_SCAN);
   const earlierIds = [...new Set(history.entries.flatMap((entry) => (entry.project_id ? candidateTicketIds(entry.description) : [])))]
     .filter((id) => !ids.includes(id))
     .slice(0, MAX_HISTORY_TICKETS);
@@ -352,6 +364,13 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
   const email = identity.email?.toLowerCase() ?? null;
   const isMe = (identityRef: { id?: string | null; uniqueName?: string | null } | undefined) =>
     Boolean(identityRef && ((identityRef.id && identityRef.id === identity.id) || (email !== null && identityRef.uniqueName?.toLowerCase() === email)));
+  // Whether a state is a finished one (null: Azure's states unreadable), read once per project, type and state.
+  const finishedStates = new Map<string, Promise<boolean | null>>();
+  const isFinishedState = (ticket: { projectName: string; type: string }, state: string) => {
+    const key = `${ticket.projectName}\u0000${ticket.type}\u0000${state}`;
+    if (!finishedStates.has(key)) finishedStates.set(key, finishedState(azure, { ...ticket, state }));
+    return finishedStates.get(key)!;
+  };
 
   const limit = createLimiter(4);
   const perTicket = await mapWithLimit(ids, limit, async (id) => {
@@ -361,10 +380,19 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       return null;
     }
 
-    const [updates, comments] = await Promise.all([
-      getWorkItemUpdates(azure, ticket.projectName, id),
-      getWorkItemComments(azure, ticket.projectName, id).catch(fallbackTo(`Reading comments on #${id} for the draft failed`, [])),
+    const [{ updates, truncated: historyCut }, commentRead] = await Promise.all([
+      readWorkItemUpdates(azure, ticket.projectName, id, { rev: ticket.rev }),
+      readWorkItemComments(azure, ticket.projectName, id).catch((error: unknown) => {
+        logFallback(`Reading comments on #${id} for the draft failed`, error);
+        warnings.push(`Comments on #${id} could not be read; its activity may be incomplete.`);
+        return { comments: [], truncated: false };
+      }),
     ]);
+
+    if (historyCut || commentRead.truncated) {
+      warnings.push(`#${id} has very long history; part of it was not read, so its activity may be incomplete.`);
+    }
+
     const activity: DraftActivity[] = [];
     let added = 0;
     let removed = 0;
@@ -373,8 +401,10 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
     let lastLoweredAt: number | null = null;
     // Remaining Work as it stood at the end of that day (by anyone): the last value set by then, else the value the next change started from.
     let remainingAtDayEnd: number | null | undefined;
-    // Remaining Work set to 0 in the same change as a state change: only work if the new state is not a done one (checked below).
-    const zeroedWithState: Array<{ hours: number; at: string; state: string }> = [];
+    // Remaining Work I set to 0 (from more): only work if the ticket was not finished that day (checked below).
+    const zeroed: Array<{ hours: number; at: string }> = [];
+    // States the ticket moved into that day, by anyone.
+    const statesThatDay = new Set<string>();
     let remainingAfterDay: number | null | undefined;
 
     for (const update of updates) {
@@ -384,6 +414,12 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       if (at && remainingChange) {
         if (Date.parse(at) < range.end.getTime()) remainingAtDayEnd = asNumber(remainingChange.newValue);
         else if (remainingAfterDay === undefined) remainingAfterDay = asNumber(remainingChange.oldValue);
+      }
+
+      const newState = update.fields?.[WORK_ITEM_FIELDS.state]?.newValue;
+
+      if (at && inDay(at) && typeof newState === "string") {
+        statesThatDay.add(newState);
       }
 
       if (!at || !inDay(at) || !isMe(update.revisedBy)) continue;
@@ -415,8 +451,8 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
         const after = asNumber(remaining.newValue);
 
         // Lowering Remaining Work (from a known value to a known value) says that much was done; clearing it says nothing.
-        if (before !== null && after === 0 && before > 0 && state && state.newValue !== undefined) {
-          zeroedWithState.push({ hours: before, at, state: String(state.newValue) });
+        if (before !== null && after === 0 && before > 0) {
+          zeroed.push({ hours: before, at });
         } else if (before !== null && after !== null && after < before) {
           lowered += before - after;
           lastLoweredAt = Date.parse(at);
@@ -434,7 +470,7 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       }
     }
 
-    for (const comment of comments) {
+    for (const comment of commentRead.comments) {
       if (inDay(comment.createdDate) && isMe(comment.createdBy)) {
         activity.push({ at: comment.createdDate, what: "Commented" });
       }
@@ -446,28 +482,45 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
 
     activity.sort((a, b) => a.at.localeCompare(b.at));
     const lastActivityAt = Math.max(...activity.map((item) => Date.parse(item.at)));
+    let statesUnreadable = false;
+
     // Zeroing Remaining Work when closing a ticket tidies it up; it is not that much work (the timeline decides instead).
-    for (const zeroed of zeroedWithState) {
-      if (await isFinished(azure, { projectName: ticket.projectName, type: ticket.type, state: zeroed.state })) continue;
-      lowered += zeroed.hours;
-      lastLoweredAt = Math.max(lastLoweredAt ?? 0, Date.parse(zeroed.at));
+    // Closing may come in another change that day, or the ticket may be finished now.
+    if (zeroed.length > 0) {
+      const finished = await Promise.all([...statesThatDay, ticket.state].map((state) => isFinishedState(ticket, state)));
+      statesUnreadable = finished.includes(null);
+
+      if (!statesUnreadable && !finished.includes(true)) {
+        for (const item of zeroed) {
+          lowered += item.hours;
+          lastLoweredAt = Math.max(lastLoweredAt ?? 0, Date.parse(item.at));
+        }
+      }
     }
 
     const remainingThatDay = remainingAtDayEnd !== undefined ? remainingAtDayEnd : remainingAfterDay !== undefined ? remainingAfterDay : ticket.remainingWork;
-    return { ticket, activity, added, removed, lowered, remainingThatDay, lastIncreaseAt, lastLoweredAt, lastActivityAt };
+    return { ticket, activity, added, removed, lowered, remainingThatDay, lastIncreaseAt, lastLoweredAt, lastActivityAt, statesUnreadable };
   });
 
-  // Time Solidtime already has on each ticket that day (whatever the description wording).
+  // Time Solidtime already has on each ticket that day (whatever the description wording), split when an entry names two tickets.
+  const lookedUp = (id: number) => (ids.includes(id) && lookup.checked) || (earlierIds.includes(id) && earlier.checked);
+  const isTicket = (id: number) => (lookup.tickets.has(id) || earlier.tickets.has(id) ? true : lookedUp(id) ? false : null);
   const tracked = new Map<number, number>();
 
   for (const entry of existing) {
-    for (const ticketId of candidateTicketIds(entry.description)) {
-      tracked.set(ticketId, (tracked.get(ticketId) ?? 0) + entrySeconds(entry, now) / 3600);
+    for (const [ticketId, seconds] of shareSeconds(entry.description, secondsWithin(entry, range, now), isTicket)) {
+      tracked.set(ticketId, (tracked.get(ticketId) ?? 0) + seconds / 3600);
     }
   }
 
-  const busy: Interval[] = existing.map((entry) => ({ start: Date.parse(entry.start), end: entry.end ? Date.parse(entry.end) : now.getTime() }));
-  const found = perTicket.filter((item): item is NonNullable<typeof item> => item !== null);
+  // Only each entry's part inside the day is busy (a timer from the evening before starts the day at midnight).
+  const busy: Interval[] = existing.map((entry) => ({
+    start: Math.max(Date.parse(entry.start), range.start.getTime()),
+    end: Math.min(entry.end ? Date.parse(entry.end) : now.getTime(), range.end.getTime()),
+  }));
+  const withActivity = perTicket.filter((item): item is NonNullable<typeof item> => item !== null);
+  // Tickets come newest change first: the most recently changed ones are kept.
+  const found = withActivity.slice(0, MAX_TICKETS);
   const fromActivity = activityHours(
     found.flatMap(({ ticket, activity }) => activity.map((item) => ({ ticketId: ticket.id, at: Date.parse(item.at) }))),
     busy
@@ -480,7 +533,7 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
   found.sort((a, b) => recorded(a) - recorded(b) || evidenceAt(a) - evidenceAt(b));
 
   const busyBefore = busy.map((interval) => ({ start: new Date(interval.start).toISOString(), end: new Date(interval.end).toISOString() }));
-  const trackedSeconds = existing.reduce((sum, entry) => sum + entrySeconds(entry, now), 0);
+  const trackedSeconds = existing.reduce((sum, entry) => sum + secondsWithin(entry, range, now), 0);
 
   const rows: DraftRow[] = found.map((item) => {
     const { ticket, activity, added, removed, lowered } = item;
@@ -489,7 +542,10 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
     const hours = Math.max(0, roundQuarter(evidence.hours - already));
     let start: string | null = null;
     let end: string | null = null;
-    let note: string | null = removed > 0 ? `Completed Work was also lowered by ${removed} h that day (not counted).` : null;
+    const notes: string[] = [];
+
+    if (removed > 0) notes.push(`Completed Work was also lowered by ${removed} h that day (not counted).`);
+    if (item.statesUnreadable) notes.push("Azure states could not be read; Remaining Work set to 0 was not counted.");
 
     if (hours > 0) {
       const slot = placeEntry(busy, hours * 3_600_000, evidenceAt(item), window);
@@ -499,10 +555,10 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
         start = new Date(slot.start).toISOString();
         end = new Date(slot.end).toISOString();
       } else {
-        note = "No free time left in the day for this; set the times yourself.";
+        notes.push("No free time left in the day for this; set the times yourself.");
       }
     } else {
-      note = "Already tracked in Solidtime.";
+      notes.push("Already tracked in Solidtime.");
     }
 
     const project = chooseProject(ticket.id, ticket.projectName, connection.projectMap, projects, hints);
@@ -533,9 +589,10 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
       solidtimeProjectId: project?.id ?? null,
       projectSource: project?.source ?? null,
       projectMatches: sameName.length > 1 ? sameName.map((match) => match.name) : [],
-      note,
+      note: notes.length ? notes.join(" ") : null,
     };
   });
+  const truncatedReason = touched.length > MAX_SCAN ? "scan" : withActivity.length > found.length ? "rows" : null;
 
   return {
     day,
@@ -544,6 +601,8 @@ export async function draftDayFromAzure(client: SolidtimeClient, connection: Con
     trackedHours: Math.round((trackedSeconds / 3600) * 100) / 100,
     busy: busyBefore,
     rows: rows.sort((a, b) => a.ticketId - b.ticketId),
-    truncated: touched.length > ids.length,
+    truncated: truncatedReason !== null,
+    truncatedReason,
+    warnings,
   };
 }

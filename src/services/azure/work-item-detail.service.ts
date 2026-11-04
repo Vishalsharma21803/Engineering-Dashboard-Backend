@@ -69,7 +69,8 @@ export async function getWorkItemDetail(
     toSection(() => getSupportedFields(client, projectName, type)),
   ]);
 
-  const summary = toWorkItemSummary(raw, sectionData(states, []), client.organizationUrl);
+  // States that could not be read: open/closed is guessed from the state name (stateCategorySource "guessed").
+  const summary = toWorkItemSummary(raw, states.status === "ok" ? sectionData(states, []) : null, client.organizationUrl);
 
   // Changed in Azure since the lists were built: drop them, so My work and the dashboard show it too.
   if (myWorkIsBehind(userId, client.credentialId, summary.id, summary.rev)) {
@@ -78,9 +79,9 @@ export async function getWorkItemDetail(
     clearAzureCache(client.credentialId);
   }
 
-  const [comments, history, linkedPullRequests, compliance, closeAfterMergeAllowed, family] = await Promise.all([
+  const [comments, historyRead, linkedPullRequests, compliance, closeAfterMergeAllowed, family] = await Promise.all([
     toSection(() => getWorkItemComments(client, projectName, workItemId)),
-    toSection(() => getWorkFieldHistory(client, projectName, workItemId)),
+    toSection(() => getWorkFieldHistory(client, projectName, workItemId, { rev: raw.rev })),
     toSection(() => getLinkedPullRequests(client, summary.links.pullRequests)),
     getEffectiveRulebook(userId)
       .then((rulebook) => evaluateTicket(client, rulebook, summary, raw, new Date()))
@@ -95,7 +96,8 @@ export async function getWorkItemDetail(
     acceptanceCriteria: htmlToText(asString(raw.fields[WORK_ITEM_FIELDS.acceptanceCriteria])),
     reproSteps: htmlToText(asString(raw.fields[WORK_ITEM_FIELDS.reproSteps])),
     comments,
-    history,
+    history: { ...historyRead, data: historyRead.data?.changes ?? null },
+    historyTruncated: historyRead.data?.truncated ?? false,
     linkedPullRequests,
     allowedStates: sectionData(states, []),
     supportedFields: sectionData(supportedFields, NO_SUPPORTED_FIELDS),

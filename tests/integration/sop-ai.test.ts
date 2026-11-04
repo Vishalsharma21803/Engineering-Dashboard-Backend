@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { HttpResponse, http } from "msw";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearAzureCache } from "../../src/lib/azure/cache.js";
 import { clearOpenCodeModelsCache } from "../../src/lib/ai/opencode.js";
 import { clearOpenRouterModelsCache } from "../../src/lib/ai/openrouter.js";
 import { prisma } from "../../src/lib/prisma.js";
+import { getUsageSummary, purgeStaleAiReservations, recordAiSpend, reserveAiSpend, settleAiSpend, spentSince, startOfUtcDay } from "../../src/services/ai/ai-usage.service.js";
 import { recoverSopAiQueue, waitForSopAiIdle } from "../../src/services/sop/ai/sop-ai.service.js";
 import { server } from "../setup.js";
 import { VALID_CLAUDE_KEY, VALID_OPENCODE_KEY, VALID_OPENROUTER_KEY, createFakeAi, fakeAiHandlers, type FakeAi } from "../support/fake-ai.js";
@@ -63,7 +65,7 @@ describe("AI SOP checks", () => {
         verdict: "fail",
         reason: "No plan is written down.",
         advice: "Write the approach as 3-5 concrete steps.",
-        quotes: ["Implement login", "a sentence that is not in the ticket"],
+        quotes: ["use JWT in httpOnly cookie", "a sentence that is not in the ticket", "login"],
         fix: { target: "comment", text: "Approach:\n1. Add the login form\n2. Call the auth API" },
       }));
 
@@ -85,13 +87,15 @@ describe("AI SOP checks", () => {
         verdict: "fail",
         reason: "No plan is written down.",
         advice: "Write the approach as 3-5 concrete steps.",
-        quotes: ["Implement login"],
+        quotes: ["use JWT in httpOnly cookie"],
         fix: { target: "comment", text: "Approach:\n1. Add the login form\n2. Call the auth API" },
-        note: "1 quote(s) could not be found in the ticket and were removed.",
+        note: "1 quote(s) were too short to prove anything and were removed. 1 quote(s) could not be found in the ticket and were removed.",
+        codeMessage: null,
+        verifier: 2,
       },
     ]);
 
-    // Ticket 102's title is not "Implement login": no quote survives, so the verdict is not trusted.
+    // Ticket 102 has no such comment: no quote survives, so the verdict is not trusted.
     expect(byId.get(102).results[0]).toMatchObject({ verdict: "unsure", quotes: [], fix: null });
 
     const call = judgeCalls()[0];
@@ -216,6 +220,140 @@ describe("AI SOP checks", () => {
     await agent.put("/api/ai/preferences").send({ provider: "OPENCODE", model: "glm-5.3-flash", effort: "MEDIUM", dailyLimitUsd: 0, acceptDataCollection: false }).expect(200);
     await check([101]);
     expect((await results([101])).get(101)).toMatchObject({ status: "SKIPPED", errorReason: "DAILY_LIMIT_REACHED", model: "glm-5.3-flash" });
+  });
+
+  it("re-checks when a pull request changes without a new ticket revision", async () => {
+    await useClaude();
+    await check([101]);
+    expect((await check([101])).unchanged).toEqual([101]);
+
+    const pr = azure.pullRequests.find((candidate) => candidate.pullRequestId === 1)!;
+    pr.status = "completed";
+    pr.closedDate = new Date().toISOString();
+    clearAzureCache();
+    expect((await check([101])).queued).toEqual([101]);
+  });
+
+  it("does not re-check (and pay again) because a pull request or comments read failed for a moment", async () => {
+    await useClaude();
+    await check([101]);
+    const quiet = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    server.use(http.get(/\/pullrequests\/\d+/, () => HttpResponse.json({ message: "Server error" }, { status: 500 })));
+    clearAzureCache();
+    expect((await check([101])).unchanged).toEqual([101]);
+    server.use(http.get(/\/workItems\/101\/comments/i, () => HttpResponse.json({ message: "Server error" }, { status: 500 })));
+    clearAzureCache();
+    expect((await check([101])).unchanged).toEqual([101]);
+    expect(judgeCalls()).toHaveLength(1);
+
+    // Still failing, but the model settings changed: that is a real change, so it is checked again.
+    await agent
+      .put("/api/ai/preferences")
+      .send({ provider: "CLAUDE", model: "claude-sonnet-5-5", effort: "LOW", dailyLimitUsd: 2, acceptDataCollection: false })
+      .expect(200);
+    clearAzureCache();
+    expect((await check([101])).queued).toEqual([101]);
+    quiet.mockRestore();
+  });
+
+  it("holds a call's worst case while it runs, so parallel calls cannot overshoot the daily limit", async () => {
+    const { id: userId } = await prisma.user.findFirstOrThrow();
+    const reserve = () => reserveAiSpend({ userId, provider: "CLAUDE", model: "claude-sonnet-5-5", purpose: "sop-check", maxCostUsd: 0.6, limitUsd: 0.5 });
+    const [first, second] = await Promise.all([reserve(), reserve()]);
+    const kept = first ?? second;
+
+    // One fits under the limit; the other sees it (spent + reserved >= limit) and is refused.
+    expect([first, second].filter((id) => id === null)).toHaveLength(1);
+    expect(await spentSince(userId, startOfUtcDay(new Date()))).toBeCloseTo(0.6);
+    // A reservation is not spending: the usage summary leaves it out.
+    expect(await getUsageSummary(userId)).toMatchObject({ todayUsd: 0, callsToday: 0 });
+
+    const usage = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    await settleAiSpend(kept, { userId, provider: "CLAUDE", model: "claude-sonnet-5-5", purpose: "sop-check", usage, costUsd: 0.01 });
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true, costUsd: true } })).toEqual([{ purpose: "sop-check", costUsd: 0.01 }]);
+    expect(await getUsageSummary(userId)).toMatchObject({ todayUsd: 0.01, callsToday: 1 });
+
+    // A reservation left by a call that died is removed by maintenance after 10 minutes.
+    const leftover = await reserve();
+    expect(leftover).not.toBeNull();
+    expect(await purgeStaleAiReservations()).toBe(0);
+    expect(await purgeStaleAiReservations(new Date(Date.now() + 11 * 60_000))).toBe(1);
+    expect(await prisma.aiUsage.count()).toBe(1);
+  });
+
+  it("releases the held amount when a call is not billed, and settles it with the real cost when it is", async () => {
+    await useClaude();
+    ai.rateLimitNext = 1;
+    await check([101]);
+    expect((await results([101])).get(101)).toMatchObject({ status: "QUEUED", errorReason: "AI_RATE_LIMITED" });
+    expect(await prisma.aiUsage.count()).toBe(0);
+
+    // Billed (an unusable answer): the reservation becomes the real cost. Forced: the rate-limit pause holds the queue.
+    ai.badJson = true;
+    await check([102], true);
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true, costUsd: true } })).toEqual([{ purpose: "sop-check", costUsd: 0.004 }]);
+  });
+
+  it("keeps a paid answer when recording its cost fails, holding the reservation as the record, and never pays for it again", async () => {
+    await useClaude();
+    const transaction = prisma.$transaction.bind(prisma);
+    // Settling (delete the reservation + add the usage row, one batch transaction) fails, also when tried again.
+    const failing = vi.spyOn(prisma, "$transaction").mockImplementation(((arg: unknown, ...rest: unknown[]) =>
+      Array.isArray(arg) ? Promise.reject(new Error("database unavailable")) : transaction(...([arg, ...rest] as [never]))) as typeof prisma.$transaction);
+    const loud = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await check([101]);
+    const settleTries = failing.mock.calls.filter(([arg]) => Array.isArray(arg)).length;
+    failing.mockRestore();
+    expect(settleTries).toBe(2);
+    expect((await results([101])).get(101)).toMatchObject({ status: "DONE", costUsd: 0.004 });
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true } })).toEqual([{ purpose: "reserved:sop-check" }]);
+    expect(String(loud.mock.calls[0]?.[0])).toContain("Recording AI spend failed twice");
+    loud.mockRestore();
+
+    // Done: the next visit does not run (and pay for) it again.
+    expect((await check([101])).unchanged).toEqual([101]);
+    expect(judgeCalls()).toHaveLength(1);
+  });
+
+  it("does not count a call twice when the first record committed but its answer was lost", async () => {
+    const { id: userId } = await prisma.user.findFirstOrThrow();
+    const reservation = await reserveAiSpend({ userId, provider: "CLAUDE", model: "claude-sonnet-5-5", purpose: "sop-check", maxCostUsd: 0.6, limitUsd: 5 });
+    const transaction = prisma.$transaction.bind(prisma);
+    // The settle commits, then the connection drops before the reply.
+    const lost = vi.spyOn(prisma, "$transaction").mockImplementationOnce((async (...args: unknown[]) => {
+      await transaction(...(args as [never]));
+      throw new Error("Connection reset after COMMIT");
+    }) as typeof prisma.$transaction);
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const usage = { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
+    await recordAiSpend(reservation, { userId, provider: "CLAUDE", model: "claude-sonnet-5-5", purpose: "sop-check", usage, costUsd: 0.004 });
+    lost.mockRestore();
+    // The first failure is logged with its cause.
+    expect(warned.mock.calls[0]?.[1]).toMatchObject({ message: "Connection reset after COMMIT" });
+    warned.mockRestore();
+    expect(await prisma.aiUsage.findMany({ select: { purpose: true, costUsd: true } })).toEqual([{ purpose: "sop-check", costUsd: 0.004 }]);
+  });
+
+  it("serves users fairly: one user's long queue does not hold back another's check", async () => {
+    const { id: busyUser } = await prisma.user.findFirstOrThrow();
+    const other = await setupUser();
+    const otherUser = await prisma.user.findFirstOrThrow({ where: { id: { not: busyUser } } });
+    // Neither user has an AI model set, so each check ends at once; only the order they start in matters.
+    await prisma.sopAiCheck.create({ data: { userId: otherUser.id, credentialId: other.credentialId, workItemId: 1, projectName: "Alpha", inputHash: "x" } });
+    await prisma.sopAiCheck.createMany({
+      data: Array.from({ length: 60 }, (_, index) => ({ userId: busyUser, credentialId, workItemId: 1000 + index, projectName: "Alpha", inputHash: "x" })),
+    });
+
+    await recoverSopAiQueue();
+    await waitForSopAiIdle();
+    const rows = await prisma.sopAiCheck.findMany({ select: { userId: true, startedAt: true } });
+    const otherStarted = rows.find((row) => row.userId === otherUser.id)!.startedAt!.getTime();
+    const before = rows.filter((row) => row.userId === busyUser && row.startedAt!.getTime() < otherStarted);
+    expect(rows.every((row) => row.startedAt !== null)).toBe(true);
+    expect(before.length).toBeLessThan(3);
   });
 
   it("counts the cost of unusable answers against the daily limit", async () => {
@@ -369,7 +507,7 @@ when: before-active
     await check([101]);
     const prompt = JSON.stringify(judgeCalls()[0]?.body);
     expect(prompt).toContain("RULE T-07 (GAP)");
-    expect(prompt).toContain("Code found: The approach has 1 step; it needs at least 3.");
+    expect(prompt).toContain("Code found:\\n<<<\\nThe approach has 1 step; it needs at least 3.\\n>>>");
 
     const cleared = await detail();
     expect(cleared.violations).toEqual([]);

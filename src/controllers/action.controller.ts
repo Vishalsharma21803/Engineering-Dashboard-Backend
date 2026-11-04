@@ -20,7 +20,10 @@ import { getRequestContext, sendError, sendValidationError } from "./controller-
 
 function getUserId(req: Request, res: Response): string | null {
   if (!req.userId) {
-    res.status(401).json({ message: "Authentication required" });
+    res.status(401).json({
+      message: "Authentication required",
+      reason: "AUTH_REQUIRED",
+    });
     return null;
   }
 

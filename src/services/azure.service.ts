@@ -58,6 +58,9 @@ export async function validateAzurePat(
     throw new AzureDevOpsUpstreamError(null);
   }
 
+  // Only the status and content type matter: the body is released so the connection can be reused.
+  await response.body?.cancel().catch(() => undefined);
+
   if (response.status === 200) {
     const contentType = response.headers.get("content-type") ?? "";
 

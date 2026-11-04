@@ -1,12 +1,18 @@
+import { HttpResponse, http } from "msw";
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { clearAzureCache } from "../../src/lib/azure/cache.js";
 import { prisma } from "../../src/lib/prisma.js";
+import { server } from "../setup.js";
 import { useAlphaRulebook } from "../support/test-rulebook.js";
 import {
   ALPHA,
   ALPHA_REPO,
+  FAKE_ORG_URL,
   FAKE_PAT,
+  ME,
+  addFakeTasks,
   writeRequests,
   type FakeAzure,
 } from "../support/fake-azure.js";
@@ -238,6 +244,13 @@ describe("Azure read API — data", () => {
     expect(pr.threads.data.filter((thread: { isResolved: boolean }) => !thread.isResolved)).toHaveLength(2);
     expect(pr.policies.data[0]).toMatchObject({ name: "Minimum number of reviewers", status: "approved" });
     expect(pr.linkedWorkItemIds.data).toEqual([101]);
+    expect(pr.linkedWorkItems).toEqual([{ id: 101, title: "Implement login", state: "Active", type: "Task" }]);
+
+    // Titles that cannot be read are left out; the ids still show.
+    server.use(http.post(`${FAKE_ORG_URL}/_apis/wit/workitemsbatch`, () => HttpResponse.json({ message: "Server error" }, { status: 500 })));
+    const withoutTitles = (await get(`/projects/Alpha/repos/${ALPHA_REPO.id}/pull-requests/1`).expect(200)).body.pullRequest;
+    expect(withoutTitles.linkedWorkItemIds.data).toEqual([101]);
+    expect(withoutTitles).not.toHaveProperty("linkedWorkItems");
   });
 
   it("returns pipeline health, runs, running builds and failed stages", async () => {
@@ -323,6 +336,207 @@ describe("Azure read API — data", () => {
     expect(dashboard.sections.workItems.data).toEqual([]);
     expect(dashboard.sections.compliance.data.map((item: { workItemId: number }) => item.workItemId)).toEqual([104]);
   });
+});
+
+describe("Azure read API — cut and partial lists", () => {
+  const wiqlTops = () => fake.requests.filter((entry) => entry.path.endsWith("/wiql")).map((entry) => entry.search.get("$top"));
+
+  it("says when a ticket list was cut: 200 where every ticket is SOP-checked, more for plain lists", async () => {
+    addFakeTasks(fake, 201);
+
+    const dashboard = (await get("/dashboard").expect(200)).body.dashboard;
+    expect(dashboard.workItemsTruncated).toEqual({ cap: 200 });
+    expect(wiqlTops()).toEqual(["201"]);
+    expect((await get("/my-work").expect(200)).body.myWork.workItemsTruncated).toEqual({ cap: 200 });
+
+    const team = (await get("/projects/Alpha/team-work-items").expect(200)).body.teamWork;
+    expect(team).toMatchObject({ workItemsTruncated: null, poolTotal: 206 });
+    expect(wiqlTops()).toContain("1001");
+
+    const overview = (await get("/projects/Alpha").expect(200)).body.project;
+    expect(overview).toMatchObject({ counts: { myOpenWorkItems: { data: 205 } }, myOpenWorkItemsTruncated: false });
+    expect(wiqlTops()).toContain("501");
+
+    addFakeTasks(fake, 300, 5001);
+    clearAzureCache();
+    expect((await get("/projects/Alpha").expect(200)).body.project).toMatchObject({ counts: { myOpenWorkItems: { data: 500 } }, myOpenWorkItemsTruncated: true });
+  });
+
+  it("says when the project overview's pull request and pipeline counts were cut", async () => {
+    expect((await get("/projects/Alpha").expect(200)).body.project).toMatchObject({
+      counts: { activePullRequests: { data: 2 }, failingPipelines: { data: 1 } },
+      activePullRequestsTruncated: false,
+      failingPipelinesTruncated: false,
+    });
+
+    for (let id = 1000; id < 1500; id += 1) fake.pullRequests.push({ ...fake.pullRequests[2]!, pullRequestId: id, threads: [], workItemIds: [] });
+    for (let id = 100; id < 600; id += 1) fake.definitions.push({ ...fake.definitions[1]!, id, name: `extra-${id}` });
+    clearAzureCache();
+
+    expect((await get("/projects/Alpha").expect(200)).body.project).toMatchObject({
+      counts: { activePullRequests: { data: 500 }, failingPipelines: { data: 1 } },
+      activePullRequestsTruncated: true,
+      failingPipelinesTruncated: true,
+    });
+  });
+
+  it("lists the pull requests of the projects it can read and says which it could not", async () => {
+    fake.failPullRequestsIn.add("Beta");
+
+    const page = (await get("/pull-requests").expect(200)).body.pullRequests;
+    expect(page.items.map((pr: { pullRequestId: number }) => pr.pullRequestId).sort()).toEqual([1, 3]);
+    expect(page.completeness).toEqual({ truncated: false, cap: 100, failedProjects: ["Beta"], note: "Pull requests from Beta could not be read from Azure DevOps." });
+
+    const dashboard = (await get("/dashboard").expect(200)).body.dashboard;
+    expect(dashboard.sections.pullRequests.status).toBe("ok");
+    expect(dashboard.completeness.pullRequests.failedProjects).toEqual(["Beta"]);
+    expect((await get("/dashboard/pull-requests").expect(200)).body.pullRequests.completeness.failedProjects).toEqual(["Beta"]);
+
+    // None readable: the list fails instead of looking empty.
+    fake.failPullRequestsIn.add("Alpha");
+    clearAzureCache();
+    expect((await get("/pull-requests").expect(502)).body.reason).toBe("AZURE_UPSTREAM_ERROR");
+    const failed = (await get("/dashboard").expect(200)).body.dashboard;
+    expect(failed.sections.pullRequests).toMatchObject({ status: "error", data: null });
+    expect(failed.completeness.pullRequests).toBeNull();
+  });
+
+  it("lists at most the 100 newest pull requests, reading every page, and says more exist", async () => {
+    for (let id = 10; id < 130; id += 1) {
+      fake.pullRequests.push({ ...fake.pullRequests[0]!, pullRequestId: id, title: `PR ${id}`, creationDate: new Date(Date.now() - id * 60_000).toISOString(), threads: [], workItemIds: [] });
+    }
+
+    const page = (await get("/pull-requests?projectId=Alpha").expect(200)).body.pullRequests;
+    expect(page.poolTotal).toBe(100);
+    expect(page.completeness).toMatchObject({ truncated: true, cap: 100, note: "Showing the 100 newest pull requests; older ones are not listed." });
+    expect(fake.requests.filter((entry) => entry.path.endsWith("/pullrequests")).map((entry) => entry.search.get("$skip"))).toContain("100");
+  });
+
+  it("asks Azure for my own pipeline runs, so other people's never push mine out of the read", async () => {
+    for (let id = 600; id < 850; id += 1) {
+      fake.builds.push({ ...fake.builds[2]!, id, queueTime: new Date().toISOString() });
+    }
+
+    const dashboard = (await get("/dashboard").expect(200)).body.dashboard;
+    expect(dashboard.sections.pipelines.data.map((build: { id: number }) => build.id)).toEqual([501, 502]);
+    expect(dashboard.completeness.pipelines).toEqual({ truncated: false, cap: 200, failedProjects: [], note: null });
+    expect(fake.requests.find((entry) => entry.path.endsWith("/_apis/build/builds"))?.search.get("requestedFor")).toBe(ME.id);
+    expect((await get("/dashboard/pipeline-runs").expect(200)).body.runs.completeness).toMatchObject({ failedProjects: [] });
+  });
+
+  it("does not call exactly 200 of my runs, or exactly 300 pull requests in a search, cut", async () => {
+    const mine = () => fake.builds.filter((build) => build.requestedFor?.id === ME.id).length;
+    for (let id = 600; mine() < 200; id += 1) {
+      fake.builds.push({ ...fake.builds[0]!, id, requestedFor: ME, queueTime: new Date().toISOString() });
+    }
+    expect((await get("/dashboard").expect(200)).body.dashboard.completeness.pipelines).toMatchObject({ truncated: false, cap: 200 });
+    fake.builds.push({ ...fake.builds[0]!, id: 900, requestedFor: ME, queueTime: new Date().toISOString() });
+    clearAzureCache();
+    expect((await get("/dashboard").expect(200)).body.dashboard.completeness.pipelines).toMatchObject({ truncated: true, cap: 200 });
+
+    // Three full pages: one more pull request is asked for to tell a cut from exactly 300.
+    const mineOpen = () => fake.pullRequests.filter((pr) => pr.status === "active" && pr.createdBy?.id === ME.id && pr.repository.project.name === "Alpha").length;
+    for (let id = 1000; mineOpen() < 300; id += 1) {
+      fake.pullRequests.push({ ...fake.pullRequests[0]!, pullRequestId: id, status: "active", createdBy: ME, threads: [], workItemIds: [] });
+    }
+    expect(fake.pullRequests[0]!.repository.project.name).toBe("Alpha");
+    clearAzureCache();
+    const before = fake.requests.length;
+    await get("/pull-requests?projectId=Alpha&role=author").expect(200);
+    const searches = fake.requests.slice(before).filter((entry) => entry.path.endsWith("/pullrequests") && entry.search.get("searchCriteria.creatorId") === ME.id);
+    expect(searches.map((entry) => [entry.search.get("$skip"), entry.search.get("$top")])).toEqual([
+      ["0", "100"],
+      ["100", "100"],
+      ["200", "100"],
+      ["300", "1"],
+    ]);
+
+    // That one-item read failing keeps the 300 read: the project is not "unreadable", the list just says it may be cut.
+    server.use(
+      http.get(/\/pullrequests$/, ({ request }) => {
+        const url = new URL(request.url);
+        return url.searchParams.get("$skip") === "300" ? HttpResponse.json({ message: "Server error" }, { status: 500 }) : undefined;
+      })
+    );
+    clearAzureCache();
+    const quiet = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const cut = (await get("/pull-requests?projectId=Alpha&role=author").expect(200)).body.pullRequests;
+    quiet.mockRestore();
+    expect(cut.completeness).toMatchObject({ truncated: true, failedProjects: [] });
+    expect(cut.poolTotal).toBe(100);
+  });
+
+  it("says when a project's current sprint could not be read, and reads it again on the next page", async () => {
+    fake.failSprints = true;
+    const sprintReads = () => fake.requests.filter((entry) => entry.path.includes("/teamsettings")).length;
+
+    expect((await get("/my-work").expect(200)).body.myWork.sprint.unreadable).toEqual(["Alpha", "Beta"]);
+    const before = sprintReads();
+    await get("/my-work?page=1").expect(200);
+    expect(sprintReads()).toBeGreaterThan(before);
+
+    fake.failSprints = false;
+    expect((await get("/my-work?page=1").expect(200)).body.myWork.sprint.unreadable).toEqual([]);
+    const read = sprintReads();
+    await get("/my-work?page=1").expect(200);
+    expect(sprintReads()).toBe(read);
+  });
+
+  it("treats a team without a current iteration (Azure answers 404) as having no sprint, not as unreadable", async () => {
+    let sprintReads = 0;
+    server.use(
+      http.get(/\/_apis\/work\/teamsettings\/iterations/, () => {
+        sprintReads += 1;
+        return HttpResponse.json({ message: "Current iteration does not exist.", typeKey: "CurrentIterationDoesNotExistException" }, { status: 404 });
+      })
+    );
+
+    expect((await get("/my-work").expect(200)).body.myWork.sprint.unreadable).toEqual([]);
+    expect(sprintReads).toBeGreaterThan(0);
+    // Kept with the page: the next page does not read the sprints again.
+    const read = sprintReads;
+    await get("/my-work?page=1").expect(200);
+    expect(sprintReads).toBe(read);
+  });
+
+  it("says when part of a ticket's very long history was not read", async () => {
+    const ticket = fake.workItems.get(101)!;
+    ticket.rev = 1500;
+    fake.updates.set(
+      101,
+      Array.from({ length: 1500 }, (_, index) => ({ id: index + 1, rev: index + 1, revisedBy: ME, fields: { "System.ChangedDate": { newValue: new Date(Date.now() - (1500 - index) * 60_000).toISOString() } } }))
+    );
+
+    expect((await get("/projects/Alpha/work-items/101").expect(200)).body.workItem.historyTruncated).toBe(true);
+    expect((await get("/projects/Alpha/work-items/102").expect(200)).body.workItem.historyTruncated).toBe(false);
+  });
+});
+
+describe("Azure calls at the list caps", () => {
+  it("stays within the time budgets at 200 SOP-checked tickets: dashboard and My work at most 2000 calls, the SOP report 2500", async () => {
+    await useAlphaRulebook();
+    addFakeTasks(fake, 200);
+    const callsFor = async (run: () => Promise<unknown>) => {
+      clearAzureCache();
+      const start = fake.requests.length;
+      await run();
+      return fake.requests.length - start;
+    };
+
+    const dashboard = await callsFor(() => get("/dashboard").expect(200));
+    const myWork = await callsFor(() => get("/my-work?refresh=1").expect(200));
+    let run: { truncated: boolean } | null = null;
+    const report = await callsFor(async () => {
+      run = (await agent.post(`/api/sop/reports/${credentialId}/Alpha`).send({}).expect(200)).body.run;
+    });
+
+    expect(dashboard).toBeLessThanOrEqual(2000);
+    expect(myWork).toBeLessThanOrEqual(2000);
+    expect(report).toBeLessThanOrEqual(2500);
+    // 205 tickets in Alpha: the run checked the 200 most recently changed and says so.
+    expect(run).toMatchObject({ truncated: true, itemsChecked: 200 });
+    expect((await agent.get(`/api/sop/reports/${credentialId}/Alpha`).expect(200)).body.runs.items[0].truncated).toBe(true);
+  }, 120_000);
 });
 
 describe("Azure read API — upstream failures", () => {

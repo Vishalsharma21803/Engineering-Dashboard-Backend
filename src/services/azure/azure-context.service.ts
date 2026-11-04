@@ -1,6 +1,7 @@
 import { AppError } from "../../lib/app-error.js";
 import { AzureClient } from "../../lib/azure/client.js";
 import { decryptSecret } from "../../lib/encryption.js";
+import { logFallback } from "../../lib/log-fallback.js";
 import { ValidationStatus } from "../../generated/prisma/enums.js";
 import {
   getCredentialWithSecret,
@@ -44,9 +45,6 @@ export async function markCredentialInvalid(userId: string, credentialId: string
   try {
     await recordValidationResult(userId, credentialId, ValidationStatus.INVALID);
   } catch (error) {
-    console.error(
-      "Recording validation result failed:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
+    logFallback("Recording that the Azure DevOps PAT is invalid failed", error);
   }
 }

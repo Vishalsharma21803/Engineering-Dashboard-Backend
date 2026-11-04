@@ -5,7 +5,11 @@ import jwt from "jsonwebtoken";
 
 import { registerSchema, loginSchema } from "../schemas/auth.schema.js";
 import { registerUser, loginUser, getCurrentUser, revokeToken } from "../services/auth.service.js";
+import { AppError } from "../lib/app-error.js";
+import { isProduction } from "../lib/server-config.js";
+import { isSignupAllowed } from "../lib/signup-policy.js";
 import { isSopAdmin } from "../lib/sop-admin.js";
+import { sendError } from "./controller-helpers.js";
 
 export async function register(
   req: Request,
@@ -24,6 +28,15 @@ export async function register(
     return;
   }
 
+  // Before any database lookup: an address that is not invited gets the same answer whether or not it has an account.
+  if (!isSignupAllowed(result.data.email)) {
+    res.status(403).json({
+      message: "Sign-up is by invitation only. Ask the Cockpit owner to add your email.",
+      reason: "SIGNUP_NOT_ALLOWED",
+    });
+    return;
+  }
+
   try {
     const user = await registerUser(result.data);
 
@@ -32,21 +45,8 @@ export async function register(
       user,
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "EMAIL_ALREADY_REGISTERED"
-    ) {
-      res.status(409).json({
-        message: "Email is already registered",
-      });
-      return;
-    }
-
-    console.error("Registration failed:", error);
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    // EMAIL_ALREADY_REGISTERED is a 409 AppError.
+    await sendError(res, error, "Signing up failed");
   }
 }
 
@@ -73,6 +73,7 @@ export async function login(
     if (!user) {
       res.status(401).json({
         message: "Invalid email or password",
+        reason: "INVALID_CREDENTIALS",
       });
       return;
     }
@@ -80,12 +81,7 @@ export async function login(
     const jwtSecret = process.env.JWT_SECRET;
 
     if (!jwtSecret) {
-      console.error("JWT_SECRET is not configured");
-
-      res.status(500).json({
-        message: "Internal server error",
-      });
-      return;
+      throw new AppError(500, "SERVER_MISCONFIGURED", "Cockpit cannot sign anyone in: JWT_SECRET is not set on the server");
     }
 
     // jwtid: logout can end this one sign-in (other devices stay signed in).
@@ -97,7 +93,7 @@ export async function login(
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction(),
       sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
       path: "/",
@@ -108,11 +104,7 @@ export async function login(
       user,
     });
   } catch (error) {
-    console.error("Login failed:", error);
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Signing in failed");
   }
 }
 
@@ -124,6 +116,7 @@ export async function me(
   if (!req.userId) {
     res.status(401).json({
       message: "Authentication required",
+      reason: "AUTH_REQUIRED",
     });
     return;
   }
@@ -134,17 +127,14 @@ export async function me(
     if (!user) {
       res.status(401).json({
         message: "User no longer exists",
+        reason: "USER_NOT_FOUND",
       });
       return;
     }
 
     res.status(200).json({ user: { ...user, isSopAdmin: isSopAdmin(user.email) } });
   } catch (error) {
-    console.error("Fetching current user failed:", error);
-
-    res.status(500).json({
-      message: "Internal server error",
-    });
+    await sendError(res, error, "Loading your account failed");
   }
 }
 
@@ -154,6 +144,7 @@ export async function logout(
 ): Promise<void> {
   const token: unknown = req.cookies?.token;
   const jwtSecret = process.env.JWT_SECRET;
+  let revocationFailed = false;
 
   // A still-valid token is revoked, so a copy of the cookie stops working too. A bad or expired one needs nothing.
   if (typeof token === "string" && token && jwtSecret) {
@@ -164,19 +155,29 @@ export async function logout(
         await revokeToken(decoded.sub, decoded.jti, new Date(decoded.exp * 1000));
       }
     } catch (error) {
-      // Signing out always clears the cookie; a revocation that could not be saved is only logged.
+      // Signing out always clears the cookie; a revocation that could not be saved is logged and reported.
       if (!(error instanceof jwt.JsonWebTokenError)) {
         console.error("Revoking the sign-in token failed:", error);
+        revocationFailed = true;
       }
     }
   }
 
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction(),
     sameSite: "lax",
     path: "/",
   });
+
+  // Still a success: this browser is signed out. Copies of the cookie stay valid until they expire.
+  if (revocationFailed) {
+    res.status(200).json({
+      message: "Signed out on this device, but Cockpit could not end the session on the server. Copies of it stay valid until they expire (within 24 hours).",
+      reason: "SESSION_NOT_REVOKED",
+    });
+    return;
+  }
 
   res.status(200).json({
     message: "Logout successful",

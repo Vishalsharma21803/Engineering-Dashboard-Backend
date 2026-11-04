@@ -77,7 +77,10 @@ type Handler = (req: Request, userId: string) => Promise<unknown>;
 export function userRoute(label: string, handler: Handler, status = 200) {
   return async (req: Request, res: Response): Promise<void> => {
     if (!req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 
@@ -97,7 +100,10 @@ export function solidtimeRoute(label: string, handler: ConnectedHandler) {
     const solidtime = req.solidtime;
 
     if (!solidtime || !req.userId) {
-      res.status(401).json({ message: "Authentication required" });
+      res.status(401).json({
+        message: "Authentication required",
+        reason: "AUTH_REQUIRED",
+      });
       return;
     }
 
@@ -257,7 +263,10 @@ export async function timeCsvController(req: Request, res: Response): Promise<vo
   const solidtime = req.solidtime;
 
   if (!solidtime || !req.userId) {
-    res.status(401).json({ message: "Authentication required" });
+    res.status(401).json({
+      message: "Authentication required",
+      reason: "AUTH_REQUIRED",
+    });
     return;
   }
 

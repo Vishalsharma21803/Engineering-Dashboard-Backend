@@ -12,6 +12,7 @@ import { WORK_ITEM_FIELDS, extractLinks, getWorkItem } from "../azure/work-items
 import {
   TEXT_FIELD_REFERENCE,
   WORK_FIELD_REFERENCE,
+  assertCloseAfterMerge,
   isHtmlField,
   loadRetryableStage,
   loadRunningBuild,
@@ -210,19 +211,26 @@ function sameValue(compare: FieldComparison, stored: unknown, wanted: string): b
 export class ExecutionFailure extends Error {
   constructor(
     readonly error: unknown,
-    readonly writeSent: boolean
+    readonly writeSent: boolean,
+    /** What each part of a batch did before it failed (`items`, with `checks` describing each). */
+    readonly partial: Record<string, unknown> | null = null
   ) {
     super(error instanceof Error ? error.message : "Execution failed");
     this.name = "ExecutionFailure";
   }
 }
 
+/**
+ * Runs an approved action. `onProgress` is called after each ticket of a batch
+ * (the caller records that the run is still alive).
+ */
 export async function executeAction(
   client: AzureClient,
-  action: ApprovedAction
+  action: ApprovedAction,
+  onProgress: () => Promise<void> = async () => {}
 ): Promise<ExecutionResult> {
   if (action.kind === "WORK_ITEMS_UPDATE_TIME") {
-    return executeTimeBatch(client, action);
+    return executeTimeBatch(client, action, onProgress);
   }
 
   const ticket = ApprovalTicket.issue(action.id, client.credentialId);
@@ -244,6 +252,11 @@ function storedTimeItems(params: Record<string, unknown>): TimeBatchItem[] {
   return items as TimeBatchItem[];
 }
 
+/** Azure answered the write with a definite refusal (4xx such as 400, 401, 403, 409): nothing was applied. */
+function refusedOutright(error: unknown): boolean {
+  return error instanceof AzureApiError && error.upstreamStatus !== null && error.reason !== "AZURE_UPSTREAM_ERROR";
+}
+
 /** The PAT itself is refused: every later ticket would fail the same way. */
 function stopsTheBatch(error: unknown): boolean {
   return error instanceof AzureApiError && (error.reason === "AZURE_PAT_INVALID" || error.reason === "AZURE_INSUFFICIENT_SCOPE");
@@ -255,17 +268,40 @@ function hoursLabel(item: TimeBatchItem): string {
     .join(", ");
 }
 
+type TimeOutcome = { workItemId: number; status: "updated" | "unverified" | "stale" | "failed" | "unknown" | "not-attempted"; message?: string };
+
+/** One line per ticket of a time batch, as shown with the result. */
+function describeTimeOutcome(outcome: TimeOutcome, item: TimeBatchItem): string {
+  switch (outcome.status) {
+    case "updated":
+      return `#${item.workItemId}: ${hoursLabel(item)}`;
+    case "unverified":
+      return `#${item.workItemId}: written, but reading it back did not match`;
+    case "stale":
+      return `#${item.workItemId}: changed in Azure DevOps since the check, not updated`;
+    case "unknown":
+      return `#${item.workItemId}: Azure DevOps did not confirm; check the ticket`;
+    case "not-attempted":
+      return `#${item.workItemId}: not attempted`;
+    default:
+      return `#${item.workItemId}: not updated (${outcome.message ?? "failed"})`;
+  }
+}
+
 /**
  * One approval covers the listed tickets; each write still gets its own
  * single-use ticket. A ticket changed since the preview is skipped (and
- * reported) while the others are written. Nothing written at all is a failure.
+ * reported) while the others are written. Nothing written at all is a failure,
+ * which still carries what happened to each ticket.
  */
-async function executeTimeBatch(client: AzureClient, action: ApprovedAction): Promise<ExecutionResult> {
+async function executeTimeBatch(client: AzureClient, action: ApprovedAction, onProgress: () => Promise<void>): Promise<ExecutionResult> {
   const items = storedTimeItems(action.params);
-  const outcomes: Array<{ workItemId: number; status: "updated" | "unverified" | "stale" | "failed" | "unknown" | "not-attempted"; message?: string }> = [];
+  const outcomes: TimeOutcome[] = [];
   let firstError: unknown = null;
   let anyWriteSent = false;
   let stopped = false;
+  // A refusal of the PAT itself (401), or of its write scope on a sent write (403), from any ticket: recorded even when another error came first.
+  let refusedBy: "AZURE_PAT_INVALID" | "AZURE_INSUFFICIENT_SCOPE" | null = null;
 
   for (const item of items) {
     if (stopped) {
@@ -292,41 +328,52 @@ async function executeTimeBatch(client: AzureClient, action: ApprovedAction): Pr
       anyWriteSent ||= writeSent;
       firstError ??= error;
       stopped = stopsTheBatch(error);
-      const stale = error instanceof AppError && error.reason === "ACTION_STALE";
+      if (error instanceof AzureApiError && (error.reason === "AZURE_PAT_INVALID" || (error.reason === "AZURE_INSUFFICIENT_SCOPE" && writeSent))) {
+        refusedBy = error.reason;
+      }
+      const stale =
+        (error instanceof AppError && error.reason === "ACTION_STALE") || (writeSent && error instanceof AzureApiError && error.reason === "AZURE_CONFLICT");
       outcomes.push({
         workItemId: item.workItemId,
-        status: writeSent ? "unknown" : stale ? "stale" : "failed",
+        status: writeSent && !refusedOutright(error) ? "unknown" : stale ? "stale" : "failed",
         message: error instanceof Error ? error.message : "Failed",
       });
     }
+
+    await onProgress();
   }
+
+  const checks = outcomes.map((outcome, index) => ({ check: describeTimeOutcome(outcome, items[index]!), passed: outcome.status === "updated" }));
 
   if (!outcomes.some((outcome) => outcome.status === "updated" || outcome.status === "unverified")) {
-    throw new ExecutionFailure(firstError, anyWriteSent);
+    throw new ExecutionFailure(firstError, anyWriteSent, { items: outcomes, checks, ...(refusedBy ? { refusedBy } : {}) });
   }
 
-  const describe = (outcome: (typeof outcomes)[number], item: TimeBatchItem): string => {
-    switch (outcome.status) {
-      case "updated":
-        return `#${item.workItemId}: ${hoursLabel(item)}`;
-      case "unverified":
-        return `#${item.workItemId}: written, but reading it back did not match`;
-      case "stale":
-        return `#${item.workItemId}: changed in Azure DevOps since the check, not updated`;
-      case "unknown":
-        return `#${item.workItemId}: Azure DevOps did not confirm; check the ticket`;
-      case "not-attempted":
-        return `#${item.workItemId}: not attempted`;
-      default:
-        return `#${item.workItemId}: not updated (${outcome.message ?? "failed"})`;
-    }
-  };
-  const checks = outcomes.map((outcome, index) => ({ check: describe(outcome, items[index]!), passed: outcome.status === "updated" }));
-
   return {
-    result: { items: outcomes },
+    result: { items: outcomes, ...(refusedBy ? { refusedBy } : {}) },
     verification: { verified: checks.every((check) => check.passed), checks },
   };
+}
+
+/**
+ * Before closing: the linked pull requests must still all be merged (one may have been linked or reopened since).
+ * A pull request that cannot be read is never taken as merged (see assertCloseAfterMerge): nothing is closed on an unknown.
+ */
+async function assertStillCloseable(client: AzureClient, workItem: RawWorkItem): Promise<void> {
+  try {
+    await assertCloseAfterMerge(client, workItem, { refuseUnreadable: true });
+  } catch (error) {
+    if (!(error instanceof AppError) || error.status !== 422) {
+      throw error;
+    }
+
+    const why: Record<string, string> = {
+      CLOSE_AFTER_MERGE_DISABLED: "The project's SOP now has a Testing stage after merge",
+      NO_LINKED_PRS: "The ticket has no linked pull request any more",
+      PRS_NOT_MERGED: "A linked pull request is not completed (it was linked or reopened since the proposal)",
+    };
+    throw new AppError(409, "ACTION_STALE", `${why[error.reason] ?? error.message}. Nothing was changed.`);
+  }
 }
 
 async function runAction(
@@ -395,6 +442,11 @@ async function runAction(
     case "WORK_ITEM_TRANSITION_STATE":
     case "WORK_ITEM_CLOSE_AFTER_MERGE": {
       const workItem = await assertFreshWorkItem(client, action);
+
+      if (action.kind === "WORK_ITEM_CLOSE_AFTER_MERGE") {
+        await assertStillCloseable(client, workItem);
+      }
+
       const expected: Record<string, unknown> = {
         [WORK_ITEM_FIELDS.state]: stringParam(params, "state"),
       };

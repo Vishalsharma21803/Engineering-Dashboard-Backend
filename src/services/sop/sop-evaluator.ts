@@ -1,7 +1,7 @@
 import type { AzureClient } from "../../lib/azure/client.js";
 import type { RawWorkItem } from "../../lib/azure/azure-api.types.js";
 import type { ComplianceResult, ComplianceViolation, SuggestedAction, WorkItemSummary } from "../../types/azure.types.js";
-import { checkNeeds, enteredAt, lastEnteredAt, movedPast, runCodeCheck } from "./code-checker.js";
+import { checkNeeds, enteredAt, lastEnteredAt, movedPast, neverWorked, runCodeCheck } from "./code-checker.js";
 import { buildDossier, kindOf, type DossierNeed, type TicketDossier } from "./dossier.js";
 import { findProjectProfile, type EffectiveRulebook } from "./rulebook.merge.js";
 import { findingSeverity, type ProjectProfile, type RuleCard, type RuleWhen, type Severity, type SopStage } from "./rulebook.types.js";
@@ -57,6 +57,12 @@ export function ruleWindow(card: RuleCard, dossier: TicketDossier, now: Date): R
   // Projects without an Estimations state estimate before work starts.
   const when: RuleWhen = card.when === "at-estimation" && dossier.profile.stages.estimation.length === 0 ? "before-active" : card.when;
   const stage = STAGE_OF_WHEN[when] as SopStage;
+
+  // A duplicate or won't-fix closed straight from New: the work of stages it never entered (before-active, working,
+  // review, testing…) was never due. Done rules still apply to it.
+  if (when !== "at-done" && neverWorked(dossier) && (when === "before-active" || !dossier.stageHistory?.some((entry) => entry.stage === stage))) {
+    return { state: "skip", reason: "Closed without work starting" };
+  }
 
   if (dossier.profile.stages[stage].length === 0) {
     return { state: "skip", reason: `${dossier.profile.project} has no ${stage} stage` };
@@ -156,6 +162,10 @@ function finding(
  */
 export function evaluateDossier(dossier: TicketDossier, rulebook: RulebookForChecks, now: Date): ComplianceResult {
   const result = baseResult(dossier.workItem, rulebook, "checked");
+
+  if (dossier.historyTruncated) {
+    result.historyTruncated = true;
+  }
 
   for (const card of candidateCards(rulebook, dossier.profile, dossier.workItem.type)) {
     const ref = { ruleId: card.id, ruleTitle: card.title };

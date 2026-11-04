@@ -50,6 +50,17 @@ export interface IterationSummary {
 
 export type SectionStatus = "ok" | "forbidden" | "error";
 
+/** How complete a list read was. `note` is a ready-to-show sentence (null when nothing was cut or failed). */
+export interface ReadCompleteness {
+  /** More existed than was read (a cap was hit). */
+  truncated: boolean;
+  /** The cap that applied (items listed at most), or null when none was hit. */
+  cap: number | null;
+  /** Projects whose part of the list could not be read (names). */
+  failedProjects: string[];
+  note: string | null;
+}
+
 export interface Section<T> {
   status: SectionStatus;
   data: T | null;
@@ -67,6 +78,12 @@ export interface ProjectOverview extends ProjectSummary {
     activePullRequests: Section<number>;
     failingPipelines: Section<number>;
   };
+  /** `counts.myOpenWorkItems` hit the list cap: there are at least that many. */
+  myOpenWorkItemsTruncated?: boolean;
+  /** `counts.activePullRequests` hit its cap (500): there are at least that many. */
+  activePullRequestsTruncated?: boolean;
+  /** More pipelines than were read (500): `counts.failingPipelines` may miss some. */
+  failingPipelinesTruncated?: boolean;
 }
 
 export type StateCategory =
@@ -85,6 +102,8 @@ export interface WorkItemSummary {
   title: string;
   state: string;
   stateCategory: StateCategory;
+  /** "guessed": the type's states could not be read, so the category comes from the state name. */
+  stateCategorySource?: "azure" | "guessed";
   reason: string | null;
   priority: number | null;
   assignedTo: IdentityRef | null;
@@ -176,6 +195,8 @@ export interface WorkItemDetail extends WorkItemSummary {
   reproSteps: string;
   comments: Section<WorkItemComment[]>;
   history: Section<WorkFieldChange[]>;
+  /** Part of the middle of a very long history was not read. */
+  historyTruncated: boolean;
   linkedPullRequests: Section<LinkedPullRequest[]>;
   allowedStates: Array<{ name: string; category: StateCategory }>;
   supportedFields: SupportedWorkFields;
@@ -256,6 +277,8 @@ export interface PullRequestDetail extends PullRequestSummary {
   threads: Section<PullRequestThread[]>;
   policies: Section<PolicyEvaluation[]>;
   linkedWorkItemIds: Section<number[]>;
+  /** Titles of the linked tickets; omitted when they could not be read (ids missing from it show as "#id"). */
+  linkedWorkItems?: Array<{ id: number; title: string; state: string; type: string }>;
 }
 
 export interface BuildSummary {
@@ -428,6 +451,8 @@ export interface ComplianceResult {
   cleared: Array<ComplianceRuleRef & { reason: string; quotes: string[] }>;
   /** The user's last AI review of this ticket; null when there is none. */
   aiReview: ComplianceAiReview | null;
+  /** True when part of the ticket's very long history (middle revisions or oldest comments) was not read; results are unchanged. */
+  historyTruncated?: boolean;
 }
 
 export interface ComplianceAiReview {
@@ -481,4 +506,10 @@ export interface Dashboard {
     compliance: Section<ComplianceResult[]>;
   };
   recommendations: Recommendation[];
+  /** "Bug in Alpha" pairs whose states could not be read (their tickets' open/closed is guessed). */
+  stateLookupFailed: string[];
+  /** The ticket list was cut at `cap` (most recently changed kept). */
+  workItemsTruncated: { cap: number } | null;
+  /** Null when that section could not be read at all. */
+  completeness: { pullRequests: ReadCompleteness | null; pipelines: ReadCompleteness | null };
 }

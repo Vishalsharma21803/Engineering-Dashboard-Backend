@@ -26,7 +26,10 @@ export function listPlatformsController(_req: Request, res: Response): void {
 /** Adds a credential for any platform in the registry; the platform's own rules validate and save it. */
 export async function connectPlatformController(req: Request, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ message: "Authentication required" });
+    res.status(401).json({
+      message: "Authentication required",
+      reason: "AUTH_REQUIRED",
+    });
     return;
   }
 

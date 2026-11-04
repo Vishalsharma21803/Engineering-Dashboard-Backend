@@ -30,6 +30,7 @@ export type AiErrorReason =
   | "AI_MODEL_UNAVAILABLE"
   | "AI_PERMISSION_DENIED"
   | "AI_UPSTREAM_ERROR"
+  | "AI_REQUEST_REJECTED"
   | "AI_REFUSED"
   | "AI_BAD_OUTPUT"
   | "AI_FREE_TIER_BLOCKED";
@@ -42,6 +43,8 @@ const HTTP_STATUS_BY_REASON: Record<AiErrorReason, number> = {
   AI_MODEL_UNAVAILABLE: 422,
   AI_PERMISSION_DENIED: 403,
   AI_UPSTREAM_ERROR: 502,
+  // The provider understood the request and refused it (bad parameter, prompt too long): retrying cannot help.
+  AI_REQUEST_REJECTED: 422,
   AI_REFUSED: 422,
   AI_BAD_OUTPUT: 502,
   AI_FREE_TIER_BLOCKED: 422,
@@ -54,6 +57,7 @@ const MESSAGE_BY_REASON: Record<AiErrorReason, string> = {
   AI_MODEL_UNAVAILABLE: "This model is not available for this API key.",
   AI_PERMISSION_DENIED: "This API key is not allowed to use this feature or model.",
   AI_UPSTREAM_ERROR: "The AI provider could not be reached.",
+  AI_REQUEST_REJECTED: "The AI provider rejected the request.",
   AI_REFUSED: "The model declined to check this ticket.",
   AI_BAD_OUTPUT: "The model's answer was cut off or not in the expected format.",
   AI_FREE_TIER_BLOCKED:

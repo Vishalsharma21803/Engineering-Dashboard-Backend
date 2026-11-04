@@ -355,6 +355,7 @@ export const SopReportRunScalarFieldEnum = {
   roles: 'roles',
   tickets: 'tickets',
   timeScope: 'timeScope',
+  truncated: 'truncated',
   createdAt: 'createdAt'
 } as const
 

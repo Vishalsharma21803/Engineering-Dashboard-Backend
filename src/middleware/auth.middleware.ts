@@ -13,6 +13,7 @@ export async function authenticate(
   if (typeof token !== "string" || !token) {
     res.status(401).json({
       message: "Authentication required",
+      reason: "AUTH_REQUIRED",
     });
     return;
   }
@@ -22,7 +23,8 @@ export async function authenticate(
   if (!jwtSecret) {
     console.error("JWT_SECRET is not configured");
     res.status(500).json({
-      message: "Internal server error",
+      message: "Cockpit cannot check sign-ins: JWT_SECRET is not set on the server",
+      reason: "SERVER_MISCONFIGURED",
     });
     return;
   }
@@ -34,6 +36,7 @@ export async function authenticate(
   } catch {
     res.status(401).json({
       message: "Invalid or expired authentication token",
+      reason: "AUTH_REQUIRED",
     });
     return;
   }
@@ -44,6 +47,7 @@ export async function authenticate(
   ) {
     res.status(401).json({
       message: "Invalid authentication token",
+      reason: "AUTH_REQUIRED",
     });
     return;
   }
@@ -53,6 +57,7 @@ export async function authenticate(
     if (typeof decoded.jti === "string" && (await isTokenRevoked(decoded.jti))) {
       res.status(401).json({
         message: "This session has ended. Sign in again.",
+        reason: "AUTH_REQUIRED",
       });
       return;
     }
