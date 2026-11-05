@@ -314,5 +314,5 @@ export function fakeSolidtimeHandlers(fake: FakeSolidtime) {
   ];
 }
 
-/** Writes Cockpit sent to Solidtime (anything but GET). */
+/** Writes Relay sent to Solidtime (anything but GET). */
 export const solidtimeWrites = (fake: FakeSolidtime) => fake.requests.filter((request) => request.method !== "GET");

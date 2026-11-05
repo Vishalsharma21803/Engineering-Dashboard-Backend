@@ -203,7 +203,7 @@ model AuditLog {
   @@index([actionId])
 }
 
-/// Personal dashboard triage (snooze / acknowledge / abandon). Cockpit-only:
+/// Personal dashboard triage (snooze / acknowledge / abandon). Relay-only:
 /// never written to Azure DevOps.
 model TriageMark {
   id           String       @id @default(uuid())

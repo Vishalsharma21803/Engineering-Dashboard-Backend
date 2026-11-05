@@ -76,7 +76,7 @@ export async function openCodeFetch(path: string, apiKey: string | null, init: {
       method: init.method ?? "GET",
       headers: {
         Accept: "application/json",
-        "User-Agent": "EngineerCockpit/1.0",
+        "User-Agent": "Relay/1.0",
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       },
@@ -154,7 +154,7 @@ export async function listOpenCodeModels(): Promise<AiModelOption[]> {
 /**
  * Costs nothing: a 1-token request to a free model. 401 = bad key. Any other
  * answer means OpenCode knows the key, and tells whether free models work
- * from Cockpit (200) or only inside OpenCode (403 FreeTierError).
+ * from Relay (200) or only inside OpenCode (403 FreeTierError).
  */
 export async function validateOpenCodeKey(apiKey: string): Promise<KeyValidationResult> {
   const response = await openCodeFetch(OPENCODE_CHAT_PATH, apiKey, {

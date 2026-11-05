@@ -31,7 +31,7 @@ export async function register(
   // Before any database lookup: an address that is not invited gets the same answer whether or not it has an account.
   if (!isSignupAllowed(result.data.email)) {
     res.status(403).json({
-      message: "Sign-up is by invitation only. Ask the Cockpit owner to add your email.",
+      message: "Sign-up is by invitation only. Ask the Relay owner to add your email.",
       reason: "SIGNUP_NOT_ALLOWED",
     });
     return;
@@ -81,7 +81,7 @@ export async function login(
     const jwtSecret = process.env.JWT_SECRET;
 
     if (!jwtSecret) {
-      throw new AppError(500, "SERVER_MISCONFIGURED", "Cockpit cannot sign anyone in: JWT_SECRET is not set on the server");
+      throw new AppError(500, "SERVER_MISCONFIGURED", "Relay cannot sign anyone in: JWT_SECRET is not set on the server");
     }
 
     // jwtid: logout can end this one sign-in (other devices stay signed in).
@@ -173,7 +173,7 @@ export async function logout(
   // Still a success: this browser is signed out. Copies of the cookie stay valid until they expire.
   if (revocationFailed) {
     res.status(200).json({
-      message: "Signed out on this device, but Cockpit could not end the session on the server. Copies of it stay valid until they expire (within 24 hours).",
+      message: "Signed out on this device, but Relay could not end the session on the server. Copies of it stay valid until they expire (within 24 hours).",
       reason: "SESSION_NOT_REVOKED",
     });
     return;

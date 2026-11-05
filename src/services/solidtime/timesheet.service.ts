@@ -37,7 +37,7 @@ export interface Timesheet {
   entries: Page<TimesheetEntry>;
   /** Ticket ids could be checked against Azure. */
   ticketsChecked: boolean;
-  /** More entries than Cockpit reads at once; totals cover only those read. */
+  /** More entries than Relay reads at once; totals cover only those read. */
   truncated: boolean;
 }
 

@@ -8,7 +8,7 @@ import {
 } from "../controllers/notification.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
-// Stored in Cockpit only; nothing here touches Azure DevOps or Solidtime.
+// Stored in Relay only; nothing here touches Azure DevOps or Solidtime.
 const router = Router();
 
 router.use(authenticate);

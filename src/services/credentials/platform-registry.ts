@@ -92,7 +92,7 @@ const ENTRIES: PlatformEntry[] = [
     id: "azure",
     category: "integration",
     label: "Azure DevOps",
-    description: "An organization URL and a personal access token. Cockpit reads your work items, pull requests and pipelines; changes are only proposed.",
+    description: "An organization URL and a personal access token. Relay reads your work items, pull requests and pipelines; changes are only proposed.",
     helpUrl: "https://learn.microsoft.com/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate",
     fields: [
       { name: "organizationUrl", label: "Organization URL", type: "url", required: true, placeholder: "https://dev.azure.com/my-org", hint: "Use https://dev.azure.com/<organization> or https://<organization>.visualstudio.com." },

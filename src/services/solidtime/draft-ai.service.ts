@@ -136,7 +136,7 @@ export function buildEstimatePrompt(rows: DraftRow[], context: { day: string; ti
   const time = new Intl.DateTimeFormat("en-GB", { timeZone: context.timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const lines = rows.map((row) => {
     const activity = row.activity.map((item) => `${time.format(new Date(item.at))} ${inline(item.what, 120)}`).join("; ");
-    // Only Cockpit's own numbers stay outside the markers; every text that comes from the ticket is inside.
+    // Only Relay's own numbers stay outside the markers; every text that comes from the ticket is inside.
     return [
       `- ticketId ${row.ticketId}: suggested ${row.hours} h. Already in the timesheet that day: ${row.alreadyTrackedHours} h.`,
       `  Original estimate ${hoursText(row.originalEstimate)}, completed work ${hoursText(row.completedWork)}, remaining work ${hoursText(row.remainingWork)}.`,

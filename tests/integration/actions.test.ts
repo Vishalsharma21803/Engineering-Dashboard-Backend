@@ -732,11 +732,11 @@ describe("interrupted executions and fresh lists", () => {
 
   it("records a change as succeeded when it finishes after another process ended it as interrupted", async () => {
     const action = await propose(comment("slow"));
-    // Another Cockpit process's sweep ends the run while Azure is still answering.
+    // Another Relay process's sweep ends the run while Azure is still answering.
     fake.beforeWrite = async () => {
       await prisma.proposedAction.update({
         where: { id: action.id },
-        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Cockpit stopped before this change finished.", result: { writeSent: "unknown" } },
+        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Relay stopped before this change finished.", result: { writeSent: "unknown" } },
       });
     };
 
@@ -776,7 +776,7 @@ describe("interrupted executions and fresh lists", () => {
     fake.beforeWrite = async () => {
       await prisma.proposedAction.update({
         where: { id: action.id },
-        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Cockpit stopped before this change finished.", result: { writeSent: "unknown" } },
+        data: { status: "FAILED", errorCode: "EXECUTION_INTERRUPTED", errorMessage: "Relay stopped before this change finished.", result: { writeSent: "unknown" } },
       });
     };
 

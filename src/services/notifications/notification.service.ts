@@ -441,7 +441,7 @@ export async function storedClosedTickets(userId: string, credentialId: string):
   return { flaggedNoTime: flagged, previousGaps };
 }
 
-/** Approvals live in Cockpit, so they are checked whenever the list is read. */
+/** Approvals live in Relay, so they are checked whenever the list is read. */
 async function syncApprovals(userId: string, credentialId: string): Promise<void> {
   const pending = await prisma.proposedAction.findMany({ where: { userId, credentialId, status: "PENDING" }, select: { id: true }, orderBy: { createdAt: "asc" } });
   const key = "approvals";

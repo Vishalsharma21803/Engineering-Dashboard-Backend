@@ -311,7 +311,7 @@ export async function prepareAction(
         if (currentCompleted !== null && wanted.completedWork < currentCompleted) {
           throw invalid(
             "WOULD_LOWER_COMPLETED_WORK",
-            `#${workItem.id}: Azure has ${currentCompleted} h completed, more than the ${wanted.completedWork} h proposed. Cockpit does not lower Completed Work.`
+            `#${workItem.id}: Azure has ${currentCompleted} h completed, more than the ${wanted.completedWork} h proposed. Relay does not lower Completed Work.`
           );
         }
 

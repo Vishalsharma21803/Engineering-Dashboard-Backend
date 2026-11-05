@@ -148,7 +148,7 @@ describe("who may sign up", () => {
     delete process.env.SIGNUP_ALLOWED_EMAILS;
 
     const refused = await register("new@example.com").expect(403);
-    expect(refused.body).toEqual({ message: "Sign-up is by invitation only. Ask the Cockpit owner to add your email.", reason: "SIGNUP_NOT_ALLOWED" });
+    expect(refused.body).toEqual({ message: "Sign-up is by invitation only. Ask the Relay owner to add your email.", reason: "SIGNUP_NOT_ALLOWED" });
     // No hint whether the address has an account.
     expect((await register("existing@example.com").expect(403)).body.reason).toBe("SIGNUP_NOT_ALLOWED");
 

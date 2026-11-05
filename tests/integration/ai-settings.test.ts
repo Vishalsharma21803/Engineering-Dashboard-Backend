@@ -111,7 +111,7 @@ describe("AI keys", () => {
     expect(list.body.credentials[0].lastValidationStatus).toBe("VALID");
   });
 
-  it("reports a rejected key without logging the user out of Cockpit", async () => {
+  it("reports a rejected key without logging the user out of Relay", async () => {
     const credential = await addKey("CLAUDE", INVALID_CLAUDE_KEY);
     const response = await agent.post(`/api/ai/credentials/${credential.id}/validate`).expect(200);
 
@@ -215,7 +215,7 @@ describe("AI settings", () => {
     expect(response.body.reason).toBe("AI_KEY_REQUIRED");
   });
 
-  it("rejects models Cockpit doesn't offer and unsupported effort levels", async () => {
+  it("rejects models Relay doesn't offer and unsupported effort levels", async () => {
     await addKey("OPENROUTER", VALID_OPENROUTER_KEY);
 
     const unknown = await agent

@@ -58,7 +58,7 @@ export function mentionsTicket(description: string | null | undefined, ticketId:
   return candidateTicketIds(description).includes(ticketId);
 }
 
-/** The description Cockpit writes for a ticket's timer or entry. */
+/** The description Relay writes for a ticket's timer or entry. */
 export function ticketDescription(ticketId: number, title: string): string {
   return `#${ticketId} ${title}`.slice(0, 5000);
 }

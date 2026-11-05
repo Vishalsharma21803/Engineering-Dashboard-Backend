@@ -45,7 +45,7 @@ export type ProposedAction = Prisma.ProposedActionModel
 export type AuditLog = Prisma.AuditLogModel
 /**
  * Model TriageMark
- * Personal dashboard triage (snooze / acknowledge / abandon). Cockpit-only:
+ * Personal dashboard triage (snooze / acknowledge / abandon). Relay-only:
  * never written to Azure DevOps.
  */
 export type TriageMark = Prisma.TriageMarkModel

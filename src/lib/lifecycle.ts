@@ -44,7 +44,7 @@ export function refuseWhileShuttingDown(_req: Request, res: Response, next: Next
   }
 
   res.setHeader("Connection", "close");
-  res.status(503).json({ message: "Cockpit is restarting. Try again in a moment.", reason: "SERVER_RESTARTING" });
+  res.status(503).json({ message: "Relay is restarting. Try again in a moment.", reason: "SERVER_RESTARTING" });
 }
 
 export function beginShutdown(): void {

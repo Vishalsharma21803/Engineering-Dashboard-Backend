@@ -36,7 +36,7 @@ export type AiErrorReason =
   | "AI_FREE_TIER_BLOCKED";
 
 const HTTP_STATUS_BY_REASON: Record<AiErrorReason, number> = {
-  // Never 401: the frontend treats any 401 as a lost Cockpit session.
+  // Never 401: the frontend treats any 401 as a lost Relay session.
   AI_KEY_INVALID: 424,
   AI_NO_CREDIT: 402,
   AI_RATE_LIMITED: 503,
@@ -105,7 +105,7 @@ export class AiProviderError extends Error {
     readonly billed: BilledUsage | null = null,
     /** What the provider itself said (shown to the user so limits are understandable). */
     readonly detail: string | null = null,
-    /** What Cockpit found wrong itself (no answer in time, an answer that is not JSON…); never shown as the provider's words. */
+    /** What Relay found wrong itself (no answer in time, an answer that is not JSON…); never shown as the provider's words. */
     readonly diagnosis: string | null = null
   ) {
     super(`AI provider request failed (${reason})`);

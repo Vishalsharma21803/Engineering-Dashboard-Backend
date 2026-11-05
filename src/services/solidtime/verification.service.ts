@@ -18,7 +18,7 @@ type Connection = SolidtimeConnectionDto & { organizationId: string; memberId: s
  * - matched: equal (and Remaining Work is what follows from it)
  * - missing: Azure has no Completed Work yet
  * - mismatch: Azure has less
- * - azure-higher: Azure has more; Cockpit never lowers it
+ * - azure-higher: Azure has more; Relay never lowers it
  * - remaining: Completed Work is equal, only Remaining Work is out of date
  * - running: my timer runs on it, so the total is still moving
  * - cannot-update: the ticket type has no Completed Work field

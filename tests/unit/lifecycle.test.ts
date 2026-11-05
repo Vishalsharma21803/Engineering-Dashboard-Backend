@@ -96,7 +96,7 @@ describe("shutting down", () => {
     beginShutdown();
 
     const response = await request(app).get("/api/auth/me").set("Origin", "http://localhost:5173").expect(503);
-    expect(response.body).toEqual({ message: "Cockpit is restarting. Try again in a moment.", reason: "SERVER_RESTARTING" });
+    expect(response.body).toEqual({ message: "Relay is restarting. Try again in a moment.", reason: "SERVER_RESTARTING" });
     expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
     expect(response.headers.connection).toBe("close");
     await request(app).get("/health").expect(503);

@@ -62,7 +62,7 @@ export async function updateAiPreference(userId: string, input: UpdateAiPreferen
     const model = await findModel(input.provider, input.model, input.provider === "OPENROUTER" ? apiKey : null);
 
     if (!model) {
-      throw new AppError(422, "AI_MODEL_NOT_OFFERED", "This model is not available in Cockpit");
+      throw new AppError(422, "AI_MODEL_NOT_OFFERED", "This model is not available in Relay");
     }
 
     if (model.efforts.length > 0 && !model.efforts.includes(input.effort)) {

@@ -1,9 +1,9 @@
 /**
  * Built-in starting point (version 0) derived from WI-002 v1.3 and the
  * real setup of the sifars organization. SOP owners replace it by saving
- * their own version in Cockpit; it is never edited in place.
+ * their own version in Relay; it is never edited in place.
  */
-export const STARTER_RULEBOOK = `# Engineer Cockpit SOP rulebook (WI-002 v1.3 starter)
+export const STARTER_RULEBOOK = `# Relay SOP rulebook (WI-002 v1.3 starter)
 
 Each block between --- lines is one rule card. Projects (their states, fields and categories)
 are set up on the SOP rules → Projects tab. Rule cards: checker "code" = a fixed built-in check; checker "ai" = judged by the user's AI model
@@ -383,7 +383,7 @@ severity: warn
 `;
 
 /**
- * Project facts that version 0 used to carry. When Cockpit moves project set-ups out of the
+ * Project facts that version 0 used to carry. When Relay moves project set-ups out of the
  * rulebook and the organization still uses the built-in starter, these become the first set-ups.
  */
 export const STARTER_PROJECT_BLOCKS = `---

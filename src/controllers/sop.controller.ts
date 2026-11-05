@@ -384,7 +384,7 @@ export const suggestProjectSetUpController = azureSopRoute("Reading the project 
   return { suggestion: { projectName: project.name, ...(await suggestProjectSetUp(azure.client, project.name, project.id)) } };
 });
 
-/* Team SOP report runs: read Azure, saved in Cockpit for the person who ran them. */
+/* Team SOP report runs: read Azure, saved in Relay for the person who ran them. */
 
 /** Runs the team SOP report for one project (default rules, code rules only) and saves it for this user. Reads Azure only. */
 export const runSopReportController = azureSopRoute("Running the SOP report failed", async (req, azure, userId) => {

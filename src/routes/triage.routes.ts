@@ -8,7 +8,7 @@ import {
 } from "../controllers/triage.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
-// Personal dashboard triage stored in Cockpit only; nothing here touches Azure DevOps.
+// Personal dashboard triage stored in Relay only; nothing here touches Azure DevOps.
 const router = Router();
 
 router.use(authenticate);

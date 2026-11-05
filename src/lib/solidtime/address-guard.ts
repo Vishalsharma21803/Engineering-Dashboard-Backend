@@ -8,7 +8,7 @@ import { LOCAL_HOSTS, allowedSolidtimeHosts } from "./url.js";
 
 /**
  * The backend calls the Solidtime address a user typed in, with their token,
- * so that address must not lead into Cockpit's own network (cloud metadata,
+ * so that address must not lead into Relay's own network (cloud metadata,
  * databases, admin panels). Every call checks where the host resolves to and
  * refuses private, loopback, link-local and other internal ranges. Self-hosted
  * Solidtime on a private network is allowed by listing it in
@@ -119,7 +119,7 @@ export async function assertPublicHost(hostname: string): Promise<void> {
     throw new AppError(
       422,
       "SOLIDTIME_ADDRESS_BLOCKED",
-      "This Solidtime address points to a private or internal network. Ask the Cockpit owner to allow it (SOLIDTIME_ALLOWED_HOSTS)."
+      "This Solidtime address points to a private or internal network. Ask the Relay owner to allow it (SOLIDTIME_ALLOWED_HOSTS)."
     );
   }
 }

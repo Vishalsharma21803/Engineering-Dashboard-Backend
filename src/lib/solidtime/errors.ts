@@ -9,7 +9,7 @@ export type SolidtimeErrorReason =
   | "SOLIDTIME_REJECTED"
   | "SOLIDTIME_UPSTREAM_ERROR";
 
-// Never 401: the frontend treats any 401 as a lost Cockpit session.
+// Never 401: the frontend treats any 401 as a lost Relay session.
 const STATUS: Record<SolidtimeErrorReason, number> = {
   SOLIDTIME_TOKEN_INVALID: 424,
   SOLIDTIME_FORBIDDEN: 403,

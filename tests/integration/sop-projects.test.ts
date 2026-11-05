@@ -61,7 +61,7 @@ when: before-active
     expect(rulebook.content).not.toContain("kind: project");
     expect(rulebook.content).toContain("when: at-estimation");
     expect((await agent.get("/api/sop/projects/Alpha/history").expect(200)).body.changes).toEqual([
-      expect.objectContaining({ kind: "IMPORTED", changedBy: "Cockpit" }),
+      expect.objectContaining({ kind: "IMPORTED", changedBy: "Relay" }),
     ]);
 
     // Runs once: nothing more happens on later requests.

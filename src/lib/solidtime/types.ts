@@ -82,7 +82,7 @@ export interface SolidtimeAggregate {
   grouped_data: Array<{ key: string | null; seconds: number; grouped_type: string | null; grouped_data: Array<{ key: string | null; seconds: number }> | null }> | null;
 }
 
-/** The fields Cockpit writes when it creates or edits an entry. */
+/** The fields Relay writes when it creates or edits an entry. */
 export interface TimeEntryInput {
   member_id: string;
   project_id: string | null;

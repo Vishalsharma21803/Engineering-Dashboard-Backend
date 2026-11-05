@@ -28,7 +28,7 @@ function headers(apiKey: string | null): Record<string, string> {
   return {
     Accept: "application/json",
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    "X-OpenRouter-Title": "Engineer Cockpit",
+    "X-OpenRouter-Title": "Relay",
   };
 }
 

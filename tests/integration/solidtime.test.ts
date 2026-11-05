@@ -95,7 +95,7 @@ describe("connecting Solidtime", () => {
     setSolidtimeResolverForTests(async () => ["10.0.0.5"]);
     const refused = await agent.post("/api/solidtime/connections").send({ baseUrl: SOLIDTIME_URL, token: EMPLOYEE_TOKEN }).expect(422);
     expect(refused.body).toEqual({
-      message: "This Solidtime address points to a private or internal network. Ask the Cockpit owner to allow it (SOLIDTIME_ALLOWED_HOSTS).",
+      message: "This Solidtime address points to a private or internal network. Ask the Relay owner to allow it (SOLIDTIME_ALLOWED_HOSTS).",
       reason: "SOLIDTIME_ADDRESS_BLOCKED",
     });
     expect(solidtime.requests).toEqual([]);

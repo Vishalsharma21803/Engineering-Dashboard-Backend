@@ -1,4 +1,4 @@
-/** Subset of Azure DevOps REST 7.1 response shapes the cockpit consumes. */
+/** Subset of Azure DevOps REST 7.1 response shapes Relay consumes. */
 
 export interface RawIdentity {
   id?: string;

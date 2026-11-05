@@ -39,7 +39,7 @@ describe("production mode", () => {
     expect(() => assertServerConfig()).toThrow(/JWT_SECRET should be at least 32[\s\S]*FRONTEND_ORIGIN must be set/);
 
     process.env.JWT_SECRET = LONG_SECRET;
-    process.env.FRONTEND_ORIGIN = "https://cockpit.example.com";
+    process.env.FRONTEND_ORIGIN = "https://relay.example.com";
     expect(() => assertServerConfig()).not.toThrow();
   });
 
@@ -48,7 +48,7 @@ describe("production mode", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     process.env.NODE_ENV = "production";
     process.env.JWT_SECRET = LONG_SECRET;
-    process.env.FRONTEND_ORIGIN = "https://cockpit.example.com";
+    process.env.FRONTEND_ORIGIN = "https://relay.example.com";
     delete process.env.SIGNUP_ALLOWED_EMAILS;
 
     assertServerConfig();

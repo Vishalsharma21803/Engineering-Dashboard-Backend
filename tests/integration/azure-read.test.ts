@@ -549,7 +549,7 @@ describe("Azure read API — upstream failures", () => {
     const credential = await prisma.credential.findUniqueOrThrow({ where: { id: credentialId } });
     expect(credential.lastValidationStatus).toBe("INVALID");
 
-    // The cockpit session itself is still valid.
+    // The Relay session itself is still valid.
     await agent.get("/api/auth/me").expect(200);
   });
 

@@ -156,7 +156,7 @@ export async function recoverInterruptedActions(now = new Date()): Promise<numbe
           status: ActionStatus.FAILED,
           executedAt: now,
           errorCode: "EXECUTION_INTERRUPTED",
-          errorMessage: "Cockpit stopped before this change finished. Check the ticket or time entry to see whether it was applied before proposing it again.",
+          errorMessage: "Relay stopped before this change finished. Check the ticket or time entry to see whether it was applied before proposing it again.",
           result: { writeSent: "unknown" },
         },
       });

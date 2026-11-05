@@ -91,7 +91,7 @@ export interface DayDraft {
   /** Some work may be missing: see truncatedReason. */
   truncated: boolean;
   /**
-   * "scan": I changed more tickets since that day than Cockpit reads, so the oldest-changed were not checked;
+   * "scan": I changed more tickets since that day than Relay reads, so the oldest-changed were not checked;
    * "rows": more tickets had my activity that day than one draft holds (50); null: nothing was cut.
    */
   truncatedReason: "scan" | "rows" | null;

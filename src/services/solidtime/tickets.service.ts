@@ -5,7 +5,7 @@ import type { StateCategory } from "../../types/azure.types.js";
 import { getWorkItemsByIds, getWorkItemTypeStates, WORK_ITEM_FIELDS, workItemProjectName, workItemType } from "../azure/work-items.service.js";
 import { createAzureClientForCredential } from "../azure/azure-context.service.js";
 
-/** What Cockpit shows about an Azure ticket next to Solidtime time. */
+/** What Relay shows about an Azure ticket next to Solidtime time. */
 export interface TicketInfo {
   id: number;
   title: string;

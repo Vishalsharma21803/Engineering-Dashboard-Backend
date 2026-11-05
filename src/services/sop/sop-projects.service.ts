@@ -317,7 +317,7 @@ export async function listProjectChanges(projectName: string) {
 
   return rows.map((row) => ({
     kind: row.kind,
-    changedBy: row.changedBy ? (names.get(row.changedBy) ?? "Unknown user") : "Cockpit",
+    changedBy: row.changedBy ? (names.get(row.changedBy) ?? "Unknown user") : "Relay",
     createdAt: row.createdAt.toISOString(),
   }));
 }

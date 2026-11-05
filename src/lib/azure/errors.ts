@@ -8,7 +8,7 @@ export type AzureErrorReason =
   | "AZURE_UPSTREAM_ERROR";
 
 const HTTP_STATUS_BY_REASON: Record<AzureErrorReason, number> = {
-  // Never 401: the frontend treats any 401 as a lost cockpit session.
+  // Never 401: the frontend treats any 401 as a lost Relay session.
   AZURE_PAT_INVALID: 424,
   AZURE_INSUFFICIENT_SCOPE: 403,
   AZURE_NOT_FOUND: 404,

@@ -23,7 +23,7 @@ export async function authenticate(
   if (!jwtSecret) {
     console.error("JWT_SECRET is not configured");
     res.status(500).json({
-      message: "Cockpit cannot check sign-ins: JWT_SECRET is not set on the server",
+      message: "Relay cannot check sign-ins: JWT_SECRET is not set on the server",
       reason: "SERVER_MISCONFIGURED",
     });
     return;
