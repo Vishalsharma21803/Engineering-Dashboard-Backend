@@ -375,6 +375,7 @@ describe("time on tickets", () => {
     expect(sheet.days).toEqual([{ day: today, seconds: 7200 }]);
     expect(sheet.byTicket.items).toEqual([{ ticketId: 101, title: "Implement login", seconds: 3600 }]);
     expect(sheet.entries).toMatchObject({ total: 3, page: 1, pageSize: 10 });
+    expect(sheet.running).toBeNull();
 
     const unlinked = (await agent.get(st(connection, `/unlinked?from=${today}`)).expect(200)).body.entries;
     expect(unlinked.items.map((entry: { description: string }) => entry.description).sort()).toEqual(["#999999 not a ticket", "Standup"]);
@@ -384,6 +385,14 @@ describe("time on tickets", () => {
     const oneDay = (await agent.get(st(connection, `/timesheet?from=${yesterday}&to=${today}&day=${yesterday}`)).expect(200)).body.timesheet;
     expect(oneDay.totalSeconds).toBe(3 * 3600);
     expect(oneDay.entries.items.map((entry: { description: string }) => entry.description)).toEqual(["#101 Implement login"]);
+    // A running timer is named with its start day, seconds so far and tickets, so the page can keep it moving.
+    const startedAt = new Date(Date.now() - 600_000).toISOString();
+    const running = addEntry(solidtime, { start: startedAt, end: null, description: "#101 Implement login" });
+    // The same period was read just above: refresh=1 skips the server's short-lived copy of it.
+    const live = (await agent.get(st(connection, `/timesheet?from=${yesterday}&to=${today}&refresh=1`)).expect(200)).body.timesheet;
+    expect(live.running).toMatchObject({ id: running.id, start: startedAt, day: startedAt.slice(0, 10), ticketIds: [101] });
+    expect(live.running.seconds).toBeGreaterThanOrEqual(600);
+    expect(live.totalSeconds).toBe(3 * 3600 + live.running.seconds);
     await agent.get(st(connection, `/timesheet?from=${today}&day=${yesterday}`)).expect(400);
     await agent.get(st(connection, "/timesheet?from=2026-01-01&to=2026-03-01")).expect(400);
     await agent.get(st(connection, "/timesheet?from=2026-02-31")).expect(400);

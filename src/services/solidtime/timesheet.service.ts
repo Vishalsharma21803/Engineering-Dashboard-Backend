@@ -35,6 +35,11 @@ export interface Timesheet {
   byTicket: Page<{ ticketId: number; title: string; seconds: number }>;
   unlinkedSeconds: number;
   entries: Page<TimesheetEntry>;
+  /**
+   * My running timer if it is in this period, as counted above (its seconds up to now), so the page can keep the
+   * totals moving without asking again. Its tickets share its time like any entry's; none means "not linked".
+   */
+  running: { id: string; start: string; day: string; seconds: number; ticketIds: number[] } | null;
   /** Ticket ids could be checked against Azure. */
   ticketsChecked: boolean;
   /** More entries than Relay reads at once; totals cover only those read. */
@@ -78,6 +83,12 @@ async function myEntries(client: SolidtimeClient, connection: Connection, azure:
   return { rows, timeZone, truncated, checked: lookup.checked };
 }
 
+function runningOf(rows: TimesheetEntry[], timeZone: string): Timesheet["running"] {
+  // Solidtime runs one timer per person.
+  const row = rows.find((candidate) => candidate.running);
+  return row ? { id: row.id, start: row.start, day: zonedDay(new Date(row.start), timeZone), seconds: row.seconds, ticketIds: row.tickets.map((ticket) => ticket.id) } : null;
+}
+
 export async function getTimesheet(
   client: SolidtimeClient,
   connection: Connection,
@@ -118,6 +129,7 @@ export async function getTimesheet(
     days: [...days.entries()].filter(([day]) => day >= input.from && day <= input.to).map(([day, seconds]) => ({ day, seconds })),
     byTicket: paginate([...tickets.values()].map((ticket) => ({ ...ticket, seconds: Math.round(ticket.seconds) })).sort((a, b) => b.seconds - a.seconds), input.ticketPage),
     unlinkedSeconds,
+    running: runningOf(rows, timeZone),
     // The list can be one day of the period; totals above always cover all of it.
     entries: paginate(input.day ? rows.filter((row) => zonedDay(new Date(row.start), timeZone) === input.day) : rows, input.page),
     ticketsChecked: checked,
